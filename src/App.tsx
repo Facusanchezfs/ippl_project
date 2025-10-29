@@ -107,7 +107,7 @@ function App() {
 
           {/* Financial routes */}
           <Route path="/financial" element={
-            <ProtectedRoute allowedRoles={['financial']}>
+            <ProtectedRoute allowedRoles={['financial', 'admin']}>
               <FinancialLayout />
             </ProtectedRoute>
           }>
@@ -121,7 +121,7 @@ function App() {
 
           {/* Content Manager routes */}
           <Route path="/content" element={
-            <ProtectedRoute allowedRoles={['content_manager']}>
+            <ProtectedRoute allowedRoles={['content_manager', 'admin']}>
               <AdminLayout />
             </ProtectedRoute>
           }>
@@ -130,12 +130,12 @@ function App() {
 
           {/* Professional routes */}
           <Route path="/professional" element={
-            <ProtectedRoute allowedRoles={['professional']}>
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <PsychologistDashboard />
             </ProtectedRoute>
           } />
           <Route path="/professional/pacientes" element={
-            <ProtectedRoute allowedRoles={['professional']}>
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <ProfessionalPatients />
             </ProtectedRoute>
           } />
@@ -145,22 +145,22 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/professional/calendario" element={
-            <ProtectedRoute allowedRoles={['professional']}>
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <AppointmentsCalendar />
             </ProtectedRoute>
           } />
           <Route path="/professional/citas-hoy" element={
-            <ProtectedRoute allowedRoles={['professional']}>
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <TodayAppointmentsPage />
             </ProtectedRoute>
           } />
           <Route path="/professional/citas-finalizadas" element={
-            <ProtectedRoute allowedRoles={['professional']}>
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <CompletedAppointmentsPage />
             </ProtectedRoute>
           } />
           <Route path="/professional/actividades" element={
-            <ProtectedRoute allowedRoles={['professional']}>
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <AllActivitiesPage />
             </ProtectedRoute>
           } />

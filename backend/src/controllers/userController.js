@@ -61,15 +61,18 @@ const createUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHashed = await bcrypt.hash(password, salt);
 
+    // Asegurar que commission sea un número válido
+    const commissionValue = (typeof commission === 'number' && !isNaN(commission)) ? commission : 0;
+    
     const created = await User.create({
       name,
       email,
       password: passwordHashed,
       role,
       status: status ?? 'active',
-      commission: commission ?? null,
-      saldoTotal: saldoTotal,
-      saldoPendiente: saldoPendiente,
+      commission: commissionValue,
+      saldoTotal: saldoTotal || 0,
+      saldoPendiente: saldoPendiente || 0,
     });
 
     return res.status(201).json(toUserDTO(created));

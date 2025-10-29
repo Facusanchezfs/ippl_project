@@ -5,6 +5,7 @@ import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../utils/imageUtils';
 import { useAuth } from '../context/AuthContext';
+import { getFriendlyErrorMessage, ErrorMessages } from '../utils/errorMessages';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import { useParams } from 'react-router-dom';
@@ -86,7 +87,8 @@ const BlogPage = () => {
       setPosts(restOfPosts);
     } catch (error) {
       console.error('Error loading posts:', error);
-      toast.error('Error al cargar los posts');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.POST_LOAD_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +127,8 @@ const BlogPage = () => {
       toast.success('¡Gracias por tu like!');
     } catch (error) {
       console.error('Error al gestionar like:', error);
-      toast.error('Error al gestionar el like');
+      const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudo procesar tu like. Intenta nuevamente.');
+      toast.error(friendlyMessage);
     } finally {
       setIsLiking(false);
     }
@@ -163,15 +166,15 @@ const BlogPage = () => {
               data-aos="zoom-in-up"
             >
               <div className="relative overflow-hidden rounded-xl bg-gray-100">
-                <div className="aspect-[2/1] w-full">
+                <div className="w-full">
                   {featuredPost.thumbnail ? (
                     <img
                       src={getImageUrl(featuredPost.thumbnail)}
                       alt={featuredPost.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      className="w-full h-auto max-h-96 object-contain group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
-                    <div className="w-full h-full grid place-items-center text-gray-400">Sin imagen</div>
+                    <div className="w-full h-64 grid place-items-center text-gray-400">Sin imagen</div>
                   )}
                 </div>
 
@@ -247,15 +250,15 @@ const BlogPage = () => {
               >
                 {/* Image */}
                 <div className="overflow-hidden rounded-lg bg-gray-100 mb-4">
-                  <div className="aspect-[3/2] w-full">
+                  <div className="w-full">
                     {post.thumbnail ? (
                       <img
                         src={getImageUrl(post.thumbnail)}
                         alt={post.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-auto max-h-64 object-contain group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
-                      <div className="w-full h-full grid place-items-center text-gray-400">Sin imagen</div>
+                      <div className="w-full h-48 grid place-items-center text-gray-400">Sin imagen</div>
                     )}
                   </div>
                 </div>
@@ -330,11 +333,11 @@ const BlogPage = () => {
 
               {/* Imagen hero ocupando altura */}
               {selectedPost.thumbnail && (
-                <div className="relative w-full h-[70vh]">
+                <div className="relative w-full h-[70vh] flex items-center justify-center bg-black rounded-t-2xl">
                   <img
                     src={getImageUrl(selectedPost.thumbnail)}
                     alt={selectedPost.title}
-                    className="w-full h-full object-cover rounded-t-2xl"
+                    className="max-w-full max-h-full object-contain rounded-t-2xl"
                   />
                   {/* overlay sutil para efecto magazine */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent rounded-t-2xl"></div>

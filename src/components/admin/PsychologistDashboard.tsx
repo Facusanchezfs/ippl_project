@@ -4,6 +4,7 @@ import patientsService from '../../services/patients.service';
 import appointmentsService from '../../services/appointments.service';
 import { Appointment } from '../../types/Appointment';
 import { parseNumber } from '../../utils/functionUtils.ts';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import { 
   UserIcon, 
   ClockIcon,
@@ -51,7 +52,8 @@ const PsychologistDashboard = () => {
       setUserLoaded(userPromise);
     } catch (error) {
       console.error('Error al cargar datos:', error);
-      toast.error('Error al cargar los datos');
+      const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar los datos. Intenta recargar la página.');
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
@@ -66,15 +68,19 @@ const PsychologistDashboard = () => {
 
   const changePassword = async (newPassword: string) =>{
     try{
+      if (!userLoaded) {
+        toast.error('Los datos del usuario no están disponibles. Intenta recargar la página.');
+        return;
+      }
+      
       const updateData: UpdateUserData = {};
       updateData.password = newPassword;
-      if(userLoaded){
-        await userService.updateUser(userLoaded.id, updateData);
-        toast.success('Contraseña cambiada correctamente');
-      }
+      await userService.updateUser(userLoaded.id, updateData);
+      toast.success('Contraseña cambiada correctamente');
     } catch (e) {
-      console.error('Error al cargar datos:', e);
-      toast.error('Error al cargar los datos');
+      console.error('Error al cambiar contraseña:', e);
+      const friendlyMessage = getFriendlyErrorMessage(e, ErrorMessages.PASSWORD_CHANGE_FAILED);
+      toast.error(friendlyMessage);
     }
   }
 
@@ -124,7 +130,12 @@ const PsychologistDashboard = () => {
           <div className="flex items-center gap-4 flex-wrap md:justify-end">
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+              disabled={!userLoaded}
+              className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                userLoaded 
+                  ? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
+                  : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+              }`}
             >
               <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
               Cambiar contraseña

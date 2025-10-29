@@ -8,6 +8,7 @@ import {
   ArrowRightIcon
 } from '@heroicons/react/24/outline';
 import activityService from '../../services/activity.service';
+import { getFriendlyErrorMessage } from '../../utils/errorMessages';
 import type { Activity } from '../../types/Activity';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -46,7 +47,8 @@ const RecentActivityProfessional = () => {
       setActivities(filteredActivities);
     } catch (error) {
       console.error('Error al cargar actividades:', error);
-      toast.error('Error al cargar las actividades recientes');
+      const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar las actividades recientes. Intenta recargar la página.');
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }

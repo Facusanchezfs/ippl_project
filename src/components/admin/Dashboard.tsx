@@ -6,6 +6,10 @@ import { messageService, Message } from '../../services/messageService';
 import postsService, { Post } from '../../services/posts.service';
 import activityService from '../../services/activity.service';
 import { Activity } from '../../types/Activity';
+import userService, { UpdateUserData, User } from '../../services/user.service';
+import { parseNumber } from '../../utils/functionUtils';
+import ChangePasswordModal from '../professional/ChangePassword';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import { 
   UserGroupIcon, 
   DocumentTextIcon, 
@@ -20,7 +24,9 @@ import {
   NewspaperIcon,
   Cog6ToothIcon,
   PresentationChartLineIcon,
-  BookOpenIcon
+  BookOpenIcon,
+  AdjustmentsHorizontalIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import axios from 'axios';
@@ -71,13 +77,27 @@ const Dashboard = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [userLoaded, setUserLoaded] = useState<User>();
 
   useEffect(() => {
     loadStats();
     loadRecentMessages();
     loadRecentPosts();
     loadActivities();
+    if (user) {
+      loadUser();
+    }
   }, [user]);
+
+  const loadUser = async () => {
+    try {
+      const userToLoad = await userService.getUserById(parseNumber(user?.id));
+      setUserLoaded(userToLoad);
+    } catch (error) {
+      console.error('Error al cargar usuario:', error);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -163,6 +183,24 @@ const Dashboard = () => {
     toast.success('Datos actualizados');
   };
 
+  const changePassword = async (newPassword: string) => {
+    try {
+      if (!userLoaded) {
+        toast.error('Los datos del usuario no están disponibles. Intenta recargar la página.');
+        return;
+      }
+      
+      const updateData: UpdateUserData = {};
+      updateData.password = newPassword;
+      await userService.updateUser(userLoaded.id, updateData);
+      toast.success('Contraseña cambiada correctamente');
+    } catch (e) {
+      console.error('Error al cambiar contraseña:', e);
+      const friendlyMessage = getFriendlyErrorMessage(e, ErrorMessages.PASSWORD_CHANGE_FAILED);
+      toast.error(friendlyMessage);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -184,6 +222,18 @@ const Dashboard = () => {
               Bienvenido, {user?.name}
             </p>
           </div>
+          <button
+            onClick={() => setShowModal(true)}
+            disabled={!userLoaded}
+            className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              userLoaded 
+                ? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
+                : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+            }`}
+          >
+            <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
+            Cambiar contraseña
+          </button>
           <button 
             onClick={handleRefresh}
             className={`flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -261,7 +311,7 @@ const Dashboard = () => {
             </div>
 
             {/* Secciones de Gestión */}
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 {
                   title: "Gestión de Personal",
@@ -294,6 +344,17 @@ const Dashboard = () => {
                     { label: "Pacientes con Citas", value: systemStats.patients.withAppointments },
                     { label: "Profesionales Asignados", value: Object.keys(systemStats.patients.byProfessional).length },
                     { label: "Pacientes Activos", value: systemStats.patients.active }
+                  ]
+                },
+                {
+                  title: "Gestión de Finanzas",
+                  icon: CurrencyDollarIcon,
+                  color: "emerald",
+                  route: "/financial",
+                  stats: [
+                    { label: "Pagos Pendientes", value: 0 },
+                    { label: "Solicitudes", value: 0 },
+                    { label: "Ingresos del Mes", value: 0 }
                   ]
                 }
               ].map((section, index) => (
@@ -463,6 +524,12 @@ const Dashboard = () => {
           </>
         )}
       </div>
+
+      <ChangePasswordModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSubmit={changePassword}
+      />
     </div>
   );
 };

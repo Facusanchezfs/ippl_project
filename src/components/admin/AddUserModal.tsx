@@ -13,7 +13,8 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, onSubmit }
     name: '',
     email: '',
     password: '',
-    role: 'professional'
+    role: 'professional',
+    commission: 0
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,12 +24,13 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, onSubmit }
       name: '',
       email: '',
       password: '',
-      role: 'professional'
+      role: 'professional',
+      commission: 0
     });
     onClose();
   };
 
-  const showCommissionField = formData.role === 'professional';
+  const showCommissionField = formData.role === 'professional' || formData.role === 'financial';
 
   if (!isOpen) return null;
 
@@ -99,7 +101,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ isOpen, onClose, onSubmit }
               onChange={(e) => setFormData({ 
                 ...formData, 
                 role: e.target.value as CreateUserData['role'],
-                commission: e.target.value === 'professional' ? 0 : undefined
+                commission: 0
               })}
             >
               <option value="professional">Psicólogo</option>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import userService, { UpdateUserData, User } from '../../services/user.service';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import {
 	CurrencyDollarIcon,
 	AdjustmentsHorizontalIcon,
@@ -8,6 +10,7 @@ import {
 	ArrowPathIcon,
 	CalendarIcon,
 	UserGroupIcon,
+	ArrowLeftIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
@@ -36,6 +39,7 @@ interface FinancialStats {
 }
 
 const FinancialDashboard: React.FC = () => {
+	const navigate = useNavigate();
 	const { user } = useAuth();
 	const [stats, setStats] = useState<FinancialStats | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
@@ -141,7 +145,8 @@ const FinancialDashboard: React.FC = () => {
 			});
 		} catch (error) {
 			console.error('Error al cargar estadísticas financieras:', error);
-			toast.error('Error al cargar las estadísticas');
+			const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar las estadísticas. Intenta recargar la página.');
+			toast.error(friendlyMessage);
 		} finally {
 			setIsLoading(false);
 		}
@@ -163,21 +168,26 @@ const FinancialDashboard: React.FC = () => {
 			setTotalSaldoProfesionales(totalSaldo);
 			setTotalDeudaComision(totalDeuda);
 		} catch (error) {
-			toast.error('Error al cargar profesionales');
+			const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar los profesionales. Intenta recargar la página.');
+			toast.error(friendlyMessage);
 		}
 	};
 
 	const changePassword = async (newPassword: string) =>{
     try{
+      if (!userLoaded) {
+        toast.error('Los datos del usuario no están disponibles. Intenta recargar la página.');
+        return;
+      }
+      
       const updateData: UpdateUserData = {};
       updateData.password = newPassword;
-      if(userLoaded){
-        await userService.updateUser(userLoaded.id, updateData);
-        toast.success('Contraseña cambiada correctamente');
-      }
+      await userService.updateUser(userLoaded.id, updateData);
+      toast.success('Contraseña cambiada correctamente');
     } catch (e) {
-      console.error('Error al cargar datos:', e);
-      toast.error('Error al cargar los datos');
+      console.error('Error al cambiar contraseña:', e);
+      const friendlyMessage = getFriendlyErrorMessage(e, ErrorMessages.PASSWORD_CHANGE_FAILED);
+      toast.error(friendlyMessage);
     }
   }
 
@@ -195,6 +205,9 @@ const FinancialDashboard: React.FC = () => {
 				}));
 			setRecentAbonos(recientes);
 		} catch (error) {
+			console.error('Error al cargar abonos recientes:', error);
+			const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar los abonos recientes. Intenta recargar la página.');
+			toast.error(friendlyMessage);
 			setRecentAbonos([]);
 		}
 	};
@@ -306,19 +319,35 @@ const FinancialDashboard: React.FC = () => {
 		<div className="p-6 space-y-8">
 			<div className="bg-white rounded-2xl shadow-lg p-6">
 				<div className="flex justify-between items-center mb-6">
-					<div>
-						<h1 className="text-2xl font-bold text-gray-900">
-							Panel Financiero
-						</h1>
-						<p className="mt-1 text-gray-600">
-							Resumen financiero y estadísticas
-						</p>
+					<div className="flex items-center gap-4">
+						{user?.role === 'admin' && (
+							<button
+								onClick={() => navigate('/admin')}
+								className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+							>
+								<ArrowLeftIcon className="h-5 w-5 mr-2" />
+								Volver al Dashboard
+							</button>
+						)}
+						<div>
+							<h1 className="text-2xl font-bold text-gray-900">
+								Panel Financiero
+							</h1>
+							<p className="mt-1 text-gray-600">
+								Resumen financiero y estadísticas
+							</p>
+						</div>
 					</div>
 					<div className="flex items-center gap-4">
 						{/* Eliminar el select de rango de fechas */}
 						<button
-                          onClick={() => setShowModal(true)}
-                          className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+							onClick={() => setShowModal(true)}
+							disabled={!userLoaded}
+							className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+								userLoaded 
+									? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
+									: 'text-gray-400 bg-gray-100 cursor-not-allowed'
+							}`}
 							>
 							<AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
 							Cambiar contraseña
@@ -472,7 +501,6 @@ const FinancialDashboard: React.FC = () => {
 											{professionals.map((prof) => {
 												const saldo = prof.saldoTotal;
 												const saldoPendientePacientes = prof.saldoPendiente;
-												console.log(saldoPendientePacientes);
 												return (
 													<tr key={prof.id} className="hover:bg-gray-50">
 														<td className="px-6 py-4 whitespace-nowrap">

@@ -4,6 +4,7 @@ import appointmentsService from '../../services/appointments.service';
 import patientsService from '../../services/patients.service';
 import { Appointment, AppointmentStatus } from '../../types/Appointment';
 import { Patient } from '../../types/Patient';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import { 
   CalendarIcon, 
   ClockIcon,
@@ -62,7 +63,8 @@ const AppointmentsPage = () => {
       setPatients(activePatients);
     } catch (error) {
       console.error('Error al cargar pacientes:', error);
-      toast.error('Error al cargar los pacientes');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.PATIENT_LOAD_FAILED);
+      toast.error(friendlyMessage);
     }
   };
 
@@ -75,7 +77,8 @@ const AppointmentsPage = () => {
       setAppointments(data);
     } catch (error) {
       console.error('Error al cargar las citas:', error);
-      toast.error('Error al cargar las citas');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.APPOINTMENT_LOAD_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }

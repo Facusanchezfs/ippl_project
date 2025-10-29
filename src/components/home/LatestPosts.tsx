@@ -81,7 +81,7 @@ const LatestPosts: React.FC = () => {
                 <img
                   src={post.featuredImage}
                   alt={post.title}
-                  className="w-full h-48 object-cover"
+                  className="w-full h-auto max-h-48 object-contain"
                 />
               </Link>
               

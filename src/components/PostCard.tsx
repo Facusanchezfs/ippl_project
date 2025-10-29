@@ -21,7 +21,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, liked, onLike, onClick }) => 
       <img
         src={getImageUrl(post.thumbnail)}
         alt={post.title}
-        className="w-full h-48 object-cover"
+        className="w-full h-auto max-h-48 object-contain"
       />
     )}
     <div className="p-6">

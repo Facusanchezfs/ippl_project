@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import postsService, { Post } from '../../services/posts.service';
 import { getImageUrl } from '../../utils/imageUtils';
 import ContentEditorModal from './ContentEditorModal.tsx';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import { 
   PencilIcon, 
   TrashIcon, 
@@ -16,7 +17,8 @@ import {
   MagnifyingGlassIcon,
   BookmarkIcon,
   DocumentTextIcon,
-  AdjustmentsHorizontalIcon
+  AdjustmentsHorizontalIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import contentManagementService from '../../services/content.service';
@@ -27,6 +29,7 @@ import ChangePasswordModal from '../professional/ChangePassword.tsx';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const ContentDashboard = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,7 +87,8 @@ const ContentDashboard = () => {
       setPosts(response.posts || []);
     } catch (error) {
       console.error('Error al cargar posts:', error);
-      toast.error('Error al cargar los posts');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.POST_LOAD_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
@@ -108,15 +112,19 @@ const ContentDashboard = () => {
 
   const changePassword = async (newPassword: string) =>{
       try{
+        if (!userLoaded) {
+          toast.error('Los datos del usuario no están disponibles. Intenta recargar la página.');
+          return;
+        }
+        
         const updateData: UpdateUserData = {};
         updateData.password = newPassword;
-        if(userLoaded){
-          await userService.updateUser(userLoaded.id, updateData);
-          toast.success('Contraseña cambiada correctamente');
-        }
+        await userService.updateUser(userLoaded.id, updateData);
+        toast.success('Contraseña cambiada correctamente');
       } catch (e) {
-        console.error('Error al cargar datos:', e);
-        toast.error('Error al cargar los datos');
+        console.error('Error al cambiar contraseña:', e);
+        const friendlyMessage = getFriendlyErrorMessage(e, ErrorMessages.PASSWORD_CHANGE_FAILED);
+        toast.error(friendlyMessage);
       }
     }
 
@@ -136,7 +144,8 @@ const ContentDashboard = () => {
       setPostToDelete(null);
     } catch (error) {
       console.error('Error al eliminar post:', error);
-      toast.error('Error al eliminar el post');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.POST_DELETE_FAILED);
+      toast.error(friendlyMessage);
     }
   };
 
@@ -171,7 +180,7 @@ const ContentDashboard = () => {
             setSelectedPost(undefined);
         } catch (error) {
             toast.error(selectedPost ? toasterMessages.errorEdit : toasterMessages.errorCreate);
-            console.log("error", error, true);
+            console.error('Error al guardar post:', error);
         }
     };
 
@@ -180,7 +189,8 @@ const ContentDashboard = () => {
       const images = await contentManagementService.getCarouselImages();
       setCarouselImages(images);
     } catch (error) {
-      toast.error('No se pudieron cargar las imágenes del carrusel.');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.IMAGE_LOAD_FAILED);
+      toast.error(friendlyMessage);
       console.error(error);
     }
   };
@@ -188,14 +198,14 @@ const ContentDashboard = () => {
   const handleCarouselUpload = async () => {
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
-      toast.error("Selecciona una imagen primero.");
+      toast.error("Por favor, selecciona una imagen antes de continuar.");
       return;
     }
     
     setIsUploading(true);
     toast.loading('Subiendo imagen...');
     try {
-      let files = Array.from(fileInputRef.current?.files ?? []);
+      const files = Array.from(fileInputRef.current?.files ?? []);
       // Usamos el servicio de posts que tiene la función de subida
       await contentManagementService.uploadCarouselImages(files);
       toast.dismiss();
@@ -206,7 +216,8 @@ const ContentDashboard = () => {
       }
     } catch (err) {
       toast.dismiss();
-      toast.error("Error al subir la imagen.");
+      const friendlyMessage = getFriendlyErrorMessage(err, ErrorMessages.FILE_UPLOAD_FAILED);
+      toast.error(friendlyMessage);
       console.error(err);
     } finally {
       setIsUploading(false);
@@ -225,12 +236,14 @@ const ContentDashboard = () => {
     try {
       await contentManagementService.deleteCarouselImage(imageToDelete);
       toast.dismiss();
-      toast.success('Imagen eliminada.');
+      toast.success('Imagen eliminada correctamente.');
       setCarouselImages(prev => prev.filter(img => img !== imageToDelete));
+      fetchCarouselImages();
     } catch (error) {
       toast.dismiss();
-      toast.error('No se pudo eliminar la imagen.');
-      console.error(error);
+      console.error('Error al eliminar imagen:', error);
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.FILE_DELETE_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsDeleteCarouselModalOpen(false);
       setImageToDelete(null);
@@ -259,20 +272,35 @@ const ContentDashboard = () => {
       {/* Header y Filtros */}
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Dashboard de Contenido
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Gestiona el contenido del blog
-            </p>
+          <div className="flex items-center gap-4">
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <ArrowLeftIcon className="h-5 w-5 mr-2" />
+                Volver al Dashboard
+              </button>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Dashboard de Contenido
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Gestiona el contenido del blog
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <button
-                          onClick={() => setShowModal(true)}
-                          className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
+              onClick={() => setShowModal(true)}
+              disabled={!userLoaded}
+              className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${userLoaded
+                  ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                  : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                }`}
+            >
+              <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
                 Cambiar contraseña
               </button>
             <button
@@ -638,7 +666,7 @@ const ContentDashboard = () => {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onSubmit={changePassword}
-      />;
+      />
     </div>
   );
 };

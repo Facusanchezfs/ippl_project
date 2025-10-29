@@ -72,6 +72,7 @@ const appointmentsRoutes = require('./routes/appointments');
 const professionalsRoutes = require('./routes/professionals');
 const activitiesRoutes = require('./routes/activities');
 const messageRoutes = require('./routes/messageRoutes');
+const contentRoutes = require('./routes/content');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -82,6 +83,7 @@ app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/professionals', professionalsRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/content', contentRoutes);
 
 // Ruta específica para subir archivos de audio
 app.post('/api/upload/audio', upload.single('audio'), (req, res) => {

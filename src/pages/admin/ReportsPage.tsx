@@ -88,7 +88,6 @@ const ReportsPage: React.FC = () => {
   if (!selectedProfessional) return;
 
   const prof = professionals.find(p => p.id == selectedProfessional);
-  console.log(prof)
   if (!prof) return;
 
   // util: fecha local
@@ -156,7 +155,6 @@ const ReportsPage: React.FC = () => {
     styles: { fontSize: 10 },
     headStyles: { fillColor: [41, 128, 185] },
   });
-  console.log('llegue al evento')
   doc.save(`Reporte_Citas_${prof.name.replace(/ /g, '_')}.pdf`);
 };
 

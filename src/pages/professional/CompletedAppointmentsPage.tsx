@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import appointmentsService from '../../services/appointments.service';
 import { Appointment } from '../../types/Appointment';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import { 
   CalendarIcon, 
   ClockIcon,
@@ -42,7 +43,8 @@ const CompletedAppointmentsPage = () => {
       setAppointments(completedAppointments);
     } catch (error) {
       console.error('Error al cargar las citas:', error);
-      toast.error('Error al cargar las citas');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.APPOINTMENT_LOAD_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }

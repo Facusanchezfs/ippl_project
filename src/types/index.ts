@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'content-manager' | 'psychologist';
+  role: 'admin' | 'professional' | 'content_manager' | 'financial';
   profilePicture?: string;
   isActive: boolean;
 }
