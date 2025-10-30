@@ -338,20 +338,22 @@ const FinancialDashboard: React.FC = () => {
 							</p>
 						</div>
 					</div>
-					<div className="flex items-center gap-4">
-						{/* Eliminar el select de rango de fechas */}
-						<button
-							onClick={() => setShowModal(true)}
-							disabled={!userLoaded}
-							className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-								userLoaded 
-									? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
-									: 'text-gray-400 bg-gray-100 cursor-not-allowed'
-							}`}
-							>
-							<AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
-							Cambiar contraseña
-						</button>
+          <div className="flex items-center gap-4">
+            {/* Eliminar el select de rango de fechas */}
+            {user?.role === 'financial' && (
+              <button
+                onClick={() => setShowModal(true)}
+                disabled={!userLoaded}
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  userLoaded 
+                    ? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
+                    : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                }`}
+                >
+                <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
+                Cambiar contraseña
+              </button>
+            )}
 						<button
 							onClick={handleRefresh}
 							className={`flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors ${

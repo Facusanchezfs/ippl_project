@@ -291,19 +291,21 @@ const Dashboard = () => {
                   onClick: () => navigate(user?.role === 'admin' ? '/admin/calendario' : '/professional/calendario')
                 }
               ].map((stat, index) => (
-                <div 
+              <div 
                   key={`stat-${index}`} 
-                  className={`bg-gradient-to-br from-[#80C0D0] to-[#4CAFB8] rounded-xl p-6 cursor-pointer hover:shadow-md transition-all`}
+                  className={`rounded-xl p-[1px] bg-gradient-to-br from-[#7cc7d1] to-[#43aeb8] cursor-pointer transition-all hover:shadow-lg`}
                   onClick={stat.onClick}
                 >
-                  <div className="flex items-center">
-                    <div className="bg-primary/10 p-3 rounded-lg">
-                      <stat.icon className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-2xl font-bold text-gray-900">{stat.value}</h3>
-                      <p className="text-sm text-gray-600">{stat.title}</p>
-                      <p className="text-xs text-primary mt-1">{stat.detail}</p>
+                  <div className="bg-white rounded-[11px] p-6">
+                    <div className="flex items-center">
+                      <div className="bg-primary/10 p-3 rounded-lg">
+                        <stat.icon className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="ml-4">
+                        <h3 className="text-2xl font-bold text-gray-900">{stat.value}</h3>
+                        <p className="text-sm text-gray-600">{stat.title}</p>
+                        <p className="text-xs text-primary mt-1">{stat.detail}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
