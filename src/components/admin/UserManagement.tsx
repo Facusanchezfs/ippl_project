@@ -7,6 +7,7 @@ import Button from '../common/Button';
 import userService, { User as UserType, CreateUserData, UpdateUserData } from '../../services/user.service';
 import EditUserModal from './EditUserModal';
 import AddUserModal from './AddUserModal';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
@@ -31,7 +32,8 @@ const UserManagement: React.FC = () => {
       const data = await userService.getUsers();
       setUsers(data);
     } catch (error) {
-      toast.error('Error al cargar usuarios'+"\n"+error);
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.USER_LOAD_FAILED);
+      toast.error(friendlyMessage);
     }
   };
 
@@ -42,7 +44,8 @@ const UserManagement: React.FC = () => {
       loadUsers();
       setIsAddModalOpen(false);
     } catch (error) {
-      toast.error('Error al crear usuario'+"\n"+error);
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.USER_CREATE_FAILED);
+      toast.error(friendlyMessage);
     }
   };
 
@@ -54,7 +57,8 @@ const UserManagement: React.FC = () => {
       setIsEditModalOpen(false);
       setSelectedUser(null);
     } catch (error) {
-      toast.error('Error al actualizar usuario'+"\n"+error);
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.USER_UPDATE_FAILED);
+      toast.error(friendlyMessage);
     }
   };
 
@@ -80,7 +84,8 @@ const UserManagement: React.FC = () => {
       setIsActiveModalOpen(false);
       setUserToActive(null);
     } catch (error) {
-      toast.error('Error al activar usuario'+"\n"+error);
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.USER_UPDATE_FAILED);
+      toast.error(friendlyMessage);
     }
   }
 
@@ -94,7 +99,8 @@ const UserManagement: React.FC = () => {
       setIsDeleteModalOpen(false);
       setUserToDelete(null);
     } catch (error) {
-      toast.error('Error al eliminar usuario'+"\n"+error);
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.USER_DELETE_FAILED);
+      toast.error(friendlyMessage);
     }
   };
 

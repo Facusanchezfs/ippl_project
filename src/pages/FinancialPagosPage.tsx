@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import userService, { UpdateUserData, User } from '../services/user.service';
 import Button from '../components/common/Button';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 const FinancialPagosPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [professionals, setProfessionals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [comissionById, setComissionById] = useState<Record<string | number, number>>({});
@@ -46,7 +51,7 @@ const FinancialPagosPage: React.FC = () => {
     const updateData: UpdateUserData = {};
     try{
       updateData.commission = comission
-      let userUpdated = await userService.updateUser(userId, updateData);
+      const userUpdated = await userService.updateUser(userId, updateData);
       if (userUpdated.commission == comissionById[userUpdated.id]){
         toast.success("Comision actualizada correctamente")
       }
@@ -70,7 +75,18 @@ const FinancialPagosPage: React.FC = () => {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Gestión de Pagos de Profesionales</h1>
+      <div className="flex items-center gap-4 mb-6">
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => navigate('/admin')}
+            className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <ArrowLeftIcon className="h-5 w-5 mr-2" />
+            Volver al Dashboard
+          </button>
+        )}
+        <h1 className="text-2xl font-bold">Gestión de Pagos de Profesionales</h1>
+      </div>
       <div className="mb-4 text-lg font-semibold text-red-700">
         Pagos pendientes totales con el instituto: ${totalDeudaComision.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
       </div>

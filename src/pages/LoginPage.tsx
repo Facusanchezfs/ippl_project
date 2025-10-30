@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { AiOutlineEye, AiOutlineEyeInvisible } from 'react-icons/ai';
 import { motion } from 'framer-motion';
 import BubbleBackground from '../components/common/BubbleBackground';
+import { getFriendlyErrorMessage, ErrorMessages } from '../utils/errorMessages';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -50,11 +51,8 @@ const LoginPage = () => {
           navigate('/');
       }
     } catch (err: any) {
-      if (err.response?.data?.message) {
-        toast.error(err.response.data.message);
-      } else {
-        toast.error(error || 'Error al iniciar sesión');
-      }
+      const friendlyMessage = getFriendlyErrorMessage(err, ErrorMessages.LOGIN_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }

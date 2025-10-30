@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Header from '../components/common/Header';
 import Footer from '../components/common/Footer';
 import WhatsAppButton from '../components/common/WhatsAppButton';
+import InstagramButton from '../components/common/InstagramButton';
 import ContactCTA from '../components/home/ContactCTA';
 
 const PublicLayout: React.FC = () => {
@@ -17,6 +18,7 @@ const PublicLayout: React.FC = () => {
       </main>
       {location.pathname !== '/contacto' && <ContactCTA />}
       <WhatsAppButton />
+      <InstagramButton />
       {!noFooterPaths.includes(location.pathname) && <Footer />}
     </div>
   );

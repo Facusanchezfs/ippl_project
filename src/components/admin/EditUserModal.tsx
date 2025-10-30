@@ -29,7 +29,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
     if (formData.password) updateData.password = formData.password;
     if (formData.role !== user.role) updateData.role = formData.role;
     if (formData.status !== user.status) updateData.status = formData.status;
-    if ((formData.role === 'admin' || formData.role === 'professional') && formData.commission !== user.commission) updateData.commission = formData.commission;
+    if ((formData.role === 'admin' || formData.role === 'professional' || formData.role === 'financial') && formData.commission !== user.commission) updateData.commission = formData.commission;
 
     await onSubmit(user.id, updateData);
     onClose();
@@ -104,6 +104,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
             >
               <option value="professional">Psicólogo</option>
               <option value="content_manager">Editor de contenido</option>
+              <option value="financial">Financiero</option>
               <option value="admin">Administrador</option>
             </select>
           </div>
@@ -124,8 +125,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
             </select>
           </div>
 
-          {/* Campo de comisión solo para admin o doctor */}
-          {(formData.role === 'admin' || formData.role === 'professional') && (
+          {/* Campo de comisión solo para admin, professional o financial */}
+          {(formData.role === 'admin' || formData.role === 'professional' || formData.role === 'financial') && (
             <div>
               <label htmlFor="commission" className="block text-sm font-medium text-gray-700 mb-1">
                 Comisión (%)

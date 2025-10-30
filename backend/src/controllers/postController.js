@@ -152,7 +152,7 @@ const createPost = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Post creado exitosamente',
+      message: 'Post creado correctamente',
       post: toPostDTO(created),
     });
   } catch (error) {

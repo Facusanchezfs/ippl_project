@@ -20,7 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
 	useEffect(() => {
 		const token = localStorage.getItem('token');
-		console.log(
+		console.debug(
 			'[AuthProvider] mount. hasToken:',
 			!!token,
 			'path:',

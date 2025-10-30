@@ -1,35 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import postsService, { Post } from '../services/posts.service';
 import { CalendarIcon, HeartIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../utils/imageUtils';
+import { getFriendlyErrorMessage, ErrorMessages } from '../utils/errorMessages';
+import ImageModal from '../components/ImageModal';
 
 const BlogPostPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [post, setPost] = useState<Post | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (slug) {
-      loadPost(slug);
-    }
-  }, [slug]);
-
-  const loadPost = async (slug: string) => {
+  const loadPost = useCallback(async (slug: string) => {
     try {
       setIsLoading(true);
       const data = await postsService.getPostBySlug(slug);
       setPost(data);
       await postsService.incrementViews(data.id);
     } catch (error) {
-      toast.error('Error al cargar el post');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.POST_LOAD_FAILED);
+      toast.error(friendlyMessage);
       navigate('/blog');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (slug) {
+      loadPost(slug);
+    }
+  }, [slug, loadPost]);
 
   const handleLike = async () => {
     if (!post) return;
@@ -38,9 +42,11 @@ const BlogPostPage = () => {
       setPost(updatedPost);
       toast.success('¡Gracias por tu like!');
     } catch (error) {
-      toast.error('Error al dar like al post');
+      const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudo procesar tu like. Intenta nuevamente.');
+      toast.error(friendlyMessage);
     }
   };
+
 
   if (isLoading) {
     return (
@@ -68,11 +74,23 @@ const BlogPostPage = () => {
       {/* Header */}
       <header className="mb-8">
         {post.thumbnail && (
-          <img 
-            src={getImageUrl(post.thumbnail)} 
-            alt={post.title}
-            className="w-full max-h-96 object-cover rounded-lg shadow-lg mb-8"
-          />
+          <div className="w-full bg-black rounded-lg shadow-lg mb-8 cursor-pointer overflow-visible flex items-center justify-center">
+            <img 
+              src={getImageUrl(post.thumbnail)} 
+              alt={post.title}
+              className="max-w-full max-h-[90vh] object-contain"
+              onClick={() => setIsImageModalOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setIsImageModalOpen(true);
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              title="Click para ver imagen completa"
+            />
+          </div>
         )}
 
         <h1 className="text-4xl font-extrabold text-gray-900 mb-4">
@@ -113,6 +131,16 @@ const BlogPostPage = () => {
         className="prose prose-lg max-w-none"
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
+
+      {/* Image Modal */}
+      {post.thumbnail && (
+        <ImageModal
+          isOpen={isImageModalOpen}
+          onClose={() => setIsImageModalOpen(false)}
+          imageUrl={getImageUrl(post.thumbnail)}
+          imageAlt={post.title}
+        />
+      )}
     </article>
   );
 };

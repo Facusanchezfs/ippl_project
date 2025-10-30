@@ -90,7 +90,6 @@ const medicalHistoryService = {
   // Crear un nuevo historial médico
   createMedicalHistory: async (data: CreateMedicalHistoryDto) => {
     try {
-      console.log('Creating medical history:', data);
       const response = await api.post<MedicalHistory>('/medical-history', data);
       return response.data;
     } catch (error) {

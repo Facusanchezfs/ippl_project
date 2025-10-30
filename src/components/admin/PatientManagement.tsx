@@ -56,7 +56,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
       setIsRecording(true);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      toast.error('Error al acceder al micrófono');
+      toast.error('No se pudo acceder al micrófono. Verifica los permisos del navegador.');
     }
   };
 
@@ -446,7 +446,7 @@ const StatusRequestModal: React.FC<StatusRequestModalProps> = ({
               Rechazar
             </button>
             <button
-              onClick={() => { console.log('DEBUG: Botón Aprobar clickeado', { selectedStatusRequest }); handleSubmit(true); }}
+              onClick={() => handleSubmit(true)}
               disabled={isSubmitting}
               className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
             >
@@ -818,7 +818,6 @@ const PatientManagement = () => {
   };
 
   const handleApproveRequest = async (response: string) => {
-    console.log('DEBUG: handleApproveRequest called', { selectedStatusRequest, response });
     if (!selectedStatusRequest) return;
     try {
       await statusRequestService.approveRequest(selectedStatusRequest.id, response);
@@ -836,7 +835,6 @@ const PatientManagement = () => {
 
   const handleRejectRequest = async (response: string) => {
     if (!selectedStatusRequest) return;
-    console.log('DEBUG: Rechazo', { id: selectedStatusRequest.id, selectedStatusRequest });
     try {
       await statusRequestService.rejectRequest(String(selectedStatusRequest.id), response);
       await loadData(); // Recargar datos

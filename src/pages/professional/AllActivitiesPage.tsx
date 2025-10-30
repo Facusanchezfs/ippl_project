@@ -8,6 +8,7 @@ import {
 } from '@heroicons/react/24/outline';
 import activityService from '../../services/activity.service';
 import { useAuth } from '../../context/AuthContext';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import type { Activity } from '../../types/Activity';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -43,7 +44,8 @@ const AllActivitiesPage = () => {
       setActivities(filteredActivities);
     } catch (error) {
       console.error('Error al cargar actividades:', error);
-      toast.error('Error al cargar las actividades');
+      const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar las actividades. Intenta recargar la página.');
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }

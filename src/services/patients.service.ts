@@ -53,7 +53,6 @@ const patientsService = {
 
   uploadAudio: async (audioFile: File): Promise<string> => {
     try {
-      console.log('Iniciando subida de audio:', audioFile.name, 'tipo:', audioFile.type);
       
     const formData = new FormData();
     formData.append('audio', audioFile);
@@ -64,7 +63,6 @@ const patientsService = {
       },
     });
     
-      console.log('Respuesta del servidor:', response.data);
       
       if (!response.data.audioUrl) {
         throw new Error('No se recibió la URL del audio del servidor');

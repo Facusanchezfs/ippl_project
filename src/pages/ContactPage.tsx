@@ -97,8 +97,7 @@ const ContactPage: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-lg font-semibold text-gray-900">Teléfono</h3>
-                    <p className="text-gray-600">+54 11 1234-5678</p>
-                    <p className="text-gray-600">+54 11 8765-4321</p>
+                    <p className="text-gray-600">+54 3442 345555</p>
                   </div>
                 </div>
 
@@ -108,8 +107,7 @@ const ContactPage: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-lg font-semibold text-gray-900">Email</h3>
-                    <p className="text-gray-600">contacto@ippl.com.ar</p>
-                    <p className="text-gray-600">info@ippl.com.ar</p>
+                    <p className="text-gray-600">ipplcdelu@gmail.com</p>
                   </div>
                 </div>
 
@@ -119,8 +117,8 @@ const ContactPage: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-lg font-semibold text-gray-900">Dirección</h3>
-                    <p className="text-gray-600">Av. Corrientes 1234</p>
-                    <p className="text-gray-600">Buenos Aires, Argentina</p>
+                    <p className="text-gray-600">21 de noviembre 364</p>
+                    <p className="text-gray-600">Concepción del Uruguay, Entre Ríos</p>
                   </div>
                 </div>
 
@@ -144,7 +142,7 @@ const ContactPage: React.FC = () => {
               </h2>
               <div className="aspect-w-16 aspect-h-9">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3284.0168878895474!2d-58.38375908477038!3d-34.60373888045943!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4aa9f0a6da5edb%3A0x11bead4e234e558b!2sAv.+Corrientes+1234%2C+C1043AAZ+CABA!5e0!3m2!1ses-419!2sar!4v1560998105975!5m2!1ses-419!2sar"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3348.123456789!2d-58.27777777777778!3d-32.48333333333333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x95b2c1234567890%3A0x1234567890abcdef!2s21+de+noviembre+364%2C+Concepci%C3%B3n+del+Uruguay%2C+Entre+R%C3%ADos!5e0!3m2!1ses-419!2sar!4v1560998105975!5m2!1ses-419!2sar"
                   className="w-full h-64 rounded-xl"
                   style={{ border: 0 }}
                   allowFullScreen

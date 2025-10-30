@@ -11,12 +11,11 @@ export const useSocket = (role: string) => {
       socket = io(API_URL);
 
       socket.on('connect', () => {
-        console.log('Conectado al servidor de WebSocket');
         socket?.emit('joinRoom', role);
       });
 
       socket.on('disconnect', () => {
-        console.log('Desconectado del servidor de WebSocket');
+        console.debug('Desconectado del servidor de WebSocket');
       });
     }
     return socket;

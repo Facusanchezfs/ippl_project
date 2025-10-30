@@ -103,6 +103,16 @@ class PostsService {
 		return resp.data;
 	}
 
+	async getPostBySlug(slug: string): Promise<Post> {
+		const res = await api.get<PostResponse>(`/posts/slug/${slug}`);
+		return res.data.post;
+	}
+
+	async likePost(id: string): Promise<Post> {
+		const resp = await api.post<Post>(`/posts/${id}/toggle-like`);
+		return resp.data;
+	}
+
 	async getStats() {
 		const resp = await api.get('/stats');
 		return resp.data;

@@ -175,7 +175,6 @@ const ContentEditorModal = (props: PostEditorProps) => {
       postData.append('readTime', readTime);
 
       await props.onSave(postData, props.post?.id ?? '');
-      toast.success(isEditing ? 'Post actualizado' : 'Post creado');
       props.closeModal(null);
     } catch (error) {
       console.error('Error al guardar post:', error);
@@ -330,7 +329,7 @@ const ContentEditorModal = (props: PostEditorProps) => {
                           : URL.createObjectURL(formData.thumbnail)
                       }
                       alt="Vista previa"
-                      className="max-h-40 rounded-lg mx-auto"
+                      className="max-h-60 max-w-full rounded-lg mx-auto object-contain"
                     />
                   </div>
                 ) : (

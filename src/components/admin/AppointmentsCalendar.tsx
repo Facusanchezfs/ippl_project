@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Calendar, momentLocalizer, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/es';
@@ -9,8 +9,18 @@ import { Appointment } from '../../types/Appointment';
 import { ArrowLeftIcon, ClockIcon, UserIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 
-moment.locale('es');
+// Configurar moment en español de forma robusta
+moment.locale('es', {
+  weekdays: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
+  weekdaysShort: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
+  weekdaysMin: ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'],
+  months: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+  monthsShort: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+});
+
+// Crear localizador con configuración específica para español
 const localizer = momentLocalizer(moment);
 
 // Función para obtener el color según el tipo de cita
@@ -60,11 +70,7 @@ const AppointmentsCalendar = () => {
   const [view, setView] = useState<View>('week');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadAppointments();
-  }, [user]);
-
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -73,10 +79,10 @@ const AppointmentsCalendar = () => {
       
       // Convertir las citas al formato que espera el calendario
       const formattedAppointments = data.map(appointment => {
-        let start = toLocalDate(appointment.date, appointment.startTime);
+        const start = toLocalDate(appointment.date, appointment.startTime);
         let end   = toLocalDate(appointment.date, appointment.endTime);
 
-        // Garantizar end > start (y evitar “doble día” por igualdades)
+        // Garantizar end > start (y evitar "doble día" por igualdades)
         if (end <= start) {
           end = new Date(start.getTime() + 30 * 60 * 1000); // +30 min de respaldo
         }
@@ -92,11 +98,16 @@ const AppointmentsCalendar = () => {
       setAppointments(formattedAppointments);
     } catch (error) {
       console.error('Error al cargar las citas:', error);
-      toast.error('Error al cargar las citas');
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.APPOINTMENT_LOAD_FAILED);
+      toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
 
   const toLocalDate = (dateStr: string, timeStr: string) => {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -238,6 +249,16 @@ const AppointmentsCalendar = () => {
             components={{ event: EventComponent, toolbar: CustomToolbar }}
             onView={(newView) => setView(newView)}
             view={view}
+            culture="es"
+            formats={{
+              dayFormat: (date: Date) => moment(date).format('dddd'),
+              weekdayFormat: (date: Date) => moment(date).format('dddd'),
+              dayHeaderFormat: (date: Date) => moment(date).format('dddd'),
+              dayRangeHeaderFormat: ({ start, end }: { start: Date; end: Date }) => 
+                moment(start).format('dddd') + ' - ' + moment(end).format('dddd'),
+              monthHeaderFormat: (date: Date) => moment(date).format('MMMM YYYY'),
+              timeGutterFormat: (date: Date) => moment(date).format('HH:mm')
+            }}
             messages={{
               next: "Siguiente",
               previous: "Anterior",
@@ -306,7 +327,7 @@ const AppointmentsCalendar = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Costo</label>
                   <p className="mt-1 text-sm text-gray-900">
-                    ${selectedAppointment.sessionCost?.toFixed(2) || '0.00'}
+                    ${selectedAppointment.sessionCost?.toFixed(2) ?? '0.00'}
                   </p>
                 </div>
               </div>

@@ -1,8 +1,6 @@
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 import {
   BeakerIcon,
-  HeartIcon,
   UsersIcon,
   UserIcon,
   AcademicCapIcon,
@@ -73,11 +71,6 @@ const ServicesPage = () => {
       icon: ClockIcon,
       title: "Horarios Flexibles",
       description: "Adaptamos nuestros horarios a tus necesidades"
-    },
-    {
-      icon: SparklesIcon,
-      title: "Primera Consulta Gratuita",
-      description: "Conoce a nuestro equipo sin compromiso"
     },
     {
       icon: UsersIcon,
@@ -162,29 +155,31 @@ const ServicesPage = () => {
 
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" data-aos="fade-up">
-        <div className="bg-[#E5E7EB] rounded-3xl shadow-lg overflow-hidden">
-          <div className="px-6 py-16 sm:p-16">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {features.map((feature, idx) => (
-                <div 
-                  key={feature.title} 
-                  className="flex items-start"
-                  data-aos="fade-right"
-                  data-aos-delay={idx * 150}
-                >
-                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10">
-                    <feature.icon className="h-6 w-6 text-primary" />
+        <div className="flex justify-center">
+          <div className="bg-[#E5E7EB] rounded-3xl shadow-lg overflow-hidden max-w-4xl">
+            <div className="px-6 py-16 sm:p-16">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {features.map((feature, idx) => (
+                  <div 
+                    key={feature.title} 
+                    className="flex items-start"
+                    data-aos="fade-right"
+                    data-aos-delay={idx * 150}
+                  >
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10">
+                      <feature.icon className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-semibold text-[#374151]">
+                        {feature.title}
+                      </h3>
+                      <p className="mt-1 text-[#006C73]">
+                        {feature.description}
+                      </p>
+                    </div>
                   </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-semibold text-[#374151]">
-                      {feature.title}
-                    </h3>
-                    <p className="mt-1 text-[#006C73]">
-                      {feature.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

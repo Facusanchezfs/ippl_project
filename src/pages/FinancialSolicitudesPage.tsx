@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import patientsService from '../services/patients.service';
 import frequencyRequestService, { FrequencyRequest } from '../services/frequencyRequest.service';
 import statusRequestService from '../services/statusRequest.service';
 import { StatusRequest } from '../types/StatusRequest';
 import { Patient } from '../types/Patient';
-import { AdjustmentsHorizontalIcon, XCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { AdjustmentsHorizontalIcon, XCircleIcon, CheckCircleIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 const FinancialSolicitudesPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -46,7 +50,18 @@ const FinancialSolicitudesPage: React.FC = () => {
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-extrabold mb-8 text-gray-800">Solicitudes de Pacientes</h1>
+      <div className="flex items-center gap-4 mb-8">
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => navigate('/admin')}
+            className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <ArrowLeftIcon className="h-5 w-5 mr-2" />
+            Volver al Dashboard
+          </button>
+        )}
+        <h1 className="text-3xl font-extrabold text-gray-800">Solicitudes de Pacientes</h1>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white border rounded-xl shadow">
           <thead>

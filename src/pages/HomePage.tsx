@@ -173,6 +173,63 @@ const HomePage = () => {
           </div>
         </section>
 
+        {/* Professional Referral Section */}
+        <section className="py-16 bg-gradient-to-br from-[#006C73] to-[#80C0D0]" data-aos="fade-up">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-extrabold text-white sm:text-4xl mb-8">
+                Cuando no sabés a quién consultar:
+              </h2>
+              
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 md:p-12 shadow-2xl">
+                  <div className="space-y-6 text-left">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                          <span className="text-white font-bold text-lg">1</span>
+                        </div>
+                      </div>
+                      <p className="text-white text-lg leading-relaxed">
+                        <span className="font-semibold">A partir de una entrevista de admisión,</span> evaluamos tu demanda y te derivamos al profesional más indicado para vos.
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                          <span className="text-white font-bold text-lg">2</span>
+                        </div>
+                      </div>
+                      <p className="text-white text-lg leading-relaxed">
+                        <span className="font-semibold">Contamos con un equipo de psicólogos</span> formados en diversas corrientes y abordajes terapéuticos, en constante formación y supervisión clínica.
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                          <span className="text-white font-bold text-lg">3</span>
+                        </div>
+                      </div>
+                      <p className="text-white text-lg leading-relaxed">
+                        <span className="font-semibold">De este modo, garantizamos</span> un acompañamiento personalizado y adecuado a las necesidades de cada paciente.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-8 pt-6 border-t border-white/20">
+                    <div className="flex items-center justify-center space-x-2 text-white/90">
+                      <HeartIcon className="h-6 w-6" />
+                      <span className="text-lg font-medium">Tu bienestar es nuestra prioridad</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Services Section */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" data-aos="fade-up">
           <div className="text-center">
@@ -248,10 +305,10 @@ const services = [
     link: '/servicios#pareja'
   },
   {
-    name: 'Coaching Personal',
-    description: 'Acompañamiento para alcanzar tus metas y desarrollar tu máximo potencial.',
+    name: 'Terapia de Familia',
+    description: 'Acompañamiento para resolver conflictos y fortalecer los lazos familiares.',
     icon: BoltIcon,
-    link: '/servicios#coaching'
+    link: '/servicios#familia'
   }
 ];
 
