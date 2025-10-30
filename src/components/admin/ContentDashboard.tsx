@@ -41,6 +41,7 @@ const ContentDashboard = () => {
   const fileInputRef= useRef<HTMLInputElement | null>(null);
   const [carouselImages, setCarouselImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasSelectedFiles, setHasSelectedFiles] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [isDeleteCarouselModalOpen, setIsDeleteCarouselModalOpen] = useState(false);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
@@ -214,6 +215,7 @@ const ContentDashboard = () => {
       if(fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      setHasSelectedFiles(false);
     } catch (err) {
       toast.dismiss();
       const friendlyMessage = getFriendlyErrorMessage(err, ErrorMessages.FILE_UPLOAD_FAILED);
@@ -523,12 +525,14 @@ const ContentDashboard = () => {
                     ref={fileInputRef}
                     multiple
                     accept="image/*"
+                    onChange={(e) => setHasSelectedFiles((e.target.files?.length || 0) > 0)}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 cursor-pointer"
                 />
                 <button
                     onClick={handleCarouselUpload}
-                    disabled={isUploading}
-                    className="w-full md:w-auto self-start px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                    disabled={!hasSelectedFiles || isUploading}
+                    title={!hasSelectedFiles ? 'Selecciona al menos una imagen para poder subir' : 'Subir imagen al carrusel'}
+                    className="w-full md:w-auto self-start px-6 py-2 rounded-lg transition-colors text-white disabled:cursor-not-allowed disabled:bg-gray-400 bg-blue-600 hover:bg-blue-700"
                 >
                     {isUploading ? 'Subiendo...' : 'Subir Imagen'}
                 </button>
