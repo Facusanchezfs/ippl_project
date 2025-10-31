@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+
 import {
   HeartIcon,
   AcademicCapIcon,
@@ -73,7 +73,7 @@ const AboutPage = () => {
             <div className="relative h-96 lg:h-auto" data-aos="fade-left">
               <img
                 className="absolute inset-0 w-full h-full object-cover"
-                src="/images/GALERÍA-43-1024x576.jpg"
+                src="/images/image.jpg"
                 alt="Equipo del Instituto de Psicología Profesional de Argentina"
               />
             </div>
