@@ -100,4 +100,38 @@ const verifyToken = (req, res, next) => {
 	}
 };
 
-module.exports = { login, refreshToken, verifyToken };
+/**
+ * Obtiene el usuario actual autenticado
+ * Requiere token válido en el header Authorization
+ */
+const getCurrentUser = async (req, res) => {
+	try {
+		// req.user viene del middleware authenticateToken
+		if (!req.user || !req.user.id) {
+			return res.status(401).json({ message: 'Usuario no autenticado' });
+		}
+
+		// Buscar usuario en la base de datos
+		const user = await User.findByPk(req.user.id);
+
+		if (!user) {
+			return res.status(404).json({ message: 'Usuario no encontrado' });
+		}
+
+		// Verificar que el usuario esté activo
+		if (user.status === 'inactive') {
+			return res.status(403).json({ 
+				message: 'Cuenta inactiva. Contacta al administrador.' 
+			});
+		}
+
+		// Devolver usuario en formato DTO
+		const userDTO = toUserDTO(user);
+		return res.json({ user: userDTO });
+	} catch (error) {
+		console.error('Error al obtener usuario actual:', error);
+		return res.status(500).json({ message: 'Error al obtener usuario' });
+	}
+};
+
+module.exports = { login, refreshToken, verifyToken, getCurrentUser };
