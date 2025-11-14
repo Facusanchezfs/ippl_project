@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  ClockIcon, 
-  UserIcon, 
+  ClockIcon,
   CheckCircleIcon, 
   XCircleIcon,
   BellIcon,
@@ -30,21 +29,22 @@ const RecentActivityProfessional = () => {
     try {
       setIsLoading(true);
       const data = await activityService.getActivities();
-      // Filtrar actividades relevantes para el profesional
-      const filteredActivities = data.filter(activity => {
-        // Solo mostrar actividades relacionadas con el profesional actual
-        if (activity.metadata?.professionalId && activity.metadata.professionalId !== user?.id) {
-          return false;
-        }
-        // Tipos de actividades a mostrar
-        return [
-          'FREQUENCY_CHANGE_APPROVED',
-          'FREQUENCY_CHANGE_REJECTED',
-          'STATUS_CHANGE_APPROVED',
-          'STATUS_CHANGE_REJECTED'
-        ].includes(activity.type);
-      }).slice(0, MAX_ACTIVITIES); // Limitar a 4 actividades
-      setActivities(filteredActivities);
+      const normalizedActivities = data
+        .filter(activity => {
+          if (activity.metadata?.professionalId && activity.metadata.professionalId !== user?.id) {
+            return false;
+          }
+          return [
+            'FREQUENCY_CHANGE_APPROVED',
+            'FREQUENCY_CHANGE_REJECTED',
+            'STATUS_CHANGE_APPROVED',
+            'STATUS_CHANGE_REJECTED'
+          ].includes(activity.type);
+        })
+        .map(normalizeFrequencyActivity)
+        .slice(0, MAX_ACTIVITIES);
+
+      setActivities(normalizedActivities);
     } catch (error) {
       console.error('Error al cargar actividades:', error);
       const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar las actividades recientes. Intenta recargar la página.');
@@ -91,6 +91,82 @@ const RecentActivityProfessional = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Función para traducir frecuencia
+  const translateFrequency = (freq: string | undefined): string => {
+    switch (freq) {
+      case 'weekly': return 'Semanal';
+      case 'biweekly': return 'Quincenal';
+      case 'monthly': return 'Mensual';
+      default: return 'No asignada';
+    }
+  };
+
+  const normalizeFrequencyActivity = (activity: Activity): Activity => {
+    if (!activity.type.startsWith('FREQUENCY_CHANGE')) {
+      return activity;
+    }
+
+    const patientName = activity.metadata?.patientName || 'un paciente';
+    const requestedFrequency = translateFrequency((activity.metadata?.requestedFrequency as string) || (activity.metadata?.newFrequency as string));
+
+    if (activity.type === 'FREQUENCY_CHANGE_APPROVED' || activity.type === 'FREQUENCY_CHANGE_REJECTED') {
+      const actionText = activity.type === 'FREQUENCY_CHANGE_APPROVED' ? 'aprobó' : 'rechazó';
+      return {
+        ...activity,
+        title: `Solicitud de cambio de frecuencia ${actionText}`,
+        description: `Se ${actionText} el cambio de frecuencia para ${patientName} a ${requestedFrequency}`,
+      };
+    }
+
+    const professionalName = activity.metadata?.professionalName || 'Un administrador';
+    const currentFrequency = translateFrequency(activity.metadata?.currentFrequency as string);
+
+    return {
+      ...activity,
+      title: 'Solicitud de cambio de frecuencia',
+      description: `${professionalName} solicitó cambiar la frecuencia de sesiones de ${patientName} de ${currentFrequency} a ${requestedFrequency}`,
+    };
+  };
+
+  // Función para traducir descripción de actividad
+  const translateDescription = (description: string, metadata?: Activity['metadata']): string => {
+    let translated = description;
+    
+    // Reemplazar frecuencias en inglés
+    translated = translated.replace(/\bweekly\b/gi, 'Semanal');
+    translated = translated.replace(/\bbiweekly\b/gi, 'Quincenal');
+    translated = translated.replace(/\bmonthly\b/gi, 'Mensual');
+    
+    // Reemplazar estados en inglés
+    translated = translated.replace(/\bapproved\b/gi, 'Aprobado');
+    translated = translated.replace(/\brejected\b/gi, 'Rechazado');
+    translated = translated.replace(/\bpending\b/gi, 'Pendiente');
+    translated = translated.replace(/\bactive\b/gi, 'Activo');
+    translated = translated.replace(/\binactive\b/gi, 'Inactivo');
+    
+    // Si hay metadata con newFrequency, currentFrequency, etc., traducirlos también
+    if (metadata?.newFrequency) {
+      translated = translated.replace(
+        metadata.newFrequency as string,
+        translateFrequency(metadata.newFrequency as string)
+      );
+    }
+    if (metadata?.currentFrequency) {
+      translated = translated.replace(
+        metadata.currentFrequency as string,
+        translateFrequency(metadata.currentFrequency as string)
+      );
+    }
+    if (metadata?.requestedFrequency) {
+      translated = translated.replace(
+        metadata.requestedFrequency as string,
+        translateFrequency(metadata.requestedFrequency as string)
+      );
+    }
+    
+    return translated;
   };
 
   if (isLoading) {
@@ -146,7 +222,7 @@ const RecentActivityProfessional = () => {
                   {activity.title}
                 </p>
                 <p className="text-sm text-gray-500">
-                  {activity.description}
+                  {translateDescription(activity.description, activity.metadata)}
                 </p>
                 {activity.metadata?.adminResponse && (
                   <p className="mt-1 text-sm text-gray-600 italic">

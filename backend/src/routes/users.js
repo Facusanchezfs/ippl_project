@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../controllers/authController');
-const { getUserById, getUsers, createUser, updateUser, deleteUser, abonarComision, getAbonos, getProfessionals } = require('../controllers/userController');
+const { getUserById, getUsers, createUser, updateUser, deleteUser, permanentDeleteUser, abonarComision, getAbonos, getProfessionals } = require('../controllers/userController');
 
 // Proteger todas las rutas
 router.use(verifyToken);
@@ -24,8 +24,11 @@ router.post('/', createUser);
 // Actualizar un usuario
 router.put('/:id', updateUser);
 
-// Eliminar un usuario
+// Eliminar un usuario (soft delete - desactivar)
 router.delete('/:id', deleteUser);
+
+// Eliminar permanentemente un usuario (solo usuarios inactivos)
+router.delete('/:id/permanent', permanentDeleteUser);
 
 // Abonar comisión a un profesional
 router.post('/:id/abonar-comision', abonarComision);

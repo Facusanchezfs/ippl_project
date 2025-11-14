@@ -7,10 +7,37 @@ async function createActivity(type, title, description, metadata = {}) {
     const patientId = metadata?.patientId ?? null;
     const professionalId = metadata?.professionalId ?? null;
 
+    let normalizedTitle = title;
+    let normalizedDescription = description;
+
+    if (type.startsWith('FREQUENCY_CHANGE')) {
+      const humanFrequency = (freq) => {
+        switch (freq) {
+          case 'weekly':
+            return 'Semanal';
+          case 'biweekly':
+            return 'Quincenal';
+          case 'monthly':
+            return 'Mensual';
+          default:
+            return freq;
+        }
+      };
+
+      normalizedTitle = 'Solicitud de cambio de frecuencia';
+
+      const professionalName = metadata.professionalName || 'Un profesional';
+      const patientName = metadata.patientName || 'un paciente';
+      const currentFrequency = humanFrequency(metadata.currentFrequency);
+      const requestedFrequency = humanFrequency(metadata.requestedFrequency || metadata.newFrequency);
+
+      normalizedDescription = `${professionalName} solicitó cambiar la frecuencia de sesiones de ${patientName} de ${currentFrequency} a ${requestedFrequency}`;
+    }
+
     const created = await Activity.create({
       type,
-      title,
-      description,
+      title: normalizedTitle,
+      description: normalizedDescription,
       metadata,
       occurredAt: new Date(),
       patientId,
@@ -34,6 +61,7 @@ async function getActivities(req, res) {
       'STATUS_CHANGE_APPROVED',
       'STATUS_CHANGE_REJECTED',
       'FREQUENCY_CHANGE_REQUEST',
+      'FREQUENCY_CHANGE_REQUESTED',
       'FREQUENCY_CHANGE_APPROVED',
       'FREQUENCY_CHANGE_REJECTED'
     ];
@@ -41,13 +69,8 @@ async function getActivities(req, res) {
     const activities = await Activity.findAll({
       where: { type: relevantTypes },
       order: [['occurredAt', 'DESC']],
-      // Opcional: limit/offset vía querystring si lo necesitas
-      // limit: Number(req.query.limit) || 100,
-      // offset: Number(req.query.offset) || 0,
     });
 
-    // Devolvemos array (igual que antes), pero mapeado a DTO
-    console.log(activities);
     res.json(toActivityDTOList(activities));
   } catch (error) {
     console.error('Error getting activities:', error);

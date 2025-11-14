@@ -14,6 +14,7 @@ const statusRequestsRoutes = require('./routes/statusRequests');
 const frequencyRequestsRoutes = require('./routes/frequencyRequests');
 const medicalHistoryRouter = require('./routes/medicalHistory');
 const activitiesRouter = require('./routes/activities');
+const paymentsRouter = require('./routes/payments');
 
 const app = express();
 
@@ -84,6 +85,7 @@ app.use('/api/status-requests', statusRequestsRoutes);
 app.use('/api/frequency-requests', frequencyRequestsRoutes);
 app.use('/api/medical-history', medicalHistoryRouter);
 app.use('/api/activities', activitiesRouter);
+app.use('/api/payments', paymentsRouter);
 
 // se sirve este ep para el muestreo correcto de las imagenes estaticas cargadas en el servidor
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));

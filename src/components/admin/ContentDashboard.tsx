@@ -18,7 +18,8 @@ import {
   BookmarkIcon,
   DocumentTextIcon,
   AdjustmentsHorizontalIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import contentManagementService from '../../services/content.service';
@@ -295,17 +296,26 @@ const ContentDashboard = () => {
           </div>
           <div className="flex items-center gap-4">
             {user?.role === 'content_manager' && (
-              <button
-                onClick={() => setShowModal(true)}
-                disabled={!userLoaded}
-                className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${userLoaded
-                    ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
-                    : 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                  }`}
-              >
-                <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
-                  Cambiar contraseña
+              <>
+                <button
+                  onClick={() => setShowModal(true)}
+                  disabled={!userLoaded}
+                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${userLoaded
+                      ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                      : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    }`}
+                >
+                  <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
+                    Cambiar contraseña
+                  </button>
+                <button
+                  onClick={() => navigate('/content/mensajes')}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <ChatBubbleLeftRightIcon className="h-5 w-5 mr-2" />
+                  Ver mensajes
                 </button>
+              </>
             )}
             <button
               onClick={handleRefresh}

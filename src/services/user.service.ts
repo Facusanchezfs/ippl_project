@@ -62,6 +62,10 @@ const userService = {
 		await api.delete(`/users/${id}`);
 	},
 
+	permanentDeleteUser: async (id: string): Promise<void> => {
+		await api.delete(`/users/${id}/permanent`);
+	},
+
 	abonarComision: async (id: string, abono: number): Promise<void> => {
 		await api.post(`/users/${id}/abonar-comision`, { abono });
 	},

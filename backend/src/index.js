@@ -73,6 +73,7 @@ const professionalsRoutes = require('./routes/professionals');
 const activitiesRoutes = require('./routes/activities');
 const messageRoutes = require('./routes/messageRoutes');
 const contentRoutes = require('./routes/content');
+const paymentsRoutes = require('./routes/payments');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -84,6 +85,7 @@ app.use('/api/professionals', professionalsRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/payments', paymentsRoutes);
 
 // Ruta específica para subir archivos de audio
 app.post('/api/upload/audio', upload.single('audio'), (req, res) => {
@@ -141,7 +143,7 @@ async function startServer() {
 	try {
 		await ensureDirectories();
 		await sequelize.authenticate();
-		+console.log('✅ [DB] Conectada correctamente');
+		console.log('✅ [DB] Conectada correctamente');
 
 		app.listen(PORT, () => {
 			console.log(`Server is running on port ${PORT}`);

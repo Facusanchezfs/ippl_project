@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 module.exports = {
 	async up(queryInterface, Sequelize) {
 		const supporthash = await bcrypt.hash('Password1', 10);
+		const testHash = await bcrypt.hash('1234', 10);
 		await queryInterface.bulkInsert('Users', [
 			{
 				name: 'Roberta Gorischnik',
@@ -320,16 +321,25 @@ module.exports = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			},
+			{
+				name: 'Test Dev',
+				email: 'test@dev.com',
+				password: testHash,
+				role: 'admin',
+				status: 'active',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		]);
 	},
 
 	async down(queryInterface, Sequelize) {
-		// Elimina los dos usuarios por su email
+		// Elimina los usuarios por su email
 		await queryInterface.bulkDelete(
 			'Users',
 			{
 				email: {
-					[Sequelize.Op.in]: ['facundo.eet2@gmail.com'],
+					[Sequelize.Op.in]: ['facundo.eet2@gmail.com', 'test@dev.com'],
 				},
 			},
 			{}

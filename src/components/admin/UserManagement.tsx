@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast';
-import { User, Edit2, Trash2, Search, UserPlus, X, ArrowBigUpDash } from 'lucide-react';
+import { User, Edit2, Trash2, Search, UserPlus, X, ArrowBigUpDash, ArrowBigDown } from 'lucide-react';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Button from '../common/Button';
 import userService, { User as UserType, CreateUserData, UpdateUserData } from '../../services/user.service';
 import EditUserModal from './EditUserModal';
 import AddUserModal from './AddUserModal';
 import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
+import { useAuth } from '../../context/AuthContext';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
@@ -16,12 +17,15 @@ const UserManagement: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isActiveModalOpen, setIsActiveModalOpen] = useState(false);
+  const [isPermanentDeleteModalOpen, setIsPermanentDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserType | null>(null);
   const [userToActive, setUserToActive] = useState<UserType | null>(null);
+  const [userToPermanentDelete, setUserToPermanentDelete] = useState<UserType | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
 
   useEffect(() => {
     loadUsers();
@@ -104,6 +108,26 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const handlePermanentDeleteClick = (user: UserType) => {
+    setUserToPermanentDelete(user);
+    setIsPermanentDeleteModalOpen(true);
+  };
+
+  const handlePermanentDeleteConfirm = async () => {
+    if (!userToPermanentDelete) return;
+    
+    try {
+      await userService.permanentDeleteUser(userToPermanentDelete.id);
+      toast.success('Usuario eliminado permanentemente');
+      loadUsers();
+      setIsPermanentDeleteModalOpen(false);
+      setUserToPermanentDelete(null);
+    } catch (error) {
+      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.USER_DELETE_FAILED);
+      toast.error(friendlyMessage);
+    }
+  };
+
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -126,6 +150,10 @@ const UserManagement: React.FC = () => {
   };
 
   const filteredUsers = users.filter(user => {
+    if (currentUser && String(user.id) === String(currentUser.id)) {
+      return false;
+    }
+
     const matchesSearch = 
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -252,24 +280,36 @@ const UserManagement: React.FC = () => {
                         setSelectedUser(user);
                         setIsEditModalOpen(true);
                       }}
-                      title="Editar"
+                      title="Editar usuario"
                     >
                       <Edit2 size={18} />
                     </button>
-                    {user.status == 'active' ?
-                    <button
-                      className="text-red-600 hover:text-red-900 transition-colors duration-200"
-                      onClick={() => handleDeleteClick(user)}
-                      title="Eliminar"
-                    >
-                      <Trash2 size={18} />
-                    </button> : <button
-                      className="text-green-600 hover:text-green-900 transition-colors duration-200"
-                      onClick={() => handleActiveClick(user)}
-                      title="Eliminar"
-                    >
-                      <ArrowBigUpDash size={18} />
-                    </button>}
+                    {user.status === 'active' ? (
+                      <button
+                        className="text-red-600 hover:text-red-900 transition-colors duration-200"
+                        onClick={() => handleDeleteClick(user)}
+                        title="Deshabilitar usuario"
+                      >
+                        <ArrowBigDown size={18} />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className="text-green-600 hover:text-green-900 transition-colors duration-200"
+                          onClick={() => handleActiveClick(user)}
+                          title="Habilitar usuario"
+                        >
+                          <ArrowBigUpDash size={18} />
+                        </button>
+                        <button
+                          className="text-red-600 hover:text-red-900 transition-colors duration-200 ml-2"
+                          onClick={() => handlePermanentDeleteClick(user)}
+                          title="Eliminar usuario permanentemente"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))
@@ -339,23 +379,36 @@ const UserManagement: React.FC = () => {
                         setSelectedUser(user);
                         setIsEditModalOpen(true);
                       }}
+                      title="Editar usuario"
                     >
                         <Edit2 size={18} />
                       </button>
-                    {user.status == 'active' ?
-                    <button
-                      className="text-red-600 hover:text-red-900 transition-colors duration-200"
-                      onClick={() => handleDeleteClick(user)}
-                      title="Eliminar"
-                    >
-                      <Trash2 size={18} />
-                    </button> : <button
-                      className="text-green-600 hover:text-green-900 transition-colors duration-200"
-                      onClick={() => handleActiveClick(user)}
-                      title="Eliminar"
-                    >
-                      <ArrowBigUpDash size={18} />
-                    </button>}
+                    {user.status === 'active' ? (
+                      <button
+                        className="text-red-600 hover:text-red-900 transition-colors duration-200"
+                        onClick={() => handleDeleteClick(user)}
+                        title="Deshabilitar usuario"
+                      >
+                        <ArrowBigDown size={18} />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className="text-green-600 hover:text-green-900 transition-colors duration-200"
+                          onClick={() => handleActiveClick(user)}
+                          title="Habilitar usuario"
+                        >
+                          <ArrowBigUpDash size={18} />
+                        </button>
+                        <button
+                          className="text-red-600 hover:text-red-900 transition-colors duration-200 ml-2"
+                          onClick={() => handlePermanentDeleteClick(user)}
+                          title="Eliminar usuario permanentemente"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </>
+                    )}
                     </td>
                   </tr>
                 ))
@@ -485,6 +538,57 @@ const UserManagement: React.FC = () => {
               >
                 Activar nuevamente
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPermanentDeleteModalOpen && userToPermanentDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-red-600">
+                Confirmar eliminación permanente
+              </h3>
+              <button
+                onClick={() => {
+                  setIsPermanentDeleteModalOpen(false);
+                  setUserToPermanentDelete(null);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mt-3">
+              <p className="text-sm text-gray-500">
+                ¿Está seguro de que desea eliminar permanentemente este usuario? Esta acción no se puede deshacer.
+              </p>
+              <div className="mt-2">
+                <p className="text-sm font-medium text-gray-900">{userToPermanentDelete.name}</p>
+                <p className="text-sm text-gray-500">{userToPermanentDelete.email}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPermanentDeleteModalOpen(false);
+                  setUserToPermanentDelete(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handlePermanentDeleteConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Eliminar permanentemente
+              </button>
             </div>
           </div>
         </div>

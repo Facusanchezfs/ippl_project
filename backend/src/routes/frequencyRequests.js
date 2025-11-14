@@ -85,6 +85,7 @@ router.post(
         'Nueva solicitud de cambio de frecuencia',
         `${professionalName} ha solicitado ${verbo} la frecuencia de sesiones de ${patient.name} a ${newFrequency}`,
         {
+          requestId: created.id,
           patientId,
           patientName: patient.name,
           professionalId,
@@ -212,6 +213,7 @@ router.post(
         'Solicitud de cambio de frecuencia aprobada',
         `Se ha aprobado la frecuencia para ${snapshot.patientName} a ${snapshot.requestedFrequency}`,
         {
+          requestId: snapshot.id,
           patientId: snapshot.patientId,
           patientName: snapshot.patientName,
           professionalId: snapshot.professionalId,
@@ -286,14 +288,15 @@ router.post(
       await createActivity(
         'FREQUENCY_CHANGE_REJECTED',
         'Solicitud de cambio de frecuencia rechazada',
-        `Se ha rechazado el cambio de frecuencia para ${snapshot.patientName}`,
+        `Se ha rechazado la frecuencia solicitada para ${snapshot.patientName}`,
         {
-          patientId: snapshot.patientId,
+          requestId: snapshot.id,
+          patientId: String(snapshot.patientId ?? ''),
           patientName: snapshot.patientName,
-          professionalId: snapshot.professionalId,
+          professionalId: String(snapshot.professionalId ?? ''),
           professionalName: snapshot.professionalName,
           requestedFrequency: snapshot.requestedFrequency,
-          reason: snapshot.adminResponse,
+          currentFrequency: snapshot.currentFrequency,
         }
       );
 

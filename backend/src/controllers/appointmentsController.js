@@ -338,7 +338,7 @@ const updateAppointment = async (req, res) => {
         commissionInt = Math.max(0, Math.min(100, commissionInt));
         const commissionRate = commissionInt / 100;
 
-        const newPend = round2(Number(prof.saldoPendiente) + (delta * commissionRate));
+        const newPend = round2(newTotal * commissionRate);
 
         await prof.update(
           { saldoTotal: newTotal, saldoPendiente: newPend },

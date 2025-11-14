@@ -7,7 +7,7 @@ import statusRequestService from '../../services/statusRequest.service';
 import { StatusRequest } from '../../types/StatusRequest';
 import toast from 'react-hot-toast';
 import Modal from '../Modal';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import frequencyRequestService, { FrequencyRequest } from '../../services/frequencyRequest.service';
 
 interface Professional {
@@ -712,10 +712,52 @@ const PatientManagement = () => {
   const [isActivationRequestModalOpen, setIsActivationRequestModalOpen] = useState(false);
   const [selectedActivationRequest, setSelectedActivationRequest] = useState<StatusRequest | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const openFrequencyRequestModal = async (patient: Patient, requestId?: string) => {
+    try {
+      const requests = await frequencyRequestService.getPendingRequests();
+      const targetRequest = requests.find((r) =>
+        requestId ? String(r.id) === String(requestId) : r.patientId == patient.id
+      );
+
+      if (!targetRequest) {
+        toast.error('La solicitud ya fue gestionada o no está disponible.');
+        return;
+      }
+
+      setSelectedFrequencyRequest(targetRequest);
+      setSelectedPatient(patient);
+      setIsFrequencyModalOpen(true);
+    } catch (error) {
+      console.error('Error al obtener solicitud:', error);
+      toast.error('Error al obtener la solicitud');
+    }
+  };
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const state = location.state as { openFrequencyRequest?: { patientId: string; requestId?: string } } | null;
+    if (!state?.openFrequencyRequest) return;
+
+    const { patientId, requestId } = state.openFrequencyRequest;
+    const patient = patients.find((p) => String(p.id) === String(patientId));
+
+    const finalize = () => navigate('.', { replace: true, state: {} });
+
+    if (!patient) {
+      toast.error('Paciente no encontrado para la solicitud.');
+      finalize();
+      return;
+    }
+
+    void openFrequencyRequestModal(patient, requestId).finally(finalize);
+  }, [patients, location.state, isLoading, navigate]);
 
   const loadData = async () => {
     try {
@@ -850,20 +892,7 @@ const PatientManagement = () => {
   };
 
   const handleViewFrequencyRequest = async (patient: Patient) => {
-    try {
-      const requests = await frequencyRequestService.getPendingRequests();
-      const request = requests.find(r => r.patientId == patient.id);
-      if (request) {
-        setSelectedFrequencyRequest(request);
-        setSelectedPatient(patient);
-        setIsFrequencyModalOpen(true);
-      } else {
-        toast.error('No hay solicitudes de cambio de frecuencia pendientes para este paciente');
-      }
-    } catch (error) {
-      console.error('Error al obtener solicitud:', error);
-      toast.error('Error al obtener la solicitud');
-    }
+    await openFrequencyRequestModal(patient);
   };
 
   const handleApproveFrequencyRequest = async (response: string) => {

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { messageService, Message } from '../services/messageService';
-import { TrashIcon, InboxIcon } from '@heroicons/react/24/outline';
+import { TrashIcon, InboxIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const AdminMessages = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -9,6 +11,8 @@ const AdminMessages = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadMessages();
@@ -66,6 +70,13 @@ const AdminMessages = () => {
     return (
       <div className="min-h-screen bg-gray-100 pt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <button
+            onClick={() => navigate(user?.role === 'financial' ? '/financial' : user?.role === 'content_manager' ? '/content' : '/admin')}
+            className="mb-6 inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <ArrowLeftIcon className="h-5 w-5 mr-2" />
+            Volver
+          </button>
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
@@ -74,9 +85,22 @@ const AdminMessages = () => {
     );
   }
 
+  const backRoute = user?.role === 'financial'
+    ? '/financial'
+    : user?.role === 'content_manager'
+      ? '/content'
+      : '/admin';
+
   return (
     <div className="min-h-screen bg-gray-100 pt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <button
+          onClick={() => navigate(backRoute)}
+          className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          <ArrowLeftIcon className="h-5 w-5 mr-2" />
+          Volver
+        </button>
         <div className="bg-white rounded-lg shadow">
           <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">

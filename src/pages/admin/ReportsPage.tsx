@@ -4,6 +4,8 @@ import autoTable from 'jspdf-autotable';
 import patientsService from '../../services/patients.service';
 import userService from '../../services/user.service';
 import appointmentsService from '../../services/appointments.service';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 const ReportsPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
@@ -12,6 +14,7 @@ const ReportsPage: React.FC = () => {
   const [reportType, setReportType] = useState<'alta' | 'inactive'>('inactive');
   const [selectedProfessional, setSelectedProfessional] = useState('');
   const [professionals, setProfessionals] = useState<any[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     userService.getUsers().then(users => {
@@ -159,8 +162,17 @@ const ReportsPage: React.FC = () => {
 };
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Reportes de Altas y Bajas de Pacientes</h1>
+    <div className="pt-24 px-8 space-y-6">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/admin')}
+          className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          <ArrowLeftIcon className="h-5 w-5 mr-2" />
+          Volver al Dashboard
+        </button>
+        <h1 className="text-2xl font-bold">Reportes de Altas y Bajas de Pacientes</h1>
+      </div>
       <div className="flex gap-4 mb-6 items-end">
         <div>
           <label className="block text-sm font-medium text-gray-700">Tipo de reporte</label>

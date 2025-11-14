@@ -10,6 +10,10 @@ function toAmount(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function round2(v) {
+  return Math.round((Number(v) || 0) * 100) / 100;
+}
+
 // Get user by id
 
 const getUserById = async (req, res) => {
@@ -107,6 +111,24 @@ const updateUser = async (req, res) => {
     const payload = {};
     for (const k of allowed) if (data[k] !== undefined) payload[k] = data[k];
 
+    if (payload.saldoTotal !== undefined) {
+      payload.saldoTotal = round2(toAmount(payload.saldoTotal));
+    }
+
+    const commissionWasProvided = Object.prototype.hasOwnProperty.call(payload, 'commission');
+    if (commissionWasProvided) {
+      const newCommission = round2(toAmount(payload.commission));
+      payload.commission = newCommission;
+
+      if (user.role === 'professional') {
+        const baseTotal = payload.saldoTotal !== undefined
+          ? payload.saldoTotal
+          : round2(toAmount(user.saldoTotal));
+
+        payload.saldoPendiente = round2(baseTotal * (newCommission / 100));
+      }
+    }
+
     await user.update(payload);
 
     await user.reload();
@@ -120,7 +142,7 @@ const updateUser = async (req, res) => {
   }
 };
 
-// Delete a user
+// Delete a user (soft delete - desactivar)
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -139,6 +161,28 @@ const deleteUser = async (req, res) => {
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ message: 'Error al desactivar usuario' });
+  }
+};
+
+// Permanent delete a user (eliminación física)
+const permanentDeleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByPk(id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+    // Solo permitir eliminar usuarios inactivos
+    if (user.status === 'active') {
+      return res.status(400).json({ message: 'No se puede eliminar permanentemente un usuario activo. Primero debe desactivarlo.' });
+    }
+
+    await user.destroy();
+
+    return res.json({ message: 'Usuario eliminado permanentemente' });
+  } catch (error) {
+    console.error('Error permanently deleting user:', error);
+    res.status(500).json({ message: 'Error al eliminar usuario permanentemente' });
   }
 };
 
@@ -232,6 +276,7 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  permanentDeleteUser,
   abonarComision,
   getAbonos
 };
