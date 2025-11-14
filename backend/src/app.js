@@ -95,15 +95,18 @@ app.use('/api', writeLimiter);
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const audioUploadsDir = path.join(uploadsDir, 'audios');
 const postsUploadsDir = path.join(uploadsDir, 'posts');
+const carouselUploadsDir = path.join(uploadsDir, 'carousel');
+const imagesUploadsDir = path.join(uploadsDir, 'images');
 
-[uploadsDir, audioUploadsDir, postsUploadsDir].forEach(dir => {
+[uploadsDir, audioUploadsDir, postsUploadsDir, carouselUploadsDir, imagesUploadsDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     console.log(`Created directory: ${dir}`);
   }
 });
 
-// Configurar middleware para servir archivos estáticos
+// Configurar middleware para servir archivos estáticos desde /uploads
+// Manejar diferentes tipos de archivos (audio, imágenes, etc.)
 app.use('/uploads', (req, res, next) => {
   // Manejar diferentes tipos de archivos de audio
   if (req.path.match(/\.(webm|ogg|mp3|wav)$/)) {
@@ -152,10 +155,11 @@ app.use('/api/medical-history', medicalHistoryRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/payments', paymentsRouter);
 
-// se sirve este ep para el muestreo correcto de las imagenes estaticas cargadas en el servidor
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Nota: /uploads ya está configurado arriba con middleware para tipos MIME
+// Esta línea duplicada se eliminó para evitar conflictos
 
 // Manejo de errores
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({ 

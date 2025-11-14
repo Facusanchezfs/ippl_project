@@ -3,7 +3,8 @@ const fsp = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
 
-const carouselDir = path.join(__dirname, '../../../public/images/carousel');
+// Cambiado: ahora guarda en uploads/carousel en lugar de public/images/carousel
+const carouselDir = path.join(__dirname, '../../uploads/carousel');
 
 async function ensureCarouselDir() {
   try {

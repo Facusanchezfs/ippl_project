@@ -555,7 +555,7 @@ const ContentDashboard = () => {
                   {carouselImages.map(imageFile => (
                     <div key={imageFile} className="relative group rounded-lg overflow-hidden shadow-md">
                       <img 
-                        src={`${API_URL}/images/carousel/${imageFile}`} 
+                        src={`${API_URL}/uploads/carousel/${imageFile}`}
                         alt={`Imagen del carrusel: ${imageFile}`}
                         className="w-full h-24 object-cover"
                       />

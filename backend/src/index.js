@@ -24,6 +24,8 @@ async function ensureDirectories() {
 		path.join(__dirname, '..', 'uploads', 'audios'),
 		path.join(__dirname, '..', 'uploads', 'documents'),
 		path.join(__dirname, '..', 'uploads', 'images'),
+		path.join(__dirname, '..', 'uploads', 'carousel'), // Carpeta para imágenes del carousel
+		path.join(__dirname, '..', 'uploads', 'posts'), // Carpeta para imágenes de posts
 	];
 
 	for (const dir of directories) {
@@ -121,16 +123,19 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-const FRONTEND_DIST = path.resolve(__dirname, '../../dist');
-app.use(express.static(FRONTEND_DIST, {
-  index: false // importante: el index lo servimos en el fallback
-}));
+// Solo servir dist y SPA fallback en PRODUCCIÓN
+if (process.env.NODE_ENV === 'production') {
+	const FRONTEND_DIST = path.resolve(__dirname, '../../dist');
+	app.use(express.static(FRONTEND_DIST, {
+		index: false // importante: el index lo servimos en el fallback
+	}));
 
-// Fallback SPA: cualquier ruta NO-API devuelve index.html
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
-  res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
-});
+	// Fallback SPA: cualquier ruta NO-API devuelve index.html
+	app.get('*', (req, res, next) => {
+		if (req.path.startsWith('/api')) return next();
+		res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+	});
+}
 
 // Middleware de manejo de errores
 app.use((err, req, res, next) => {

@@ -108,7 +108,8 @@ router.post(
 );
 
 // --- Carrusel de imágenes ---
-const carouselDir = path.join(__dirname, '../../../public/images/carousel');
+// Cambiado: ahora guarda en uploads/carousel en lugar de public/images/carousel
+const carouselDir = path.join(__dirname, '../../uploads/carousel');
 async function ensureCarouselDir() {
   try {
     await fs.access(carouselDir);
@@ -148,7 +149,8 @@ router.post('/carousel', authenticateToken, uploadCarousel.single('image'), asyn
     if (!req.file) {
       return res.status(400).json({ message: 'No se proporcionó ninguna imagen', success: false });
     }
-    const imageUrl = `/images/carousel/${req.file.filename}`;
+    // Cambiado: ahora devuelve /uploads/carousel/ en lugar de /images/carousel/
+    const imageUrl = `/uploads/carousel/${req.file.filename}`;
     res.json({
       message: 'Imagen subida exitosamente',
       success: true,
