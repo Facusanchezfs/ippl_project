@@ -19,8 +19,6 @@ const globalLimiter = rateLimit({
 	},
 	standardHeaders: true, // Retorna información de rate limit en headers `RateLimit-*`
 	legacyHeaders: false, // Deshabilita headers `X-RateLimit-*`
-	// Usar IP real incluso detrás de proxy
-	trustProxy: true,
 });
 
 /**
@@ -37,7 +35,6 @@ const loginLimiter = rateLimit({
 	},
 	standardHeaders: true,
 	legacyHeaders: false,
-	trustProxy: true,
 	// Saltar rate limit si la request es exitosa (opcional, pero puede ser útil)
 	skipSuccessfulRequests: false,
 });
@@ -56,7 +53,6 @@ const writeLimiter = rateLimit({
 	},
 	standardHeaders: true,
 	legacyHeaders: false,
-	trustProxy: true,
 	// Solo aplicar a métodos de escritura
 	skip: (req) => {
 		const writeMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];

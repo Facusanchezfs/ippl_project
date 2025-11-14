@@ -37,10 +37,19 @@ module.exports = {
 	},
 	production: {
 		// En producción, todas las variables son OBLIGATORIAS
-		username: requireEnv('DB_USER_PROD', 'production'),
-		password: requireEnv('DB_PASS_PROD', 'production'),
-		database: requireEnv('DB_NAME_PROD', 'production'),
-		host: requireEnv('DB_HOST_PROD', 'production'),
+		// Solo validar si realmente estamos en producción
+		username: process.env.NODE_ENV === 'production' 
+			? requireEnv('DB_USER_PROD', 'production')
+			: (process.env.DB_USER_PROD || 'root'),
+		password: process.env.NODE_ENV === 'production'
+			? requireEnv('DB_PASS_PROD', 'production')
+			: (process.env.DB_PASS_PROD || 'root1234'),
+		database: process.env.NODE_ENV === 'production'
+			? requireEnv('DB_NAME_PROD', 'production')
+			: (process.env.DB_NAME_PROD || 'ippl_db'),
+		host: process.env.NODE_ENV === 'production'
+			? requireEnv('DB_HOST_PROD', 'production')
+			: (process.env.DB_HOST_PROD || '127.0.0.1'),
 		port: process.env.DB_PORT_PROD || 3306,
 		dialect: 'mysql',
 	},
