@@ -20,6 +20,10 @@ const paymentsRouter = require('./routes/payments');
 
 const app = express();
 
+// Configurar trust proxy para rate limiting detrás de proxy/reverse proxy
+// express-rate-limit v8 requiere que esto se configure en Express, no en el limiter
+app.set('trust proxy', 1);
+
 // Configurar headers de seguridad con Helmet
 app.use(helmet({
 	contentSecurityPolicy: {
