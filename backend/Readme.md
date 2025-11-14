@@ -26,8 +26,8 @@
 ### Variables Críticas
 
 - `JWT_SECRET` (OBLIGATORIO): Secreto para firmar tokens JWT. Mínimo 32 caracteres.
-- `DB_USER`, `DB_PASS`, `DB_NAME`: Credenciales de base de datos para desarrollo.
-- `DB_USER_PROD`, `DB_PASS_PROD`, etc.: Credenciales para producción (sin fallbacks).
+- `DB_USER`, `DB_PASS`, `DB_NAME`: Credenciales de base de datos para desarrollo (tienen fallbacks para facilitar setup local).
+- `DB_USER_PROD`, `DB_PASS_PROD`, `DB_NAME_PROD`, `DB_HOST_PROD` (OBLIGATORIAS en producción): Credenciales para producción. **El servidor NO iniciará en producción si faltan estas variables.**
 
 ## Scripts
 - `npm start:` Inicia el servidor.
