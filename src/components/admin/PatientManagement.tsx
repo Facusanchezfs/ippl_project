@@ -617,12 +617,6 @@ const FrequencyRequestModal: React.FC<FrequencyRequestModalProps> = ({
               El profesional ha solicitado cambiar la frecuencia de sesiones para este paciente.
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
-            <span className="sr-only">Cerrar</span>
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
         <div className="mb-6">
