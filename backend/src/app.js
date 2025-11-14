@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { globalLimiter, writeLimiter } = require('./middleware/rateLimiter');
 const appointmentsRouter = require('./routes/appointments');
 const usersRouter = require('./routes/users');
 const uploadRouter = require('./routes/upload');
@@ -42,6 +43,12 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Aplicar rate limiting global a todas las rutas API
+app.use('/api', globalLimiter);
+
+// Aplicar rate limiting adicional a endpoints de escritura
+app.use('/api', writeLimiter);
 
 // Asegurar que las carpetas necesarias existen
 const uploadsDir = path.join(__dirname, '..', 'uploads');
