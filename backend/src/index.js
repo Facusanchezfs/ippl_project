@@ -7,6 +7,9 @@ const app = require('./app');
 const { sequelize } = require('../models');
 require('dotenv').config();
 
+// Validar configuración crítica al inicio (el servidor fallará si falta JWT_SECRET)
+require('./config/jwt');
+
 const PORT = process.env.PORT || 5000;
 
 // Middleware
