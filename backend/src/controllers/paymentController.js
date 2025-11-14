@@ -1,5 +1,6 @@
 'use strict';
 const { sendPaymentReceiptsEmail } = require('../services/emailService');
+const logger = require('../utils/logger');
 
 function toNumber(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -31,7 +32,7 @@ async function sendReceipts(req, res) {
 
     return res.json({ message: 'Comprobantes enviados correctamente.' });
   } catch (error) {
-    console.error('Error enviando comprobantes:', error);
+    logger.error('Error enviando comprobantes:', error);
     return res.status(500).json({ message: 'No se pudieron enviar los comprobantes.' });
   }
 }

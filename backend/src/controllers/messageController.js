@@ -2,6 +2,7 @@
 
 const { Message } = require('../../models');
 const { toMessageDTOList } = require('../../mappers/MessageMapper');
+const logger = require('../utils/logger');
 
 // Create a new message
 async function createMessage(req, res) {
@@ -28,7 +29,7 @@ async function createMessage(req, res) {
 
     return res.status(201).json({ message: 'Mensaje enviado exitosamente' });
   } catch (error) {
-    console.error('Error al crear mensaje:', error);
+    logger.error('Error al crear mensaje:', error);
     return res.status(500).json({ error: 'Error al enviar el mensaje' });
   }
 }
@@ -42,10 +43,10 @@ async function getAllMessages(req, res) {
         ['createdAt', 'DESC'],
       ],
     });
-    console.log(rows)
+    logger.debug('Mensajes obtenidos:', { count: rows.length });
     return res.json(toMessageDTOList(rows));
   } catch (error) {
-    console.error('Error al obtener mensajes:', error);
+    logger.error('Error al obtener mensajes:', error);
     return res.status(500).json({ error: 'Error al obtener los mensajes' });
   }
 }
@@ -66,7 +67,7 @@ async function markAsRead(req, res) {
 
     return res.json({ message: 'Mensaje marcado como leído' });
   } catch (error) {
-    console.error('Error al marcar mensaje como leído:', error);
+    logger.error('Error al marcar mensaje como leído:', error);
     return res.status(500).json({ error: 'Error al actualizar el mensaje' });
   }
 }
@@ -76,7 +77,7 @@ async function clearAllMessages(req, res) {
     await Message.destroy({ where: {} });
     return res.json({ success: true, message: 'Todos los mensajes han sido eliminados' });
   } catch (error) {
-    console.error('Error al limpiar mensajes:', error);
+    logger.error('Error al limpiar mensajes:', error);
     return res.status(500).json({ error: 'Error al eliminar los mensajes' });
   }
 }

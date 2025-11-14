@@ -1,6 +1,7 @@
 'use strict';
 
 const { Message } = require('../../models');
+const logger = require('../utils/logger');
 
 function requireMessageManager(req, res, next) {
   const role = req.user?.role;
@@ -16,7 +17,7 @@ async function loadMessageById(req, res, next) {
     req.message = msg;
     return next();
   } catch (err) {
-    console.error('[loadMessageById] Error:', err);
+    logger.error('[loadMessageById] Error:', err);
     return res.status(500).json({ message: 'Error al buscar el mensaje' });
   }
 }

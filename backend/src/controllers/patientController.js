@@ -2,6 +2,7 @@
 const { Patient, Derivation, User, StatusRequest } = require('../../models');
 const { toPatientDTO } = require('../../mappers/PatientMapper');
 const { createActivity } = require('./activityController');
+const logger = require('../utils/logger');
 
 // Obtener todos los pacientes con su última derivación
 async function getAllPatients(req, res) {
@@ -34,7 +35,7 @@ async function getAllPatients(req, res) {
 
     return res.json({ patients: dtos });
   } catch (err) {
-    console.error('Error al obtener pacientes:', err);
+    logger.error('Error al obtener pacientes:', err);
     return res.status(500).json({ message: 'Error al obtener pacientes' });
   }
 }
@@ -72,7 +73,7 @@ async function getProfessionalPatients(req, res) {
 
     return res.json({ patients: dtos });
   } catch (err) {
-    console.error('Error al obtener pacientes del profesional:', err);
+    logger.error('Error al obtener pacientes del profesional:', err);
     return res.status(500).json({ message: 'Error al obtener pacientes' });
   }
 }
@@ -144,7 +145,7 @@ async function assignPatient(req, res) {
     };
     return res.json(toPatientDTO(enriched));
   } catch (err) {
-    console.error('Error al asignar paciente:', err);
+    logger.error('Error al asignar paciente:', err);
     return res.status(500).json({ message: 'Error al asignar paciente' });
   }
 }
@@ -169,7 +170,7 @@ async function addPatient(req, res) {
 
     return res.status(201).json(toPatientDTO(patient));
   } catch (err) {
-    console.error('Error al agregar paciente:', err);
+    logger.error('Error al agregar paciente:', err);
     return res.status(500).json({ message: 'Error al agregar paciente' });
   }
 }
@@ -196,7 +197,7 @@ async function deletePatient(req, res) {
 
     return res.json({ message: 'Paciente eliminado correctamente' });
   } catch (err) {
-    console.error('Error al eliminar paciente:', err);
+    logger.error('Error al eliminar paciente:', err);
     return res.status(500).json({ message: 'Error al eliminar paciente' });
   }
 }
@@ -251,7 +252,7 @@ async function requestDischargePatient(req, res) {
       requestId: String(sr.id),
     });
   } catch (error) {
-    console.error('Error requesting patient discharge:', error);
+    logger.error('Error requesting patient discharge:', error);
     return res.status(500).json({ error: 'Error al solicitar la baja del paciente' });
   }
 }
@@ -314,7 +315,7 @@ async function requestActivationPatient(req, res) {
       message: 'Solicitud de alta enviada correctamente',
     });
   } catch (error) {
-    console.error('Error requesting patient activation:', error);
+    logger.error('Error requesting patient activation:', error);
     return res.status(500).json({ error: 'Error al solicitar el alta del paciente' });
   }
 }

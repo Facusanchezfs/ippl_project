@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { authenticateToken } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Asegurar que los directorios existan
 async function ensureDirectories() {
@@ -24,7 +25,7 @@ async function ensureDirectories() {
 }
 
 // Crear directorios al iniciar
-ensureDirectories().catch(console.error);
+ensureDirectories().catch((err) => logger.error('Error al crear directorios de upload:', err));
 
 // Configurar multer para almacenar los archivos
 const storage = multer.diskStorage({
@@ -41,7 +42,7 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   fileFilter: (req, file, cb) => {
-    console.log('Tipo de archivo recibido:', file.mimetype);
+    logger.debug('Tipo de archivo recibido:', { mimetype: file.mimetype });
     if (file.mimetype === 'audio/webm') {
       cb(null, true);
     } else {
@@ -69,7 +70,7 @@ router.post(
         });
       }
 
-      console.log('Archivo recibido:', req.file);
+      logger.debug('Archivo recibido:', { filename: req.file.filename, size: req.file.size });
 
       // Construir la URL relativa del audio
       const audioUrl = `/uploads/audios/${req.file.filename}`;
@@ -77,9 +78,9 @@ router.post(
       // Verificar que el archivo existe y es accesible
       try {
         await fs.access(path.join(__dirname, '../../uploads/audios', req.file.filename));
-        console.log('Archivo guardado exitosamente en:', audioUrl);
+        logger.info('Archivo guardado exitosamente:', { url: audioUrl });
       } catch (error) {
-        console.error('Error verificando archivo:', error);
+        logger.error('Error verificando archivo:', error);
         return res.status(500).json({ 
           message: 'Error al guardar el archivo de audio',
           success: false,
@@ -97,7 +98,7 @@ router.post(
         mimetype: req.file.mimetype
       });
     } catch (error) {
-      console.error('Error al subir audio:', error);
+      logger.error('Error al subir audio:', error);
       res.status(500).json({ 
         message: 'Error al subir el archivo de audio',
         success: false,

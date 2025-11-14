@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { User, Abono, sequelize } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
+const logger = require('../utils/logger');
 
 // helper numérico para DECIMAL
 function toAmount(v) {
@@ -23,7 +24,7 @@ try {
     const dtos = toUserDTO(user);
     res.json(dtos);
   } catch (error) {
-    console.error('Error getting user:', error);
+    logger.error('Error getting user:', error);
     res.status(500).json({ message: 'Error al obtener usuario' });
   }
 }
@@ -34,7 +35,7 @@ const getProfessionals = async (req, res) =>{
     const dtos = professionals.map(x => toUserDTO(x));
     res.json(dtos);
   } catch (error) {
-    console.error('Error getting professionals:', error);
+    logger.error('Error getting professionals:', error);
     res.status(500).json({ message: 'Error al obtener profesionales' });
   }
 }
@@ -45,7 +46,7 @@ const getUsers = async (req, res) => {
     const dtos = users.map((u) => toUserDTO(u));
     res.json({ users: dtos });
   } catch (error) {
-    console.error('Error getting users:', error);
+    logger.error('Error getting users:', error);
     res.status(500).json({ message: 'Error al obtener usuarios' });
   }
 }
@@ -84,7 +85,7 @@ const createUser = async (req, res) => {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({ message: 'El email ya está registrado' });
     }
-    console.error('Error creating user:', error);
+    logger.error('Error creating user:', error);
     res.status(500).json({ message: 'Error al crear usuario' });
   }
 };
@@ -137,7 +138,7 @@ const updateUser = async (req, res) => {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({ message: 'El email ya está registrado' });
     }
-    console.error('Error updating user:', error);
+    logger.error('Error updating user:', error);
     res.status(500).json({ message: 'Error al actualizar usuario' });
   }
 };
@@ -159,7 +160,7 @@ const deleteUser = async (req, res) => {
 
     return res.json({ message: 'Usuario desactivado correctamente', user: toUserDTO(user) });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    logger.error('Error deleting user:', error);
     res.status(500).json({ message: 'Error al desactivar usuario' });
   }
 };
@@ -181,7 +182,7 @@ const permanentDeleteUser = async (req, res) => {
 
     return res.json({ message: 'Usuario eliminado permanentemente' });
   } catch (error) {
-    console.error('Error permanently deleting user:', error);
+    logger.error('Error permanently deleting user:', error);
     res.status(500).json({ message: 'Error al eliminar usuario permanentemente' });
   }
 };
@@ -247,7 +248,7 @@ const abonarComision = async (req, res) => {
     });
   } catch (error) {
     await t.rollback();
-    console.error('Error al abonar comisión:', error);
+    logger.error('Error al abonar comisión:', error);
     return res.status(500).json({ message: 'Error al abonar comisión' });
   }
 };
@@ -264,7 +265,7 @@ const getAbonos = async (req, res) => {
 
     return res.json({ abonos: toAbonoDTOList(abonos) });
   } catch (error) {
-    console.error('Error al obtener abonos:', error);
+    logger.error('Error al obtener abonos:', error);
     return res.status(500).json({ message: 'Error al obtener abonos' });
   }
 };

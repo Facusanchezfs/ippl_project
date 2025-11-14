@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Post, sequelize } = require('../../models');
 const { toPostDTO, toPostDTOList } = require('../../mappers/PostMapper');
 const {toArray} = require("funciones-basicas");
+const logger = require('../utils/logger');
 
 function tryParseJSON(value, fallback) {
   if (value == null) return fallback;
@@ -59,7 +60,7 @@ const getAllPosts = async (req, res) => {
     });
     return res.json({ posts: toPostDTOList(posts) });
   } catch (error) {
-    console.error('Error al obtener posts:', error);
+    logger.error('Error al obtener posts:', error);
     return res.status(500).json({ message: 'Error al obtener posts' });
   }
 };
@@ -73,7 +74,7 @@ const getPostBySection = async (req, res) =>{
     });
     return res.json({posts: toPostDTOList(posts)});
   } catch (e){
-    console.error("Error loading posts by section");
+    logger.error("Error loading posts by section");
     return res.status(500).json({ message: 'Error loading posts by section' });
   }
 }
@@ -85,7 +86,7 @@ const getPostBySlug = async (req, res) => {
     if (!post) return res.status(404).json({ message: 'Post no encontrado' });
     return res.json({ post: toPostDTO(post) });
   } catch (error) {
-    console.error('Error al obtener post por slug:', error);
+    logger.error('Error al obtener post por slug:', error);
     return res.status(500).json({ message: 'Error al obtener el post' });
   }
 };
@@ -156,7 +157,7 @@ const createPost = async (req, res) => {
       post: toPostDTO(created),
     });
   } catch (error) {
-    console.error('Error al crear post:', error);
+    logger.error('Error al crear post:', error);
     return res.status(500).json({
       success: false,
       message: 'Error interno del servidor al crear el post',
@@ -231,7 +232,7 @@ const updatePost = async (req, res) => {
     await post.update(updates);
     return res.json(toPostDTO(post));
   } catch (error) {
-    console.error('Error al actualizar post:', error);
+    logger.error('Error al actualizar post:', error);
     return res.status(500).json({ message: 'Error al actualizar post' });
   }
 };
@@ -253,7 +254,7 @@ const deletePost = async (req, res) => {
     await post.update({ active: false });
     return res.json({ message: 'Post eliminado correctamente' });
   } catch (error) {
-    console.error('Error al eliminar post:', error);
+    logger.error('Error al eliminar post:', error);
     return res.status(500).json({ message: 'Error al eliminar post' });
   }
 };
@@ -279,7 +280,7 @@ const getPostById = async (req, res) => {
 
     return res.json(toPostDTO(post)); // respuesta plana
   } catch (error) {
-    console.error('Error al obtener post por id:', error);
+    logger.error('Error al obtener post por id:', error);
     return res.status(500).json({ message: 'Error al obtener el post' });
   }
 };
@@ -311,7 +312,7 @@ const checkPostViewed = async (req, res) => {
 
     return res.json({ isViewed });
   } catch (error) {
-    console.error('Error al verificar vista:', error);
+    logger.error('Error al verificar vista:', error);
     return res.status(500).json({ message: 'Error al verificar la vista' });
   }
 };
@@ -344,7 +345,7 @@ const incrementPostView = async (req, res) => {
     if (error.status === 404) {
       return res.status(404).json({ message: error.message });
     }
-    console.error('Error al incrementar vista:', error);
+    logger.error('Error al incrementar vista:', error);
     return res.status(500).json({ message: 'Error al incrementar la vista' });
   }
 };
@@ -377,7 +378,7 @@ const togglePostLike = async (req, res) => {
     if (error.status === 404) {
       return res.status(404).json({ message: error.message });
     }
-    console.error('Error al incrementar like:', error);
+    logger.error('Error al incrementar like:', error);
     return res.status(500).json({ message: 'Error al incrementar el like' });
   }
 };
@@ -404,7 +405,7 @@ const checkPostLike = async (req, res) => {
 
     return res.json({ isLiked });
   } catch (error) {
-    console.error('Error al verificar like:', error);
+    logger.error('Error al verificar like:', error);
     return res.status(500).json({ message: 'Error al verificar el like' });
   }
 };
@@ -449,7 +450,7 @@ const getPostsStats = async (req, res) => {
       weeklyVisits,
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
+    logger.error('Error al obtener estadísticas:', error);
     return res.status(500).json({ message: 'Error al obtener estadísticas' });
   }
 };

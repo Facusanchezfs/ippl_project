@@ -2,6 +2,7 @@
 const { sequelize, StatusRequest, Patient } = require('../../models');
 const { toStatusRequestDTO, toStatusRequestDTOList } = require('../../mappers/StatusRequestMapper');
 const { createActivity } = require('./activityController');
+const logger = require('../utils/logger');
 
 const VALID_STATUSES = ['active', 'pending', 'inactive', 'absent', 'alta'];
 
@@ -74,7 +75,7 @@ const createRequest = async (req, res) => {
 
     return res.status(201).json(toStatusRequestDTO(created));
   } catch (error) {
-    console.error('Error al crear solicitud:', error);
+    logger.error('Error al crear solicitud:', error);
     return res.status(500).json({ message: 'Error al crear la solicitud' });
   }
 };
@@ -89,7 +90,7 @@ const getPendingRequests = async (req, res) => {
 
     return res.json({ requests: toStatusRequestDTOList(pending) });
   } catch (error) {
-    console.error('Error al obtener solicitudes:', error);
+    logger.error('Error al obtener solicitudes:', error);
     return res.status(500).json({ message: 'Error al obtener las solicitudes' });
   }
 };
@@ -109,14 +110,14 @@ const getProfessionalRequests = async (req, res) => {
 
     return res.json({ requests: toStatusRequestDTOList(rows) });
   } catch (error) {
-    console.error('Error al obtener solicitudes del profesional:', error);
+    logger.error('Error al obtener solicitudes del profesional:', error);
     return res.status(500).json({ message: 'Error al obtener las solicitudes' });
   }
 };
 
 // Aprobar una solicitud de cambio de estado
 const approveRequest = async (req, res) => {
-  console.log('DEBUG: Llamada a approveRequest con ID:', req.params.requestId);
+  logger.debug('Llamada a approveRequest con ID:', { requestId: req.params.requestId });
   const { requestId } = req.params;
   const { adminResponse } = req.body;
 
@@ -155,7 +156,7 @@ const approveRequest = async (req, res) => {
 
     // Manejo de resultados fuera de la transacción
     if (result.kind === 'not_found') {
-      console.log('DEBUG: Solicitud no encontrada para ID:', requestId);
+      logger.debug('Solicitud no encontrada para ID:', { requestId });
       return res.status(404).json({ message: 'Solicitud no encontrada' });
     }
     if (result.kind === 'already_processed') {
@@ -194,13 +195,13 @@ const approveRequest = async (req, res) => {
         adminResponse: adminResponse ?? undefined,
       });
     } catch (logErr) {
-      console.error('WARN: No se pudo registrar la actividad de aprobación:', logErr);
+      logger.warn('No se pudo registrar la actividad de aprobación:', logErr);
     }
 
     // 6) Devolver DTO de la solicitud aprobada
     return res.json(toStatusRequestDTO(request));
   } catch (error) {
-    console.error('Error al aprobar solicitud:', error);
+    logger.error('Error al aprobar solicitud:', error);
     return res.status(500).json({ message: 'Error al aprobar la solicitud' });
   }
 };
@@ -269,7 +270,7 @@ const rejectRequest = async (req, res) => {
     await sr.reload();
     return res.json(toStatusRequestDTO(sr));
   } catch (error) {
-    console.error('Error al rechazar solicitud:', error);
+    logger.error('Error al rechazar solicitud:', error);
     return res.status(500).json({ message: 'Error al rechazar la solicitud' });
   }
 };

@@ -1,6 +1,7 @@
 'use strict';
 
 const { Appointment } = require('../../models');
+const logger = require('../utils/logger');
 
 async function preloadAppointmentForWrite(req, res, next) {
   try {
@@ -27,7 +28,7 @@ async function preloadAppointmentForWrite(req, res, next) {
     req.appointment = appointment;
     next();
   } catch (err) {
-    console.error('[appointmentsAuth] Error en preloadAppointmentForWrite:', err);
+    logger.error('[appointmentsAuth] Error en preloadAppointmentForWrite:', err);
     res.status(500).json({ message: 'Error al verificar permisos' });
   }
 }
