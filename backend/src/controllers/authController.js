@@ -2,8 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { User } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'tu_secreto_super_seguro';
+const { JWT_SECRET } = require('../config/jwt');
 
 const generateToken = (user) => {
 	return jwt.sign(
