@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 const { globalLimiter, writeLimiter } = require('./middleware/rateLimiter');
@@ -18,6 +19,42 @@ const activitiesRouter = require('./routes/activities');
 const paymentsRouter = require('./routes/payments');
 
 const app = express();
+
+// Configurar headers de seguridad con Helmet
+app.use(helmet({
+	contentSecurityPolicy: {
+		directives: {
+			defaultSrc: ["'self'"],
+			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval necesario para Vite en desarrollo
+			styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind puede generar estilos inline
+			imgSrc: ["'self'", "data:", "https://images.pexels.com", "https://via.placeholder.com"],
+			fontSrc: ["'self'", "data:"],
+			connectSrc: ["'self'", "http://localhost:5000", "https://www.ippl.com.ar"],
+			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
+			objectSrc: ["'none'"],
+			baseUri: ["'self'"],
+			formAction: ["'self'"],
+			frameAncestors: ["'none'"], // Previene clickjacking
+			upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null, // Solo en producción
+		},
+	},
+	// Forzar HTTPS en producción
+	strictTransportSecurity: {
+		maxAge: 31536000, // 1 año
+		includeSubDomains: true,
+		preload: true
+	},
+	// Prevenir MIME type sniffing
+	noSniff: true,
+	// Prevenir que la página sea embebida en iframes (clickjacking)
+	frameguard: {
+		action: 'deny'
+	},
+	// Deshabilitar X-Powered-By header
+	hidePoweredBy: true,
+	// Configurar XSS Protection
+	xssFilter: true,
+}));
 
 // Servir archivos estáticos desde la carpeta 'public' en la raíz del proyecto
 app.use(express.static(path.join(__dirname, '../../public')));
