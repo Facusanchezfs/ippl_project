@@ -50,11 +50,15 @@ app.use(helmet({
 		},
 	},
 	// Forzar HTTPS en producción
-	strictTransportSecurity: {
+	strictTransportSecurity: isProduction ? {
 		maxAge: 31536000, // 1 año
 		includeSubDomains: true,
 		preload: true
-	},
+	} : false,
+	// Cross-Origin-Opener-Policy: solo en producción
+	crossOriginOpenerPolicy: isProduction ? { policy: "same-origin" } : false,
+	// Cross-Origin-Resource-Policy: solo en producción
+	crossOriginResourcePolicy: isProduction ? { policy: "same-origin" } : false,
 	// Prevenir MIME type sniffing
 	noSniff: true,
 	// Prevenir que la página sea embebida en iframes (clickjacking)
