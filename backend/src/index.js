@@ -13,7 +13,7 @@ require('./config/jwt');
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+// CORS ya está configurado en app.js
 app.use(express.json());
 
 // Asegurarse de que los directorios existan

@@ -22,7 +22,24 @@ const app = express();
 app.use(express.static(path.join(__dirname, '../../public')));
 
 // Configuración de CORS
-app.use(cors());
+const allowedOrigins = [
+	'http://localhost:5173',
+	'https://www.ippl.com.ar'
+];
+
+app.use(cors({
+	origin: (origin, callback) => {
+		// Permitir requests sin origin (Postman, cURL, etc.)
+		if (!origin) return callback(null, true);
+		if (allowedOrigins.includes(origin)) {
+			return callback(null, true);
+		}
+		return callback(new Error('Origin not allowed by CORS'));
+	},
+	credentials: true,
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+	allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(express.json());
 
