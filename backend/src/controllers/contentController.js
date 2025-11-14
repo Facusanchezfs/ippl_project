@@ -2,6 +2,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
+const logger = require('../utils/logger');
 
 // Cambiado: ahora guarda en uploads/carousel en lugar de public/images/carousel
 const carouselDir = path.join(__dirname, '../../uploads/carousel');
@@ -10,7 +11,7 @@ async function ensureCarouselDir() {
   try {
     await fsp.mkdir(carouselDir, { recursive: true });
   } catch (e) {
-    console.error('No se pudo crear el directorio del carrusel:', e);
+    logger.error('No se pudo crear el directorio del carrusel:', e);
   }
 }
 ensureCarouselDir();
@@ -44,7 +45,7 @@ const upload = multer({
 const getCarouselImages = (req, res) => {
   fs.readdir(carouselDir, (err, files) => {
     if (err) {
-      console.error('Error al leer el directorio del carrusel:', err);
+      logger.error('Error al leer el directorio del carrusel:', err);
       return res
         .status(500)
         .json({ message: 'No se pudieron cargar las imágenes del carrusel.' });
@@ -71,7 +72,7 @@ const deleteCarouselImage = (req, res) => {
 
   fs.unlink(filePath, (err) => {
     if (err) {
-      console.error(`Error al eliminar el archivo ${filename}:`, err);
+      logger.error(`Error al eliminar el archivo ${filename}:`, err);
       if (err.code === 'ENOENT') {
         return res.status(404).json({ message: 'El archivo no fue encontrado.' });
       }

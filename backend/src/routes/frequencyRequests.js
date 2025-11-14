@@ -6,6 +6,7 @@ const { sequelize, Patient, FrequencyRequest } = require('../../models');
 const { toFrequencyRequestDTO, toFrequencyRequestDTOList } = require('../../mappers/FrequencyRequestMapper');
 
 const { createActivity } = require('../controllers/activityController');
+const logger = require('../utils/logger');
 
 // Crear una nueva solicitud
 // POST /frequency-requests
@@ -97,7 +98,7 @@ router.post(
 
       return res.status(201).json(toFrequencyRequestDTO(created));
     } catch (error) {
-      console.error('Error al crear solicitud:', error);
+      logger.error('Error al crear solicitud:', error);
       return res.status(500).json({ message: 'Error al crear la solicitud' });
     }
   }
@@ -118,7 +119,7 @@ router.get(
 
       return res.json(toFrequencyRequestDTOList(pending));
     } catch (error) {
-      console.error('Error al obtener solicitudes:', error);
+      logger.error('Error al obtener solicitudes:', error);
       return res.status(500).json({ message: 'Error al obtener las solicitudes' });
     }
   }
@@ -141,7 +142,7 @@ router.get(
 
       return res.json(toFrequencyRequestDTOList(requests));
     } catch (error) {
-      console.error('Error al obtener solicitudes del paciente:', error);
+      logger.error('Error al obtener solicitudes del paciente:', error);
       return res.status(500).json({ message: 'Error al obtener las solicitudes' });
     }
   }
@@ -229,7 +230,7 @@ router.post(
       if (status !== 500) {
         return res.status(status).json({ message: error.message });
       }
-      console.error('Error al aprobar solicitud:', error);
+      logger.error('Error al aprobar solicitud:', error);
       return res.status(500).json({ message: 'Error al aprobar la solicitud' });
     }
   }
@@ -307,7 +308,7 @@ router.post(
       if (status !== 500) {
         return res.status(status).json({ message: error.message });
       }
-      console.error('Error al rechazar solicitud:', error);
+      logger.error('Error al rechazar solicitud:', error);
       return res.status(500).json({ message: 'Error al rechazar la solicitud' });
     }
   }

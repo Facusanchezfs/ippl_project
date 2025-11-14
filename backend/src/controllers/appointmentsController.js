@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Appointment, Patient, User, sequelize } = require('../../models');
 const { toAppointmentDTO, toAppointmentDTOList } = require('../../mappers/AppointmentMapper');
+const logger = require('../utils/logger');
 
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -17,7 +18,7 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const getAllAppointments = async (req, res) => {
   try {
-    console.log('getAllAppointments method');
+    logger.debug('getAllAppointments method');
     const appts = await Appointment.findAll({
       where: { active: true },
       order: [
@@ -29,7 +30,7 @@ const getAllAppointments = async (req, res) => {
 
     return res.json({ appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas:', error);
+    logger.error('Error al obtener citas:', error);
     return res.status(500).json({ message: 'Error al obtener citas' });
   }
 };
@@ -49,7 +50,7 @@ const getProfessionalAppointments = async (req, res) => {
 
     return res.json({ appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas del profesional:', error);
+    logger.error('Error al obtener citas del profesional:', error);
     return res.status(500).json({ message: 'Error al obtener citas' });
   }
 };
@@ -80,7 +81,7 @@ const getTodayProfessionalAppointments = async (req, res) => {
 
     return res.json({ appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas del profesional (hoy):', error);
+    logger.error('Error al obtener citas del profesional (hoy):', error);
     return res.status(500).json({ message: 'Error al obtener citas' });
   }
 }
@@ -100,7 +101,7 @@ const getPatientAppointments = async (req, res) => {
 
     return res.json({ appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas del paciente:', error);
+    logger.error('Error al obtener citas del paciente:', error);
     return res.status(500).json({ message: 'Error al obtener citas' });
   }
 };
@@ -192,7 +193,7 @@ const createAppointment = async (req, res) => {
 
     return res.status(201).json(toAppointmentDTO(created));
   } catch (error) {
-    console.error('[createAppointment] Error al crear cita:', error);
+    logger.error('[createAppointment] Error al crear cita:', error);
     return res.status(500).json({ message: 'Error al crear cita', error: error.message });
   }
 };
@@ -359,7 +360,7 @@ const updateAppointment = async (req, res) => {
 
     return res.json(toAppointmentDTO(appt));
   } catch (error) {
-    console.error('[updateAppointment] Error:', error);
+    logger.error('[updateAppointment] Error:', error);
     return res.status(500).json({ message: 'Error al actualizar cita', error: error.message });
   }
 };
@@ -375,7 +376,7 @@ const deleteAppointment = async (req, res) => {
       appointment: appt, // devuelve el registro actualizado
     });
   } catch (error) {
-    console.error('[deleteAppointment] Error:', error);
+    logger.error('[deleteAppointment] Error:', error);
     return res.status(500).json({ message: 'Error al eliminar la cita' });
   }
 };
@@ -423,7 +424,7 @@ const getAvailableSlots = async (req, res) => {
 
     return res.json({ slots: availableSlots });
   } catch (error) {
-    console.error('Error al obtener slots disponibles:', error);
+    logger.error('Error al obtener slots disponibles:', error);
     return res.status(500).json({ message: 'Error al obtener slots disponibles' });
   }
 };
@@ -450,7 +451,7 @@ const getUpcomingAppointments = async (req, res) => {
 
     return res.json({ appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas próximas:', error);
+    logger.error('Error al obtener citas próximas:', error);
     return res.status(500).json({ message: 'Error al obtener citas próximas' });
   }
 };

@@ -4,6 +4,7 @@ const {
   toMedicalHistoryDTO,
   toMedicalHistoryDTOList,
 } = require('../../mappers/MedicalHistoryMapper');
+const logger = require('../utils/logger');
 
 // Lista historiales filtrando por patientId o professionalId (vía params o query).
 // Respuesta: { histories: MedicalHistoryDTO[] }
@@ -36,7 +37,7 @@ async function getMedicalHistories(req, res) {
 
     return res.json(toMedicalHistoryDTOList(histories));
   } catch (error) {
-    console.error('[getMedicalHistories] Error:', error);
+    logger.error('[getMedicalHistories] Error:', error);
     return res.status(500).json({ message: 'Error al obtener historiales médicos' });
   }
 }
@@ -51,7 +52,7 @@ async function getMedicalHistoryById(req, res) {
     }
     return res.json(toMedicalHistoryDTO(mh));
   } catch (error) {
-    console.error('[getMedicalHistoryById] Error:', error);
+    logger.error('[getMedicalHistoryById] Error:', error);
     return res.status(500).json({ message: 'Error al obtener historial médico' });
   }
 }
@@ -85,7 +86,7 @@ async function createMedicalHistory(req, res) {
 
     return res.status(201).json(toMedicalHistoryDTO(created));
   } catch (error) {
-    console.error('[createMedicalHistory] Error:', error);
+    logger.error('[createMedicalHistory] Error:', error);
     return res.status(500).json({ message: 'Error al crear historial médico' });
   }
 }
@@ -119,7 +120,7 @@ async function updateMedicalHistory(req, res) {
 
     return res.json(toMedicalHistoryDTO(mh));
   } catch (error) {
-    console.error('[updateMedicalHistory] Error:', error);
+    logger.error('[updateMedicalHistory] Error:', error);
     return res.status(500).json({ message: 'Error al actualizar historial médico' });
   }
 }
@@ -142,7 +143,7 @@ const deleteMedicalHistory = async (req, res) => {
     
     res.json({ message: 'Historial médico eliminado correctamente' });
   } catch (error) {
-    console.error('Error al eliminar el historial médico:', error);
+    logger.error('Error al eliminar el historial médico:', error);
     res.status(500).json({ message: 'Error al eliminar el historial médico' });
   }
 };

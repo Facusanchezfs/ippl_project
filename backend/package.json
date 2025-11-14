@@ -30,7 +30,9 @@
 		"mysql2": "^3.14.3",
 		"nodemailer": "^6.10.1",
 		"sequelize": "^6.37.7",
-		"uuid": "^11.1.0"
+		"uuid": "^11.1.0",
+		"winston": "^3.18.3",
+		"winston-daily-rotate-file": "^5.0.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.34.0",

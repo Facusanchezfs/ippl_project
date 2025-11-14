@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/jwt');
+const logger = require('../utils/logger');
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -26,7 +27,7 @@ const authenticateToken = (req, res, next) => {
         code: 'INVALID_TOKEN' 
       });
     } else {
-    console.error('Error al verificar token:', error);
+      logger.error('Error al verificar token:', error);
       return res.status(403).json({ 
         error: 'Error al verificar el token', 
         code: 'TOKEN_ERROR' 
@@ -41,8 +42,7 @@ const checkRole = (allowedRoles) => {
       return res.status(401).json({ error: 'Usuario no autenticado' });
     }
 
-    console.log('User role:', req.user.role);
-    console.log('Allowed roles:', allowedRoles);
+    logger.debug('Verificando rol:', { userRole: req.user.role, allowedRoles });
 
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ error: 'No tienes permiso para acceder a este recurso' });

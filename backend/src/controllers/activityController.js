@@ -1,5 +1,6 @@
 const { Activity } = require('../../models');
 const { toActivityDTO, toActivityDTOList } = require('../../mappers/ActivityMapper');
+const logger = require('../utils/logger');
 
 // Crear una nueva actividad
 async function createActivity(type, title, description, metadata = {}) {
@@ -46,7 +47,7 @@ async function createActivity(type, title, description, metadata = {}) {
 
     return toActivityDTO(created);
   } catch (error) {
-    console.error('Error creating activity:', error);
+    logger.error('Error creating activity:', error);
     throw error;
   }
 }
@@ -73,7 +74,7 @@ async function getActivities(req, res) {
 
     res.json(toActivityDTOList(activities));
   } catch (error) {
-    console.error('Error getting activities:', error);
+    logger.error('Error getting activities:', error);
     res.status(500).json({ error: 'Error al obtener las actividades' });
   }
 }
@@ -88,7 +89,7 @@ async function markAsRead(req, res) {
     if (!activity.read) await activity.update({ read: true });
     res.json({ success: true });
   } catch (error) {
-    console.error('Error marking activity as read:', error);
+    logger.error('Error marking activity as read:', error);
     res.status(500).json({ error: 'Error al marcar la actividad como leída' });
   }
 }
@@ -99,7 +100,7 @@ async function markAllAsRead(req, res) {
     await Activity.update({ read: true }, { where: { read: false } });
     res.json({ success: true });
   } catch (error) {
-    console.error('Error marking all activities as read:', error);
+    logger.error('Error marking all activities as read:', error);
     res.status(500).json({ error: 'Error al marcar todas las actividades como leídas' });
   }
 }
@@ -112,7 +113,7 @@ async function getUnreadCount(req, res) {
     });
     res.json({ count });
   } catch (error) {
-    console.error('Error getting unread count:', error);
+    logger.error('Error getting unread count:', error);
     res.status(500).json({ error: 'Error al obtener el conteo de actividades no leídas' });
   }
 }
@@ -123,7 +124,7 @@ async function clearAllActivities(req, res) {
     await Activity.destroy({ where: {} });
     res.json({ success: true, message: 'Todas las actividades han sido eliminadas' });
   } catch (error) {
-    console.error('Error clearing activities:', error);
+    logger.error('Error clearing activities:', error);
     res.status(500).json({ error: 'Error al limpiar las actividades' });
   }
 }

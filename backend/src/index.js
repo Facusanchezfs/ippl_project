@@ -5,6 +5,7 @@ const multer = require('multer');
 const fs = require('fs').promises;
 const app = require('./app');
 const { sequelize } = require('../models');
+const logger = require('./utils/logger');
 require('dotenv').config();
 
 // Validar configuración crítica al inicio (el servidor fallará si falta JWT_SECRET)
@@ -33,7 +34,7 @@ async function ensureDirectories() {
 			await fs.access(dir);
 		} catch {
 			await fs.mkdir(dir, { recursive: true });
-			console.log(`✅ Directorio creado: ${dir}`);
+			logger.info(`✅ Directorio creado: ${dir}`);
 		}
 	}
 }
@@ -137,9 +138,8 @@ if (process.env.NODE_ENV === 'production') {
 	});
 }
 
-// Middleware de manejo de errores
+// Middleware de manejo de errores (errorLogger ya está en app.js)
 app.use((err, req, res, next) => {
-	console.error('Error:', err);
 	res.status(500).json({
 		message: 'Error en el servidor',
 		error: process.env.NODE_ENV === 'development' ? err.message : undefined,
@@ -151,13 +151,14 @@ async function startServer() {
 	try {
 		await ensureDirectories();
 		await sequelize.authenticate();
-		console.log('✅ [DB] Conectada correctamente');
+		logger.info('✅ [DB] Conectada correctamente');
+		logger.info('SQL logging disabled');
 
 		app.listen(PORT, () => {
-			console.log(`Server is running on port ${PORT}`);
+			logger.info(`🚀 Server is running on port ${PORT}`);
 		});
 	} catch (error) {
-		console.error('❌ Error al iniciar el servidor:', error);
+		logger.error('❌ Error al iniciar el servidor:', error);
 		process.exit(1);
 	}
 }

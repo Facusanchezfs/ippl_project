@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { User } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { JWT_SECRET } = require('../config/jwt');
+const logger = require('../utils/logger');
 
 const generateToken = (user) => {
 	return jwt.sign(
@@ -49,7 +50,7 @@ const login = async (req, res) => {
 
 		res.json({ token, user: userDTO });
 	} catch (err) {
-		console.error('Error en login:', err);
+		logger.error('Error en login:', err);
 		res.status(500).json({ message: 'Error en el servidor' });
 	}
 };
@@ -74,7 +75,7 @@ const refreshToken = async (req, res) => {
 		const newToken = generateToken(user);
 		res.json({ token: newToken });
 	} catch (error) {
-		console.error('Error al renovar token:', error);
+		logger.error('Error al renovar token:', error);
 		const isExpired = error.name === 'TokenExpiredError';
 		return res.status(401).json({
 			message: isExpired ? 'Token expirado' : 'Token inválido',
@@ -129,7 +130,7 @@ const getCurrentUser = async (req, res) => {
 		const userDTO = toUserDTO(user);
 		return res.json({ user: userDTO });
 	} catch (error) {
-		console.error('Error al obtener usuario actual:', error);
+		logger.error('Error al obtener usuario actual:', error);
 		return res.status(500).json({ message: 'Error al obtener usuario' });
 	}
 };

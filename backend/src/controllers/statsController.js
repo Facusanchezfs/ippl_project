@@ -1,6 +1,7 @@
 
 const { Op, fn, col } = require('sequelize');
 const { sequelize, User, Patient, Post, Appointment } = require('../../models');
+const logger = require('../utils/logger');
 
 const getSystemStats = async (req, res) => {
   try {
@@ -119,7 +120,7 @@ const getSystemStats = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
+    logger.error('Error al obtener estadísticas:', error);
     return res.status(500).json({ message: 'Error al obtener estadísticas del sistema' });
   }
 };
@@ -196,7 +197,7 @@ const getProfessionalStats = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas del profesional:', error);
+    logger.error('Error al obtener estadísticas del profesional:', error);
     return res.status(500).json({ message: 'Error al obtener estadísticas del profesional' });
   }
 };

@@ -35,6 +35,7 @@ function validateJwtSecret() {
 
 	// Advertencia si parece ser el valor por defecto inseguro
 	if (secret === 'tu_secreto_super_seguro') {
+		// Usar console.warn aquí porque el logger podría no estar inicializado aún
 		console.warn(
 			'⚠️  ADVERTENCIA: JWT_SECRET parece ser el valor por defecto inseguro. ' +
 			'Por favor, cambia a un secreto aleatorio fuerte.'

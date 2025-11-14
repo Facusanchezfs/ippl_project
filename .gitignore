@@ -17,6 +17,7 @@
 # Logs
 logs
 *.log
+backend/logs/
 
 # IDE / OS
 .vscode/

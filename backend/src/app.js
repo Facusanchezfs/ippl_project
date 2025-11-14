@@ -4,6 +4,9 @@ const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 const { globalLimiter, writeLimiter } = require('./middleware/rateLimiter');
+const requestLogger = require('./middleware/requestLogger');
+const errorLogger = require('./middleware/errorLogger');
+const logger = require('./utils/logger');
 const appointmentsRouter = require('./routes/appointments');
 const usersRouter = require('./routes/users');
 const uploadRouter = require('./routes/upload');
@@ -96,6 +99,9 @@ app.use(cors({
 
 app.use(express.json());
 
+// Middleware de logging de requests (debe ir antes de las rutas)
+app.use(requestLogger);
+
 // Aplicar rate limiting global a todas las rutas API
 app.use('/api', globalLimiter);
 
@@ -112,7 +118,7 @@ const imagesUploadsDir = path.join(uploadsDir, 'images');
 [uploadsDir, audioUploadsDir, postsUploadsDir, carouselUploadsDir, imagesUploadsDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
-    console.log(`Created directory: ${dir}`);
+    logger.info(`Created directory: ${dir}`);
   }
 });
 
@@ -169,10 +175,12 @@ app.use('/api/payments', paymentsRouter);
 // Nota: /uploads ya está configurado arriba con middleware para tipos MIME
 // Esta línea duplicada se eliminó para evitar conflictos
 
+// Middleware de logging de errores (debe ir antes del manejo de errores final)
+app.use(errorLogger);
+
 // Manejo de errores
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
   res.status(500).json({ 
     message: 'Error interno del servidor',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
