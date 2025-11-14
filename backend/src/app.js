@@ -25,21 +25,28 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Configurar headers de seguridad con Helmet
+// Configuración diferente para development y production
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(helmet({
 	contentSecurityPolicy: {
 		directives: {
 			defaultSrc: ["'self'"],
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval necesario para Vite en desarrollo
 			styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind puede generar estilos inline
-			imgSrc: ["'self'", "data:", "https://images.pexels.com", "https://via.placeholder.com"],
+			imgSrc: isProduction
+				? ["'self'", "data:", "https://images.pexels.com", "https://via.placeholder.com"]
+				: ["'self'", "data:", "http://localhost:5000", "https://images.pexels.com", "https://via.placeholder.com"],
 			fontSrc: ["'self'", "data:"],
-			connectSrc: ["'self'", "http://localhost:5000", "https://www.ippl.com.ar"],
+			connectSrc: isProduction
+				? ["'self'", "http://localhost:5000", "https://www.ippl.com.ar"]
+				: ["'self'", "http://localhost:5000", "http://localhost:5173", "https://www.ippl.com.ar"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
 			objectSrc: ["'none'"],
 			baseUri: ["'self'"],
 			formAction: ["'self'"],
 			frameAncestors: ["'none'"], // Previene clickjacking
-			upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null, // Solo en producción
+			upgradeInsecureRequests: isProduction ? [] : null, // Solo en producción
 		},
 	},
 	// Forzar HTTPS en producción
