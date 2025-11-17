@@ -5,6 +5,7 @@ const {
   toMedicalHistoryDTOList,
 } = require('../../mappers/MedicalHistoryMapper');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Lista historiales filtrando por patientId o professionalId (vía params o query).
 // Respuesta: { histories: MedicalHistoryDTO[] }
@@ -18,9 +19,7 @@ async function getMedicalHistories(req, res) {
       req.params.professionalId ?? req.query.professionalId ?? undefined;
 
     if (!patientId && !professionalId) {
-      return res.status(400).json({
-        message: 'Debe proporcionar patientId o professionalId (params o query)',
-      });
+      return sendError(res, 400, 'Debe proporcionar patientId o professionalId (params o query)');
     }
 
     const where = {};
@@ -35,10 +34,10 @@ async function getMedicalHistories(req, res) {
       ],
     });
 
-    return res.json(toMedicalHistoryDTOList(histories));
+    return sendSuccess(res, toMedicalHistoryDTOList(histories));
   } catch (error) {
     logger.error('[getMedicalHistories] Error:', error);
-    return res.status(500).json({ message: 'Error al obtener historiales médicos' });
+    return sendError(res, 500, 'Error al obtener historiales médicos');
   }
 }
 
@@ -48,12 +47,12 @@ async function getMedicalHistoryById(req, res) {
     const { id } = req.params;
     const mh = await MedicalHistory.findByPk(id);
     if (!mh) {
-      return res.status(404).json({ message: 'Historial médico no encontrado' });
+      return sendError(res, 404, 'Historial médico no encontrado');
     }
-    return res.json(toMedicalHistoryDTO(mh));
+    return sendSuccess(res, toMedicalHistoryDTO(mh));
   } catch (error) {
     logger.error('[getMedicalHistoryById] Error:', error);
-    return res.status(500).json({ message: 'Error al obtener historial médico' });
+    return sendError(res, 500, 'Error al obtener historial médico');
   }
 }
 
@@ -63,13 +62,13 @@ async function createMedicalHistory(req, res) {
 
     // Validaciones básicas
     if (!patientId || !date || !diagnosis || !treatment || !notes) {
-      return res.status(400).json({ message: 'Faltan campos requeridos' });
+      return sendError(res, 400, 'Faltan campos requeridos');
     }
 
     // Verificar que el paciente exista
     const patient = await Patient.findByPk(patientId, { attributes: ['id'] });
     if (!patient) {
-      return res.status(404).json({ message: 'Paciente no encontrado' });
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     // Profesional (si estás autenticando, suele venir en req.user)
@@ -84,10 +83,10 @@ async function createMedicalHistory(req, res) {
       notes,
     });
 
-    return res.status(201).json(toMedicalHistoryDTO(created));
+    return sendSuccess(res, toMedicalHistoryDTO(created), 'Historial médico creado correctamente', 201);
   } catch (error) {
     logger.error('[createMedicalHistory] Error:', error);
-    return res.status(500).json({ message: 'Error al crear historial médico' });
+    return sendError(res, 500, 'Error al crear historial médico');
   }
 }
 
@@ -100,14 +99,14 @@ async function updateMedicalHistory(req, res) {
 
     const mh = await MedicalHistory.findByPk(id);
     if (!mh) {
-      return res.status(404).json({ message: 'Historial médico no encontrado' });
+      return sendError(res, 404, 'Historial médico no encontrado');
     }
 
     // Autorización simple: autor (professionalId) o admin
     const isAdmin = req.user?.role === 'admin';
     const isAuthor = req.user && String(req.user.id) === String(mh.professionalId ?? '');
     if (!isAdmin && !isAuthor) {
-      return res.status(403).json({ message: 'No autorizado para editar este historial' });
+      return sendError(res, 403, 'No autorizado para editar este historial');
     }
 
     const updates = {};
@@ -118,33 +117,29 @@ async function updateMedicalHistory(req, res) {
     await mh.update(updates);
     await mh.reload();
 
-    return res.json(toMedicalHistoryDTO(mh));
+    return sendSuccess(res, toMedicalHistoryDTO(mh), 'Historial médico actualizado correctamente');
   } catch (error) {
     logger.error('[updateMedicalHistory] Error:', error);
-    return res.status(500).json({ message: 'Error al actualizar historial médico' });
+    return sendError(res, 500, 'Error al actualizar historial médico');
   }
 }
 
 
 const deleteMedicalHistory = async (req, res) => {
   try {
-    const historyId = req.params.id;
+    const { id } = req.params;
+    const mh = await MedicalHistory.findByPk(id);
     
-    const data = await fs.readFile(MEDICAL_HISTORY_FILE, 'utf8');
-    const histories = JSON.parse(data);
-    
-    const filteredHistories = histories.filter(h => h.id !== historyId);
-    
-    if (filteredHistories.length === histories.length) {
-      return res.status(404).json({ message: 'Historial médico no encontrado' });
+    if (!mh) {
+      return sendError(res, 404, 'Historial médico no encontrado');
     }
     
-    await fs.writeFile(MEDICAL_HISTORY_FILE, JSON.stringify(filteredHistories, null, 2));
+    await mh.destroy();
     
-    res.json({ message: 'Historial médico eliminado correctamente' });
+    return sendSuccess(res, null, 'Historial médico eliminado correctamente', 204);
   } catch (error) {
     logger.error('Error al eliminar el historial médico:', error);
-    res.status(500).json({ message: 'Error al eliminar el historial médico' });
+    return sendError(res, 500, 'Error al eliminar el historial médico');
   }
 };
 

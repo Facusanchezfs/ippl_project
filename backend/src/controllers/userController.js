@@ -4,6 +4,7 @@ const { User, Abono, sequelize } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // helper numérico para DECIMAL
 function toAmount(v) {
@@ -19,37 +20,40 @@ function round2(v) {
 
 const getUserById = async (req, res) => {
   const { id } = req.params;
-try {
+  try {
     const user = await User.findByPk(id);
+    if (!user) {
+      return sendError(res, 404, 'Usuario no encontrado');
+    }
     const dtos = toUserDTO(user);
-    res.json(dtos);
+    return sendSuccess(res, dtos);
   } catch (error) {
     logger.error('Error getting user:', error);
-    res.status(500).json({ message: 'Error al obtener usuario' });
+    return sendError(res, 500, 'Error al obtener usuario');
   }
-}
+};
 
-const getProfessionals = async (req, res) =>{
-  try{
-    const professionals = await User.findAll({where: {role: 'professional'}})
+const getProfessionals = async (req, res) => {
+  try {
+    const professionals = await User.findAll({ where: { role: 'professional' } });
     const dtos = professionals.map(x => toUserDTO(x));
-    res.json(dtos);
+    return sendSuccess(res, dtos);
   } catch (error) {
     logger.error('Error getting professionals:', error);
-    res.status(500).json({ message: 'Error al obtener profesionales' });
+    return sendError(res, 500, 'Error al obtener profesionales');
   }
-}
+};
 // Get all users
 const getUsers = async (req, res) => {
   try {
     const users = await User.findAll({ order: [['id', 'ASC']] });
     const dtos = users.map((u) => toUserDTO(u));
-    res.json({ users: dtos });
+    return sendSuccess(res, { users: dtos });
   } catch (error) {
     logger.error('Error getting users:', error);
-    res.status(500).json({ message: 'Error al obtener usuarios' });
+    return sendError(res, 500, 'Error al obtener usuarios');
   }
-}
+};
 
 // Create a new user
 const createUser = async (req, res) => {
@@ -57,11 +61,11 @@ const createUser = async (req, res) => {
     const { name, email, password, role, status, commission, saldoTotal, saldoPendiente } = req.body;
 
     if (!name || !email || !password || !role) {
-      return res.status(400).json({ message: 'Todos los campos (name, email, password, role) son requeridos' });
+      return sendError(res, 400, 'Todos los campos (name, email, password, role) son requeridos');
     }
 
     const exists = await User.findOne({ where: { email } });
-    if (exists) return res.status(409).json({ message: 'El email ya está registrado' });
+    if (exists) return sendError(res, 409, 'El email ya está registrado');
 
     const salt = await bcrypt.genSalt(10);
     const passwordHashed = await bcrypt.hash(password, salt);
@@ -80,13 +84,13 @@ const createUser = async (req, res) => {
       saldoPendiente: saldoPendiente || 0,
     });
 
-    return res.status(201).json(toUserDTO(created));
+    return sendSuccess(res, toUserDTO(created), 'Usuario creado correctamente', 201);
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({ message: 'El email ya está registrado' });
+      return sendError(res, 409, 'El email ya está registrado');
     }
     logger.error('Error creating user:', error);
-    res.status(500).json({ message: 'Error al crear usuario' });
+    return sendError(res, 500, 'Error al crear usuario');
   }
 };
 
@@ -96,13 +100,13 @@ const updateUser = async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user) return sendError(res, 404, 'Usuario no encontrado');
 
     const data = { ...req.body };
 
     if (Object.prototype.hasOwnProperty.call(data, 'password')) {
       if (!data.password) {
-        return res.status(400).json({ message: 'La contraseña no puede ser vacía' });
+        return sendError(res, 400, 'La contraseña no puede ser vacía');
       }
       const salt = await bcrypt.genSalt(10);
       data.password = await bcrypt.hash(data.password, salt);
@@ -133,13 +137,13 @@ const updateUser = async (req, res) => {
     await user.update(payload);
 
     await user.reload();
-    return res.json(toUserDTO(user));
+    return sendSuccess(res, toUserDTO(user), 'Usuario actualizado correctamente');
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({ message: 'El email ya está registrado' });
+      return sendError(res, 409, 'El email ya está registrado');
     }
     logger.error('Error updating user:', error);
-    res.status(500).json({ message: 'Error al actualizar usuario' });
+    return sendError(res, 500, 'Error al actualizar usuario');
   }
 };
 
@@ -149,19 +153,19 @@ const deleteUser = async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user) return sendError(res, 404, 'Usuario no encontrado');
 
     if (user.status === 'inactive') {
-      return res.json({ message: 'El usuario ya estaba inactivo', user: toUserDTO(user) });
+      return sendSuccess(res, { user: toUserDTO(user) }, 'El usuario ya estaba inactivo');
     }
 
     await user.update({ status: 'inactive' });
     await user.reload();
 
-    return res.json({ message: 'Usuario desactivado correctamente', user: toUserDTO(user) });
+    return sendSuccess(res, { user: toUserDTO(user) }, 'Usuario desactivado correctamente');
   } catch (error) {
     logger.error('Error deleting user:', error);
-    res.status(500).json({ message: 'Error al desactivar usuario' });
+    return sendError(res, 500, 'Error al desactivar usuario');
   }
 };
 
@@ -171,19 +175,19 @@ const permanentDeleteUser = async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user) return sendError(res, 404, 'Usuario no encontrado');
 
     // Solo permitir eliminar usuarios inactivos
     if (user.status === 'active') {
-      return res.status(400).json({ message: 'No se puede eliminar permanentemente un usuario activo. Primero debe desactivarlo.' });
+      return sendError(res, 400, 'No se puede eliminar permanentemente un usuario activo. Primero debe desactivarlo.');
     }
 
     await user.destroy();
 
-    return res.json({ message: 'Usuario eliminado permanentemente' });
+    return sendSuccess(res, null, 'Usuario eliminado permanentemente', 204);
   } catch (error) {
     logger.error('Error permanently deleting user:', error);
-    res.status(500).json({ message: 'Error al eliminar usuario permanentemente' });
+    return sendError(res, 500, 'Error al eliminar usuario permanentemente');
   }
 };
 
@@ -197,7 +201,7 @@ const abonarComision = async (req, res) => {
     const amount = Number(abono);
     if (!amount || isNaN(amount) || amount <= 0) {
       await t.rollback();
-      return res.status(400).json({ message: 'Abono inválido' });
+      return sendError(res, 400, 'Abono inválido');
     }
 
     // lock para evitar race conditions en saldo
@@ -209,7 +213,7 @@ const abonarComision = async (req, res) => {
 
     if (!professional) {
       await t.rollback();
-      return res.status(404).json({ message: 'Profesional no encontrado' });
+      return sendError(res, 404, 'Profesional no encontrado');
     }
 
     const prevSaldo = toAmount(professional.saldoPendiente);
@@ -241,15 +245,14 @@ const abonarComision = async (req, res) => {
     );
 
     await t.commit();
-    return res.json({
-      success: true,
+    return sendSuccess(res, {
       saldoPendiente: nextSaldo,
       paidInFull, // booleano para que el cliente muestre alerta
-    });
+    }, 'Comisión abonada correctamente');
   } catch (error) {
     await t.rollback();
     logger.error('Error al abonar comisión:', error);
-    return res.status(500).json({ message: 'Error al abonar comisión' });
+    return sendError(res, 500, 'Error al abonar comisión');
   }
 };
 
@@ -263,10 +266,10 @@ const getAbonos = async (req, res) => {
       ],
     });
 
-    return res.json({ abonos: toAbonoDTOList(abonos) });
+    return sendSuccess(res, { abonos: toAbonoDTOList(abonos) });
   } catch (error) {
     logger.error('Error al obtener abonos:', error);
-    return res.status(500).json({ message: 'Error al obtener abonos' });
+    return sendError(res, 500, 'Error al obtener abonos');
   }
 };
 

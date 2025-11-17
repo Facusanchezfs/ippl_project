@@ -2,6 +2,7 @@
 const { Op, fn, col } = require('sequelize');
 const { sequelize, User, Patient, Post, Appointment } = require('../../models');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 const getSystemStats = async (req, res) => {
   try {
@@ -95,7 +96,7 @@ const getSystemStats = async (req, res) => {
     ]);
 
     // ---- Respuesta ----
-    return res.json({
+    return sendSuccess(res, {
       users: {
         total: totalUsers,
         byRole: { admin: admins, professional: pros, content_manager: cms },
@@ -121,7 +122,7 @@ const getSystemStats = async (req, res) => {
     });
   } catch (error) {
     logger.error('Error al obtener estadísticas:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas del sistema' });
+    return sendError(res, 500, 'Error al obtener estadísticas del sistema');
   }
 };
 
@@ -181,7 +182,7 @@ const getProfessionalStats = async (req, res) => {
       }),
     ]);
 
-    return res.json({
+    return sendSuccess(res, {
       patients: {
         total,
         active: activeCount,
@@ -198,7 +199,7 @@ const getProfessionalStats = async (req, res) => {
     });
   } catch (error) {
     logger.error('Error al obtener estadísticas del profesional:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas del profesional' });
+    return sendError(res, 500, 'Error al obtener estadísticas del profesional');
   }
 };
 

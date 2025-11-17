@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Appointment, Patient, User, sequelize } = require('../../models');
 const { toAppointmentDTO, toAppointmentDTOList } = require('../../mappers/AppointmentMapper');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -28,10 +29,10 @@ const getAllAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
     logger.error('Error al obtener citas:', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    return sendError(res, 500, 'Error al obtener citas');
   }
 };
 
@@ -48,10 +49,10 @@ const getProfessionalAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
     logger.error('Error al obtener citas del profesional:', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    return sendError(res, 500, 'Error al obtener citas');
   }
 };
 
@@ -79,10 +80,10 @@ const getTodayProfessionalAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
     logger.error('Error al obtener citas del profesional (hoy):', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    return sendError(res, 500, 'Error al obtener citas');
   }
 }
 
@@ -99,10 +100,10 @@ const getPatientAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
     logger.error('Error al obtener citas del paciente:', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    return sendError(res, 500, 'Error al obtener citas');
   }
 };
 
@@ -122,13 +123,10 @@ const createAppointment = async (req, res) => {
 
     // 1) Validaciones básicas
     if (!patientId || !professionalId || !date || !startTime || !endTime) {
-      return res.status(400).json({
-        message:
-          'Faltan campos requeridos (patientId, professionalId, date, startTime, endTime)',
-      });
+      return sendError(res, 400, 'Faltan campos requeridos (patientId, professionalId, date, startTime, endTime)');
     }
     if (toMinutes(endTime) <= toMinutes(startTime)) {
-      return res.status(400).json({ message: 'endTime debe ser mayor que startTime' });
+      return sendError(res, 400, 'endTime debe ser mayor que startTime');
     }
 
     // 2) Snapshots de nombres (si no existen, seguimos con texto por defecto)
@@ -156,7 +154,7 @@ const createAppointment = async (req, res) => {
       return newStart < e && s < newEnd;
     });
     if (overlaps) {
-      return res.status(400).json({ message: 'El horario seleccionado no está disponible' });
+      return sendError(res, 400, 'El horario seleccionado no está disponible');
     }
 
     // 4) Saneos / normalizaciones
@@ -191,10 +189,10 @@ const createAppointment = async (req, res) => {
       // active: true por defecto (soft delete en el modelo)
     });
 
-    return res.status(201).json(toAppointmentDTO(created));
+    return sendSuccess(res, toAppointmentDTO(created), 'Cita creada correctamente', 201);
   } catch (error) {
     logger.error('[createAppointment] Error al crear cita:', error);
-    return res.status(500).json({ message: 'Error al crear cita', error: error.message });
+    return sendError(res, 500, 'Error al crear cita');
   }
 };
 
@@ -241,7 +239,7 @@ const updateAppointment = async (req, res) => {
     const newProf  = updates.professionalId  ?? appt.professionalId;
 
     if (newStart && newEnd && toMinutes(newEnd) <= toMinutes(newStart)) {
-      return res.status(400).json({ message: 'endTime debe ser mayor que startTime' });
+      return sendError(res, 400, 'endTime debe ser mayor que startTime');
     }
 
     if (
@@ -358,10 +356,10 @@ const updateAppointment = async (req, res) => {
       }
     });
 
-    return res.json(toAppointmentDTO(appt));
+    return sendSuccess(res, toAppointmentDTO(appt), 'Cita actualizada correctamente');
   } catch (error) {
     logger.error('[updateAppointment] Error:', error);
-    return res.status(500).json({ message: 'Error al actualizar cita', error: error.message });
+    return sendError(res, 500, 'Error al actualizar cita');
   }
 };
 
@@ -371,13 +369,10 @@ const deleteAppointment = async (req, res) => {
     const appt = req.appointment; // ya viene del middleware y está activa
     await appt.update({ active: false });
 
-    return res.json({
-      message: 'Cita eliminada correctamente',
-      appointment: appt, // devuelve el registro actualizado
-    });
+    return sendSuccess(res, null, 'Cita eliminada correctamente', 204);
   } catch (error) {
     logger.error('[deleteAppointment] Error:', error);
-    return res.status(500).json({ message: 'Error al eliminar la cita' });
+    return sendError(res, 500, 'Error al eliminar la cita');
   }
 };
 
@@ -387,7 +382,7 @@ const getAvailableSlots = async (req, res) => {
     const { date } = req.query;
 
     if (!professionalId || !date) {
-      return res.status(400).json({ message: 'professionalId y date son requeridos' });
+      return sendError(res, 400, 'professionalId y date son requeridos');
     }
 
     // Traer citas activas del profesional para ese día (excepto canceladas)
@@ -403,6 +398,7 @@ const getAvailableSlots = async (req, res) => {
     });
 
     // Generar slots de 60 min entre 09:00 y 17:00 (inclusive 17:00 como en tu implementación original)
+    const fmt = (h) => String(h).padStart(2, '0') + ':00';
     const allSlots = Array.from({ length: 9 }, (_, i) => fmt(9 + i)); // 09:00 ... 17:00
     const SLOT_MINUTES = 60;
 
@@ -422,10 +418,10 @@ const getAvailableSlots = async (req, res) => {
       return !overlaps;
     });
 
-    return res.json({ slots: availableSlots });
+    return sendSuccess(res, { slots: availableSlots });
   } catch (error) {
     logger.error('Error al obtener slots disponibles:', error);
-    return res.status(500).json({ message: 'Error al obtener slots disponibles' });
+    return sendError(res, 500, 'Error al obtener slots disponibles');
   }
 };
 
@@ -449,10 +445,10 @@ const getUpcomingAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
     logger.error('Error al obtener citas próximas:', error);
-    return res.status(500).json({ message: 'Error al obtener citas próximas' });
+    return sendError(res, 500, 'Error al obtener citas próximas');
   }
 };
 

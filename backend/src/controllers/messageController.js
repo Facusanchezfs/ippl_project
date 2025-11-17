@@ -3,6 +3,7 @@
 const { Message } = require('../../models');
 const { toMessageDTOList } = require('../../mappers/MessageMapper');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Create a new message
 async function createMessage(req, res) {
@@ -11,7 +12,7 @@ async function createMessage(req, res) {
 
     // Validaciones básicas
     if (!nombre || !apellido || !correoElectronico || !mensaje) {
-      return res.status(400).json({ error: 'Faltan campos requeridos' });
+      return sendError(res, 400, 'Faltan campos requeridos');
     }
 
     await Message.create({
@@ -24,13 +25,10 @@ async function createMessage(req, res) {
       leido: false,
     });
 
-    // Si preferís devolver el objeto creado:
-    // return res.status(201).json(toMessageDTO(created));
-
-    return res.status(201).json({ message: 'Mensaje enviado exitosamente' });
+    return sendSuccess(res, null, 'Mensaje enviado exitosamente', 201);
   } catch (error) {
     logger.error('Error al crear mensaje:', error);
-    return res.status(500).json({ error: 'Error al enviar el mensaje' });
+    return sendError(res, 500, 'Error al enviar el mensaje');
   }
 }
 
@@ -44,10 +42,10 @@ async function getAllMessages(req, res) {
       ],
     });
     logger.debug('Mensajes obtenidos:', { count: rows.length });
-    return res.json(toMessageDTOList(rows));
+    return sendSuccess(res, toMessageDTOList(rows));
   } catch (error) {
     logger.error('Error al obtener mensajes:', error);
-    return res.status(500).json({ error: 'Error al obtener los mensajes' });
+    return sendError(res, 500, 'Error al obtener los mensajes');
   }
 }
 
@@ -58,27 +56,27 @@ async function markAsRead(req, res) {
 
     const msg = req.message || await Message.findByPk(id)
     if (!msg) {
-      return res.status(404).json({ error: 'Mensaje no encontrado' });
+      return sendError(res, 404, 'Mensaje no encontrado');
     }
 
     if (!msg.leido) {
       await msg.update({ leido: true });
     }
 
-    return res.json({ message: 'Mensaje marcado como leído' });
+    return sendSuccess(res, null, 'Mensaje marcado como leído');
   } catch (error) {
     logger.error('Error al marcar mensaje como leído:', error);
-    return res.status(500).json({ error: 'Error al actualizar el mensaje' });
+    return sendError(res, 500, 'Error al actualizar el mensaje');
   }
 }
 
 async function clearAllMessages(req, res) {
   try {
     await Message.destroy({ where: {} });
-    return res.json({ success: true, message: 'Todos los mensajes han sido eliminados' });
+    return sendSuccess(res, null, 'Todos los mensajes han sido eliminados', 204);
   } catch (error) {
     logger.error('Error al limpiar mensajes:', error);
-    return res.status(500).json({ error: 'Error al eliminar los mensajes' });
+    return sendError(res, 500, 'Error al eliminar los mensajes');
   }
 }
 
