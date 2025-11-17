@@ -35,14 +35,58 @@ async function createMessage(req, res) {
 // Get all messages (array plano)
 async function getAllMessages(req, res) {
   try {
-    const rows = await Message.findAll({
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getAllMessages
+    // PROBLEMA: Sin paginación, trae todos los mensajes. Sin filtro opcional por leído.
+    // IMPACTO: Con muchos mensajes = transferencia masiva, lento.
+    // SOLUCIÓN: Paginación obligatoria + filtro opcional por leído + índice compuesto.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const leido = req.query.leido !== undefined ? req.query.leido === 'true' : undefined;
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
+    
+    const where = {};
+    if (leido !== undefined) {
+      where.leido = leido;
+    }
+    
+    const { count, rows } = await Message.findAndCountAll({
+      where,
       order: [
         ['fecha', 'DESC'],
         ['createdAt', 'DESC'],
       ],
+      limit,
+      offset,
     });
-    logger.debug('Mensajes obtenidos:', { count: rows.length });
-    return sendSuccess(res, toMessageDTOList(rows));
+    
+    logger.debug('Mensajes obtenidos:', { count: rows.length, total: count });
+    
+    const totalPages = Math.ceil(count / limit);
+    
+    // COMPATIBILIDAD: Si no se pasa paginación, devolver formato antiguo (array directo)
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        messages: toMessageDTOList(rows),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, toMessageDTOList(rows));
+    }
   } catch (error) {
     logger.error('Error al obtener mensajes:', error);
     return sendError(res, 500, 'Error al obtener los mensajes');

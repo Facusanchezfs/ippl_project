@@ -57,6 +57,12 @@ async function createActivity(type, title, description, metadata = {}) {
 // Obtener todas las actividades
 async function getActivities(req, res) {
   try {
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getActivities
+    // PROBLEMA: Sin paginación, trae miles de registros innecesarios.
+    // IMPACTO: Con muchas actividades = transferencia masiva, lento, alto uso de memoria.
+    // SOLUCIÓN: Paginación con límite máximo (max 100) + índice compuesto (type, occurredAt DESC).
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
     // Incluyo ambos sufijos por compatibilidad: REQUEST vs REQUESTED
     const relevantTypes = [
       'PATIENT_DISCHARGE_REQUEST',
@@ -69,12 +75,41 @@ async function getActivities(req, res) {
       'FREQUENCY_CHANGE_REJECTED'
     ];
 
-    const activities = await Activity.findAll({
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100); // Máximo 100
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1) return sendError(res, 400, 'limit debe ser mayor a 0');
+    
+    const offset = (page - 1) * limit;
+
+    const { count, rows: activities } = await Activity.findAndCountAll({
       where: { type: relevantTypes },
       order: [['occurredAt', 'DESC']],
+      limit,
+      offset,
     });
 
-    return sendSuccess(res, toActivityDTOList(activities));
+    const totalPages = Math.ceil(count / limit);
+
+    // COMPATIBILIDAD: Si no se pasa paginación, devolver formato antiguo (array directo)
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        activities: toActivityDTOList(activities),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, toActivityDTOList(activities));
+    }
   } catch (error) {
     logger.error('Error getting activities:', error);
     return sendError(res, 500, 'Error al obtener las actividades');

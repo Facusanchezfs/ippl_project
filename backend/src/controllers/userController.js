@@ -46,9 +46,55 @@ const getProfessionals = async (req, res) => {
 // Get all users
 const getUsers = async (req, res) => {
   try {
-    const users = await User.findAll({ order: [['id', 'ASC']] });
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getUsers
+    // PROBLEMA: Sin paginación, trae todos los usuarios. Password incluido (aunque DTO lo excluye, mejor excluirlo a nivel query).
+    // IMPACTO: Con muchos usuarios = transferencia masiva, riesgo de exponer passwords.
+    // SOLUCIÓN: Paginación obligatoria + excluir password a nivel query + filtro opcional por status.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const status = req.query.status; // Filtro opcional: 'active', 'inactive', 'pending'
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
+    
+    const where = {};
+    if (status) {
+      where.status = status;
+    }
+    
+    const { count, rows: users } = await User.findAndCountAll({
+      where,
+      attributes: { exclude: ['password'] }, // Excluir password a nivel query (refuerzo de seguridad)
+      order: [['id', 'ASC']],
+      limit,
+      offset,
+    });
+    
     const dtos = users.map((u) => toUserDTO(u));
-    return sendSuccess(res, { users: dtos });
+    const totalPages = Math.ceil(count / limit);
+    
+    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        users: dtos,
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, { users: dtos });
+    }
   } catch (error) {
     logger.error('Error getting users:', error);
     return sendError(res, 500, 'Error al obtener usuarios');

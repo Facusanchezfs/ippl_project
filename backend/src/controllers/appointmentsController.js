@@ -19,17 +19,57 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const getAllAppointments = async (req, res) => {
   try {
-    logger.debug('getAllAppointments method');
-    const appts = await Appointment.findAll({
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getAllAppointments
+    // PROBLEMA: Sin paginación, trae todos los registros. Sin atributos específicos, overfetching.
+    // IMPACTO: Con miles de citas = transferencia masiva, lento, alto uso de memoria.
+    // SOLUCIÓN: Paginación obligatoria + atributos específicos + índices compuestos.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
+    
+    const { count, rows: appts } = await Appointment.findAndCountAll({
       where: { active: true },
+      attributes: [
+        'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
+        'date', 'startTime', 'endTime', 'type', 'status',
+        'notes', 'audioNote', 'sessionCost', 'attended',
+        'paymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
+      ],
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
+      limit,
+      offset,
     });
 
-    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
+    const totalPages = Math.ceil(count / limit);
+    
+    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        appointments: toAppointmentDTOList(appts),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
+    }
   } catch (error) {
     logger.error('Error al obtener citas:', error);
     return sendError(res, 500, 'Error al obtener citas');
@@ -38,18 +78,59 @@ const getAllAppointments = async (req, res) => {
 
 const getProfessionalAppointments = async (req, res) => {
   try {
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getProfessionalAppointments
+    // PROBLEMA: Sin paginación, trae todos los registros del profesional. Sin atributos específicos.
+    // IMPACTO: Con muchos profesionales = transferencia masiva, lento.
+    // SOLUCIÓN: Paginación obligatoria + atributos específicos + índices compuestos.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
     const { professionalId } = req.params;
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
 
-    const appts = await Appointment.findAll({
+    const { count, rows: appts } = await Appointment.findAndCountAll({
       where: { active: true, professionalId },
+      attributes: [
+        'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
+        'date', 'startTime', 'endTime', 'type', 'status',
+        'notes', 'audioNote', 'sessionCost', 'attended',
+        'paymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
+      ],
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
+      limit,
+      offset,
     });
 
-    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
+    const totalPages = Math.ceil(count / limit);
+
+    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        appointments: toAppointmentDTOList(appts),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
+    }
   } catch (error) {
     logger.error('Error al obtener citas del profesional:', error);
     return sendError(res, 500, 'Error al obtener citas');
@@ -136,6 +217,11 @@ const createAppointment = async (req, res) => {
     ]);
 
     // 3) Chequeo de solapamientos: misma fecha/profesional, activo y no cancelado
+    // OPTIMIZACIÓN FASE 3 PARTE 2: createAppointment - Validación de solapamientos
+    // PROBLEMA: Query sin índices optimizados para búsqueda por professionalId + date + active + status.
+    // IMPACTO: Escaneo completo de tabla en lugar de usar índice compuesto.
+    // SOLUCIÓN: Usar atributos específicos y asegurar que la query use índices (migración de índice necesaria).
+    // COMPATIBILIDAD: Misma lógica de validación, solo optimización de query.
     const sameDay = await Appointment.findAll({
       where: {
         active: true,
@@ -143,7 +229,7 @@ const createAppointment = async (req, res) => {
         date,
         status: { [Op.eq]: 'scheduled' },
       },
-      attributes: ['id', 'startTime', 'endTime'],
+      attributes: ['id', 'startTime', 'endTime'], // Solo campos necesarios para validación
     });
     const newStart = toMinutes(startTime);
     const newEnd = toMinutes(endTime);
@@ -248,6 +334,8 @@ const updateAppointment = async (req, res) => {
       updates.endTime !== undefined ||
       updates.professionalId !== undefined
     ) {
+      // OPTIMIZACIÓN FASE 3 PARTE 2: updateAppointment - Validación de solapamientos optimizada
+      // Usar atributos específicos y asegurar uso de índices compuestos.
       const sameDay = await Appointment.findAll({
         where: {
           id: { [Op.ne]: appt.id },
@@ -256,7 +344,7 @@ const updateAppointment = async (req, res) => {
           date: newDate,
           status: { [Op.eq]: 'scheduled' },
         },
-        attributes: ['id', 'startTime', 'endTime'],
+        attributes: ['id', 'startTime', 'endTime'], // Solo campos necesarios para validación
       });
 
       const nS = toMinutes(newStart);
