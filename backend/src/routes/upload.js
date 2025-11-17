@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { authenticateToken } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Asegurar que los directorios existan
 async function ensureDirectories() {
@@ -64,10 +65,7 @@ router.post(
   async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ 
-          message: 'No se proporcionó ningún archivo de audio',
-          success: false 
-        });
+        return sendError(res, 400, 'No se proporcionó ningún archivo de audio');
       }
 
       logger.debug('Archivo recibido:', { filename: req.file.filename, size: req.file.size });
@@ -81,29 +79,19 @@ router.post(
         logger.info('Archivo guardado exitosamente:', { url: audioUrl });
       } catch (error) {
         logger.error('Error verificando archivo:', error);
-        return res.status(500).json({ 
-          message: 'Error al guardar el archivo de audio',
-          success: false,
-          error: error.message
-        });
+        return sendError(res, 500, 'Error al guardar el archivo de audio', { error: error.message });
       }
       
       // Enviar respuesta con URL y filename
-      res.json({
-        message: 'Audio subido exitosamente',
-        success: true,
+      return sendSuccess(res, {
         url: audioUrl,
         audioUrl: audioUrl,
         filename: req.file.filename,
         mimetype: req.file.mimetype
-      });
+      }, 'Audio subido exitosamente');
     } catch (error) {
       logger.error('Error al subir audio:', error);
-      res.status(500).json({ 
-        message: 'Error al subir el archivo de audio',
-        success: false,
-        error: error.message 
-      });
+      return sendError(res, 500, 'Error al subir el archivo de audio', { error: error.message });
     }
   }
 );
@@ -148,19 +136,18 @@ const uploadCarousel = multer({
 router.post('/carousel', authenticateToken, uploadCarousel.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No se proporcionó ninguna imagen', success: false });
+      return sendError(res, 400, 'No se proporcionó ninguna imagen');
     }
     // Cambiado: ahora devuelve /uploads/carousel/ en lugar de /images/carousel/
     const imageUrl = `/uploads/carousel/${req.file.filename}`;
-    res.json({
-      message: 'Imagen subida exitosamente',
-      success: true,
+    return sendSuccess(res, {
       url: imageUrl,
       filename: req.file.filename,
       mimetype: req.file.mimetype
-    });
+    }, 'Imagen subida exitosamente');
   } catch (error) {
-    res.status(500).json({ message: 'Error al subir la imagen', success: false, error: error.message });
+    logger.error('Error al subir imagen del carousel:', error);
+    return sendError(res, 500, 'Error al subir la imagen', { error: error.message });
   }
 });
 
