@@ -1,6 +1,8 @@
+const { Op } = require('sequelize');
 const { Activity } = require('../../models');
 const { toActivityDTO, toActivityDTOList } = require('../../mappers/ActivityMapper');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Crear una nueva actividad
 async function createActivity(type, title, description, metadata = {}) {
@@ -72,10 +74,10 @@ async function getActivities(req, res) {
       order: [['occurredAt', 'DESC']],
     });
 
-    res.json(toActivityDTOList(activities));
+    return sendSuccess(res, toActivityDTOList(activities));
   } catch (error) {
     logger.error('Error getting activities:', error);
-    res.status(500).json({ error: 'Error al obtener las actividades' });
+    return sendError(res, 500, 'Error al obtener las actividades');
   }
 }
 
@@ -84,13 +86,13 @@ async function markAsRead(req, res) {
   try {
     const { id } = req.params; // el cliente envía _id como string; acá usamos la PK "id"
     const activity = await Activity.findByPk(id);
-    if (!activity) return res.status(404).json({ error: 'Actividad no encontrada' });
+    if (!activity) return sendError(res, 404, 'Actividad no encontrada');
 
     if (!activity.read) await activity.update({ read: true });
-    res.json({ success: true });
+    return sendSuccess(res, null, 'Actividad marcada como leída', 204);
   } catch (error) {
     logger.error('Error marking activity as read:', error);
-    res.status(500).json({ error: 'Error al marcar la actividad como leída' });
+    return sendError(res, 500, 'Error al marcar la actividad como leída');
   }
 }
 
@@ -98,10 +100,10 @@ async function markAsRead(req, res) {
 async function markAllAsRead(req, res) {
   try {
     await Activity.update({ read: true }, { where: { read: false } });
-    res.json({ success: true });
+    return sendSuccess(res, null, 'Todas las actividades marcadas como leídas', 204);
   } catch (error) {
     logger.error('Error marking all activities as read:', error);
-    res.status(500).json({ error: 'Error al marcar todas las actividades como leídas' });
+    return sendError(res, 500, 'Error al marcar todas las actividades como leídas');
   }
 }
 
@@ -109,12 +111,12 @@ async function markAllAsRead(req, res) {
 async function getUnreadCount(req, res) {
   try {
     const count = await Activity.count({
-      where: { read: false, type: { [Op.in]: CLIENT_ACTIVITY_TYPES } },
+      where: { read: false },
     });
-    res.json({ count });
+    return sendSuccess(res, { count });
   } catch (error) {
     logger.error('Error getting unread count:', error);
-    res.status(500).json({ error: 'Error al obtener el conteo de actividades no leídas' });
+    return sendError(res, 500, 'Error al obtener el conteo de actividades no leídas');
   }
 }
 
@@ -122,10 +124,10 @@ async function getUnreadCount(req, res) {
 async function clearAllActivities(req, res) {
   try {
     await Activity.destroy({ where: {} });
-    res.json({ success: true, message: 'Todas las actividades han sido eliminadas' });
+    return sendSuccess(res, null, 'Todas las actividades han sido eliminadas', 204);
   } catch (error) {
     logger.error('Error clearing activities:', error);
-    res.status(500).json({ error: 'Error al limpiar las actividades' });
+    return sendError(res, 500, 'Error al limpiar las actividades');
   }
 }
 

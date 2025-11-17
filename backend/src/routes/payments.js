@@ -2,6 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const { verifyToken } = require('../controllers/authController');
 const { sendReceipts } = require('../controllers/paymentController');
+const validate = require('../middleware/validate');
+const paymentValidators = require('../validators/paymentsValidator');
 
 const router = express.Router();
 
@@ -15,7 +17,7 @@ const upload = multer({
 
 router.use(verifyToken);
 
-router.post('/send-receipts', upload.array('receipts'), sendReceipts);
+router.post('/send-receipts', upload.array('receipts'), validate(paymentValidators.sendReceipts), sendReceipts);
 
 module.exports = router;
 

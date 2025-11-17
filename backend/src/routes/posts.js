@@ -40,33 +40,33 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+const validate = require('../middleware/validate');
+const postValidators = require('../validators/postValidator');
+
 // Rutas públicas
 router.get('/', postController.getAllPosts);
-router.get('/:section', postController.getPostBySection);
-router.get('/slug/:slug', postController.getPostBySlug);
+router.get('/slug/:slug', validate(postValidators.getBySlug), postController.getPostBySlug);
+router.get('/section/:section', validate(postValidators.getBySection), postController.getPostBySection);
 router.post('/:id/increment-view', postController.incrementPostView);
 // Toggle like de un post
 router.post('/:id/toggle-like', postController.togglePostLike);
 
 // Rutas protegidas
 router.use(verifyToken);
-router.post('/', upload.single('thumbnail'), postController.createPost);
+router.post('/', upload.single('thumbnail'), validate(postValidators.create), postController.createPost);
 
 // Obtener un post por ID
-router.get('/:id', verifyToken, postController.getPostById);
+router.get('/:id', validate(postValidators.getById), postController.getPostById);
 
-router.put('/:id', upload.single('thumbnail'), postController.updatePost);
+router.put('/:id', upload.single('thumbnail'), validate(postValidators.update), postController.updatePost);
 
-router.delete('/:id', postController.deletePost);
+router.delete('/:id', validate(postValidators.delete), postController.deletePost);
 
 // Verificar si un usuario ha visto un post
-router.get('/:id/check-view', verifyToken, postController.checkPostViewed);
-
-// Incrementar vistas de un post (solo si el usuario no lo ha visto antes)
-
+router.get('/:id/check-view', validate(postValidators.getById), postController.checkPostViewed);
 
 // Verificar si un usuario ha dado like a un post
-router.get('/:id/check-like', verifyToken, postController.checkPostLike);
+router.get('/:id/check-like', validate(postValidators.getById), postController.checkPostLike);
 
 // Obtener estadísticas generales
 router.get('/stats', verifyToken, postController.getPostsStats);

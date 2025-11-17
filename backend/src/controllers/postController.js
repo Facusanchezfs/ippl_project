@@ -1,8 +1,9 @@
 const { Op } = require('sequelize');
-const { Post, sequelize } = require('../../models');
+const { Post, sequelize, User } = require('../../models');
 const { toPostDTO, toPostDTOList } = require('../../mappers/PostMapper');
 const {toArray} = require("funciones-basicas");
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 function tryParseJSON(value, fallback) {
   if (value == null) return fallback;
@@ -58,10 +59,10 @@ const getAllPosts = async (req, res) => {
       where: { active: true },                 // ✅ solo activos
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
-    return res.json({ posts: toPostDTOList(posts) });
+    return sendSuccess(res, { posts: toPostDTOList(posts) });
   } catch (error) {
     logger.error('Error al obtener posts:', error);
-    return res.status(500).json({ message: 'Error al obtener posts' });
+    return sendError(res, 500, 'Error al obtener posts');
   }
 };
 
@@ -72,10 +73,10 @@ const getPostBySection = async (req, res) =>{
       where: {active: true, section},
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
-    return res.json({posts: toPostDTOList(posts)});
+    return sendSuccess(res, { posts: toPostDTOList(posts) });
   } catch (e){
     logger.error("Error loading posts by section");
-    return res.status(500).json({ message: 'Error loading posts by section' });
+    return sendError(res, 500, 'Error loading posts by section');
   }
 }
 
@@ -83,11 +84,11 @@ const getPostBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
     const post = await Post.findOne({ where: { slug, active: true } }); // ✅
-    if (!post) return res.status(404).json({ message: 'Post no encontrado' });
-    return res.json({ post: toPostDTO(post) });
+    if (!post) return sendError(res, 404, 'Post no encontrado');
+    return sendSuccess(res, { post: toPostDTO(post) });
   } catch (error) {
     logger.error('Error al obtener post por slug:', error);
-    return res.status(500).json({ message: 'Error al obtener el post' });
+    return sendError(res, 500, 'Error al obtener el post');
   }
 };
 
@@ -110,10 +111,7 @@ const createPost = async (req, res) => {
     const authorName = req.user?.name;
 
     if (!title || !content || !section) {
-      return res.status(400).json({
-        success: false,
-        message: 'Faltan campos requeridos (título, contenido o sección)',
-      });
+      return sendError(res, 400, 'Faltan campos requeridos (título, contenido o sección)');
     }
 
     const tagsJson = tryParseJSON(tags, toArray(tags));
@@ -151,18 +149,10 @@ const createPost = async (req, res) => {
       viewedBy: [],
     });
 
-    return res.status(201).json({
-      success: true,
-      message: 'Post creado correctamente',
-      post: toPostDTO(created),
-    });
+    return sendSuccess(res, { post: toPostDTO(created) }, 'Post creado correctamente', 201);
   } catch (error) {
     logger.error('Error al crear post:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor al crear el post',
-      error: error.message,
-    });
+    return sendError(res, 500, 'Error interno del servidor al crear el post');
   }
 };
 
@@ -171,14 +161,14 @@ const updatePost = async (req, res) => {
     const { id } = req.params;
     const post = await Post.findByPk(id);
     if (!post || !post.active) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     // Autorización: autor o admin
     const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
     const isAdmin = req.user?.role === 'admin';
     if (!isAuthor && !isAdmin) {
-      return res.status(403).json({ message: 'No autorizado' });
+      return sendError(res, 403, 'No autorizado');
     }
 
     const {
@@ -230,10 +220,11 @@ const updatePost = async (req, res) => {
       }
     }
     await post.update(updates);
-    return res.json(toPostDTO(post));
+    await post.reload();
+    return sendSuccess(res, toPostDTO(post), 'Post actualizado correctamente');
   } catch (error) {
     logger.error('Error al actualizar post:', error);
-    return res.status(500).json({ message: 'Error al actualizar post' });
+    return sendError(res, 500, 'Error al actualizar post');
   }
 };
 
@@ -242,20 +233,20 @@ const deletePost = async (req, res) => {
     const { id } = req.params;
     const post = await Post.findByPk(id);
     if (!post || !post.active) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
     const isAdmin = req.user?.role === 'admin';
     if (!isAuthor && !isAdmin) {
-      return res.status(403).json({ message: 'No autorizado' });
+      return sendError(res, 403, 'No autorizado');
     }
 
     await post.update({ active: false });
-    return res.json({ message: 'Post eliminado correctamente' });
+    return sendSuccess(res, null, 'Post eliminado correctamente', 204);
   } catch (error) {
     logger.error('Error al eliminar post:', error);
-    return res.status(500).json({ message: 'Error al eliminar post' });
+    return sendError(res, 500, 'Error al eliminar post');
   }
 };
 
@@ -266,7 +257,7 @@ const getPostById = async (req, res) => {
 
     const post = await Post.findByPk(id);
     if (!post) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     // Ocultamos los soft-deleted a menos que sea admin o autor
@@ -274,14 +265,14 @@ const getPostById = async (req, res) => {
       const isAdmin = req.user?.role === 'admin';
       const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
       if (!isAdmin && !isAuthor) {
-        return res.status(404).json({ message: 'Post no encontrado' });
+        return sendError(res, 404, 'Post no encontrado');
       }
     }
 
-    return res.json(toPostDTO(post)); // respuesta plana
+    return sendSuccess(res, toPostDTO(post));
   } catch (error) {
     logger.error('Error al obtener post por id:', error);
-    return res.status(500).json({ message: 'Error al obtener el post' });
+    return sendError(res, 500, 'Error al obtener el post');
   }
 };
 
@@ -295,7 +286,7 @@ const checkPostViewed = async (req, res) => {
     });
 
     if (!post) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     // Ocultar soft-deleted para no admin/no autor
@@ -303,17 +294,17 @@ const checkPostViewed = async (req, res) => {
       const isAdmin = req.user?.role === 'admin';
       const isAuthor = String(post.authorId ?? '') === userId;
       if (!isAdmin && !isAuthor) {
-        return res.status(404).json({ message: 'Post no encontrado' });
+        return sendError(res, 404, 'Post no encontrado');
       }
     }
 
     const viewedArr = Array.isArray(post.viewedBy) ? post.viewedBy : [];
     const isViewed = viewedArr.map(String).includes(userId);
 
-    return res.json({ isViewed });
+    return sendSuccess(res, { isViewed });
   } catch (error) {
     logger.error('Error al verificar vista:', error);
-    return res.status(500).json({ message: 'Error al verificar la vista' });
+    return sendError(res, 500, 'Error al verificar la vista');
   }
 };
 
@@ -340,13 +331,13 @@ const incrementPostView = async (req, res) => {
       return { views: post.views };
     });
 
-    return res.json(result);
+    return sendSuccess(res, result);
   } catch (error) {
     if (error.status === 404) {
-      return res.status(404).json({ message: error.message });
+      return sendError(res, 404, error.message);
     }
     logger.error('Error al incrementar vista:', error);
-    return res.status(500).json({ message: 'Error al incrementar la vista' });
+    return sendError(res, 500, 'Error al incrementar la vista');
   }
 };
 
@@ -373,13 +364,13 @@ const togglePostLike = async (req, res) => {
       return { likes: post.likes };
     });
 
-    return res.json(result);
+    return sendSuccess(res, result);
   } catch (error) {
     if (error.status === 404) {
-      return res.status(404).json({ message: error.message });
+      return sendError(res, 404, error.message);
     }
     logger.error('Error al incrementar like:', error);
-    return res.status(500).json({ message: 'Error al incrementar el like' });
+    return sendError(res, 500, 'Error al incrementar el like');
   }
 };
 
@@ -394,7 +385,7 @@ const checkPostLike = async (req, res) => {
     });
 
     if (!post || post.active === false) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     const likedBy = Array.isArray(post.likedBy)
@@ -403,10 +394,10 @@ const checkPostLike = async (req, res) => {
 
     const isLiked = likedBy.includes(userId);
 
-    return res.json({ isLiked });
+    return sendSuccess(res, { isLiked });
   } catch (error) {
     logger.error('Error al verificar like:', error);
-    return res.status(500).json({ message: 'Error al verificar el like' });
+    return sendError(res, 500, 'Error al verificar el like');
   }
 };
 
@@ -440,7 +431,7 @@ const getPostsStats = async (req, res) => {
 
     const weeklyVisits = calculateWeeklyVisits(posts);
 
-    return res.json({
+    return sendSuccess(res, {
       totalVisits,
       activeUsers,
       activeDoctors,
@@ -451,7 +442,7 @@ const getPostsStats = async (req, res) => {
     });
   } catch (error) {
     logger.error('Error al obtener estadísticas:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas' });
+    return sendError(res, 500, 'Error al obtener estadísticas');
   }
 };
 

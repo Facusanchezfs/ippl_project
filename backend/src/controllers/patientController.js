@@ -3,6 +3,7 @@ const { Patient, Derivation, User, StatusRequest } = require('../../models');
 const { toPatientDTO } = require('../../mappers/PatientMapper');
 const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Obtener todos los pacientes con su última derivación
 async function getAllPatients(req, res) {
@@ -33,10 +34,10 @@ async function getAllPatients(req, res) {
       return toPatientDTO(enriched);
     });
 
-    return res.json({ patients: dtos });
+    return sendSuccess(res, { patients: dtos });
   } catch (err) {
     logger.error('Error al obtener pacientes:', err);
-    return res.status(500).json({ message: 'Error al obtener pacientes' });
+    return sendError(res, 500, 'Error al obtener pacientes');
   }
 }
 
@@ -71,10 +72,10 @@ async function getProfessionalPatients(req, res) {
       return toPatientDTO(enriched);
     });
 
-    return res.json({ patients: dtos });
+    return sendSuccess(res, { patients: dtos });
   } catch (err) {
     logger.error('Error al obtener pacientes del profesional:', err);
-    return res.status(500).json({ message: 'Error al obtener pacientes' });
+    return sendError(res, 500, 'Error al obtener pacientes');
   }
 }
 
@@ -94,7 +95,7 @@ async function assignPatient(req, res) {
     } = req.body;
 
     const patient = await Patient.findByPk(patientId);
-    if (!patient) return res.status(404).json({ message: 'Paciente no encontrado' });
+    if (!patient) return sendError(res, 404, 'Paciente no encontrado');
 
     // Actualiza campos del paciente
     if (professionalId !== undefined) patient.professionalId = professionalId;
@@ -143,10 +144,10 @@ async function assignPatient(req, res) {
       textNote: derivation.textNote,
       audioNote: derivation.audioNote,
     };
-    return res.json(toPatientDTO(enriched));
+    return sendSuccess(res, toPatientDTO(enriched), 'Paciente asignado correctamente');
   } catch (err) {
     logger.error('Error al asignar paciente:', err);
-    return res.status(500).json({ message: 'Error al asignar paciente' });
+    return sendError(res, 500, 'Error al asignar paciente');
   }
 }
 
@@ -155,7 +156,7 @@ async function addPatient(req, res) {
   try {
     const { name, description, email, phone, status, assignedAt, sessionFrequency } = req.body;
 
-    if (!name) return res.status(400).json({ message: 'El nombre es requerido' });
+    if (!name) return sendError(res, 400, 'El nombre es requerido');
 
     const patient = await Patient.create({
       name,
@@ -168,10 +169,10 @@ async function addPatient(req, res) {
       active: true,
     });
 
-    return res.status(201).json(toPatientDTO(patient));
+    return sendSuccess(res, toPatientDTO(patient), 'Paciente creado correctamente', 201);
   } catch (err) {
     logger.error('Error al agregar paciente:', err);
-    return res.status(500).json({ message: 'Error al agregar paciente' });
+    return sendError(res, 500, 'Error al agregar paciente');
   }
 }
 
@@ -182,7 +183,7 @@ async function deletePatient(req, res) {
     const { id } = req.params;
     const patient = await Patient.findByPk(id);
     if (!patient || !patient.active) {
-      return res.status(404).json({ message: 'Paciente no encontrado' });
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     patient.active = false;
@@ -195,10 +196,10 @@ async function deletePatient(req, res) {
       { patientId: String(patient.id), patientName: patient.name }
     );
 
-    return res.json({ message: 'Paciente eliminado correctamente' });
+    return sendSuccess(res, null, 'Paciente eliminado correctamente', 204);
   } catch (err) {
     logger.error('Error al eliminar paciente:', err);
-    return res.status(500).json({ message: 'Error al eliminar paciente' });
+    return sendError(res, 500, 'Error al eliminar paciente');
   }
 }
 
@@ -212,14 +213,14 @@ async function requestDischargePatient(req, res) {
     const { id: professionalId, name: professionalName } = req.user;
 
     const patient = await Patient.findByPk(patientId);
-    if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+    if (!patient) return sendError(res, 404, 'Paciente no encontrado');
 
     // ¿Solicitud pendiente para este paciente?
     const pending = await StatusRequest.findOne({
       where: { patientId, status: 'pending' },
     });
     if (pending) {
-      return res.status(400).json({ message: 'Ya existe una solicitud pendiente para este paciente' });
+      return sendError(res, 400, 'Ya existe una solicitud pendiente para este paciente');
     }
 
     const sr = await StatusRequest.create({
@@ -246,14 +247,10 @@ async function requestDischargePatient(req, res) {
       }
     );
 
-    return res.json({
-      success: true,
-      message: 'Solicitud de baja enviada correctamente',
-      requestId: String(sr.id),
-    });
+    return sendSuccess(res, { requestId: String(sr.id) }, 'Solicitud de baja enviada correctamente', 201);
   } catch (error) {
     logger.error('Error requesting patient discharge:', error);
-    return res.status(500).json({ error: 'Error al solicitar la baja del paciente' });
+    return sendError(res, 500, 'Error al solicitar la baja del paciente');
   }
 }
 
@@ -268,7 +265,7 @@ async function requestActivationPatient(req, res) {
 
     const patient = await Patient.findByPk(patientId);
     if (!patient) {
-      return res.status(404).json({ error: 'Paciente no encontrado' });
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     // 1) Ya existe solicitud de ALTA pendiente para este paciente
@@ -276,9 +273,7 @@ async function requestActivationPatient(req, res) {
       where: { patientId, status: 'pending', requestedStatus: 'alta' },
     });
     if (existingActivation) {
-      return res.status(400).json({
-        message: 'Ya existe una solicitud de alta pendiente para este paciente',
-      });
+      return sendError(res, 400, 'Ya existe una solicitud de alta pendiente para este paciente');
     }
 
     // 4) Crear la solicitud en BD
@@ -310,13 +305,10 @@ async function requestActivationPatient(req, res) {
       }
     );
 
-    return res.json({
-      success: true,
-      message: 'Solicitud de alta enviada correctamente',
-    });
+    return sendSuccess(res, null, 'Solicitud de alta enviada correctamente', 201);
   } catch (error) {
     logger.error('Error requesting patient activation:', error);
-    return res.status(500).json({ error: 'Error al solicitar el alta del paciente' });
+    return sendError(res, 500, 'Error al solicitar el alta del paciente');
   }
 }
 

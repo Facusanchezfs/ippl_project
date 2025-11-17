@@ -1,6 +1,7 @@
 'use strict';
 const { sendPaymentReceiptsEmail } = require('../services/emailService');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 function toNumber(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -16,7 +17,7 @@ async function sendReceipts(req, res) {
     const attachments = Array.isArray(req.files) ? req.files : [];
 
     if (!attachments.length) {
-      return res.status(400).json({ message: 'Debe adjuntar al menos un comprobante.' });
+      return sendError(res, 400, 'Debe adjuntar al menos un comprobante.');
     }
 
     await sendPaymentReceiptsEmail({
@@ -30,10 +31,10 @@ async function sendReceipts(req, res) {
       attachments,
     });
 
-    return res.json({ message: 'Comprobantes enviados correctamente.' });
+    return sendSuccess(res, null, 'Comprobantes enviados correctamente.');
   } catch (error) {
     logger.error('Error enviando comprobantes:', error);
-    return res.status(500).json({ message: 'No se pudieron enviar los comprobantes.' });
+    return sendError(res, 500, 'No se pudieron enviar los comprobantes.');
   }
 }
 
