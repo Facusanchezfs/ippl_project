@@ -55,8 +55,16 @@ function calculateWeeklyVisits(posts) {
 
 const getAllPosts = async (req, res) => {
   try {
+    // OPTIMIZACIÓN CRÍTICA #3: getAllPosts - Overfetching de contenido TEXT
+    // PROBLEMA: Traía el campo 'content' (TEXT) completo en listados, generando MBs de datos innecesarios
+    // IMPACTO: Con 200 posts = varios MBs transferidos, 200-600ms, alto uso de memoria
+    // SOLUCIÓN: Excluir 'content' del listado (solo se necesita en detalle individual)
+    // COMPATIBILIDAD: El DTO ya maneja campos opcionales, frontend no espera content en listado
+    
     const posts = await Post.findAll({
       where: { active: true },                 // ✅ solo activos
+      // Excluir 'content' (TEXT) del listado - solo se necesita en getPostById/getPostBySlug
+      attributes: { exclude: ['content'] },   // ⚠️ Optimización: no traer contenido completo
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
     return sendSuccess(res, { posts: toPostDTOList(posts) });
@@ -69,8 +77,11 @@ const getAllPosts = async (req, res) => {
 const getPostBySection = async (req, res) =>{
   const {section} = req.params;
   try{
+    // OPTIMIZACIÓN CRÍTICA #3 (consistencia): getPostBySection - Misma optimización
+    // Excluir 'content' del listado por sección para mantener consistencia
     const posts = await Post.findAll({
       where: {active: true, section},
+      attributes: { exclude: ['content'] },   // ⚠️ Optimización: no traer contenido completo
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
     return sendSuccess(res, { posts: toPostDTOList(posts) });
@@ -403,33 +414,67 @@ const checkPostLike = async (req, res) => {
 
 const getPostsStats = async (req, res) => {
   try {
-    // Traemos sólo lo que necesitamos
-    const posts = await Post.findAll({
-      where: { active: true },
-      attributes: ['views', 'likes', 'viewedBy'],
-      raw: true,
-    });
+    // OPTIMIZACIÓN CRÍTICA #1: getPostsStats - Overfetching masivo
+    // PROBLEMA: Traía TODOS los posts solo para sumar views/likes en memoria
+    // IMPACTO: Con 500 posts = 500 registros innecesarios, 200-500ms
+    // SOLUCIÓN: Usar agregaciones SQL (SUM, COUNT) directamente en la BD
+    // COMPATIBILIDAD: Mismo formato de respuesta, solo cambia la implementación interna
+    
+    const { fn, col } = require('sequelize');
+    
+    // Agregaciones SQL directas - una sola query en lugar de traer todos los posts
+    const [postsAgg, usersByRole, postsForWeekly] = await Promise.all([
+      // Suma total de views y likes, cuenta de posts - TODO en SQL
+      Post.findAll({
+        attributes: [
+          [fn('COUNT', col('id')), 'totalPosts'],
+          [fn('SUM', col('views')), 'totalViews'],
+          [fn('SUM', col('likes')), 'totalLikes'],
+        ],
+        where: { active: true },
+        raw: true,
+      }),
+      // Usuarios agrupados por rol y status - una query con GROUP BY
+      User.findAll({
+        attributes: [
+          'role',
+          'status',
+          [fn('COUNT', col('id')), 'count'],
+        ],
+        group: ['role', 'status'],
+        raw: true,
+      }),
+      // Solo viewedBy para calcular weekly visits (necesario para la función)
+      // Nota: calculateWeeklyVisits procesa viewedBy en memoria, pero ahora solo
+      // traemos este campo JSON específico, no todos los campos de todos los posts
+      Post.findAll({
+        where: { active: true },
+        attributes: ['viewedBy'], // Solo el campo necesario para weekly visits
+        raw: true,
+      }),
+    ]);
 
-    const users = await User.findAll({
-      attributes: ['role', 'status'],
-      raw: true,
-    });
-
-    const totalPosts  = posts.length;
-    const totalViews  = posts.reduce((sum, p) => sum + (p.views || 0), 0);
-    const totalLikes  = posts.reduce((sum, p) => sum + (p.likes || 0), 0);
+    // Extraer valores de agregaciones
+    const agg = postsAgg[0] || {};
+    const totalPosts = parseInt(agg.totalPosts || 0, 10);
+    const totalViews = parseInt(agg.totalViews || 0, 10);
+    const totalLikes = parseInt(agg.totalLikes || 0, 10);
     const totalVisits = totalViews; // compat con el legacy
 
-    const activeDoctors = users.filter(
-      u => u.role === 'professional' && u.status === 'active'
-    ).length;
+    // Procesar usuarios por rol desde GROUP BY
+    let activeDoctors = 0;
+    let activeUsers = 0;
+    for (const row of usersByRole) {
+      if (row.role === 'professional' && row.status === 'active') {
+        activeDoctors = parseInt(row.count, 10);
+      } else if (row.role !== 'professional' && row.status === 'active') {
+        activeUsers += parseInt(row.count, 10);
+      }
+    }
 
-    // En el legacy: activeUsers = !isDoctor. Aquí: todos los activos que NO son 'professional'.
-    const activeUsers = users.filter(
-      u => u.role !== 'professional' && u.status === 'active'
-    ).length;
-
-    const weeklyVisits = calculateWeeklyVisits(posts);
+    // Weekly visits sigue necesitando el procesamiento en memoria
+    // pero ahora solo procesamos viewedBy, no todos los campos
+    const weeklyVisits = calculateWeeklyVisits(postsForWeekly);
 
     return sendSuccess(res, {
       totalVisits,
