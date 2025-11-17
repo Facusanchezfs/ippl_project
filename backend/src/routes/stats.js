@@ -6,10 +6,12 @@ const { getSystemStats, getProfessionalStats } = require('../controllers/statsCo
 // Todas las rutas requieren autenticación
 router.use(verifyToken);
 
+const { sendError } = require('../utils/response');
+
 // Obtener estadísticas generales del sistema (solo admin)
 router.get('/system', (req, res, next) => {
   if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Acceso denegado' });
+    return sendError(res, 403, 'Acceso denegado');
   }
   next();
 }, getSystemStats);
@@ -17,7 +19,7 @@ router.get('/system', (req, res, next) => {
 // Obtener estadísticas de un profesional específico
 router.get('/professional/:professionalId', (req, res, next) => {
   if (req.user.role !== 'admin' && req.user.id !== req.params.professionalId) {
-    return res.status(403).json({ message: 'Acceso denegado' });
+    return sendError(res, 403, 'Acceso denegado');
   }
   next();
 }, getProfessionalStats);

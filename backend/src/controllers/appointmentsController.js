@@ -355,7 +355,7 @@ const updateAppointment = async (req, res) => {
         return nS < e && s < nE; // solapamiento
       });
       if (overlaps) {
-        return res.status(400).json({ message: 'El horario seleccionado no está disponible' });
+        return sendError(res, 400, 'El horario seleccionado no está disponible');
       }
     }
 

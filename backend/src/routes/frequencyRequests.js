@@ -7,6 +7,7 @@ const { toFrequencyRequestDTO, toFrequencyRequestDTOList } = require('../../mapp
 
 const { createActivity } = require('../controllers/activityController');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Crear una nueva solicitud
 // POST /frequency-requests
@@ -21,31 +22,27 @@ router.post(
 
       // Validaciones básicas
       if (!patientId || !newFrequency || !reason) {
-        return res.status(400).json({
-          message: 'Faltan campos requeridos. Se necesita: patientId, newFrequency y reason',
-        });
+        return sendError(res, 400, 'Faltan campos requeridos. Se necesita: patientId, newFrequency y reason');
       }
 
       const validFrequencies = ['weekly', 'biweekly', 'monthly'];
       if (!validFrequencies.includes(newFrequency)) {
-        return res.status(400).json({
-          message: 'Frecuencia no válida. Las frecuencias permitidas son: weekly, biweekly, monthly',
-        });
+        return sendError(res, 400, 'Frecuencia no válida. Las frecuencias permitidas son: weekly, biweekly, monthly');
       }
 
       if (!reason.trim()) {
-        return res.status(400).json({ message: 'La razón del cambio no puede estar vacía' });
+        return sendError(res, 400, 'La razón del cambio no puede estar vacía');
       }
 
       // Buscar paciente
       const patient = await Patient.findByPk(patientId);
       if (!patient) {
-        return res.status(404).json({ message: 'Paciente no encontrado' });
+        return sendError(res, 404, 'Paciente no encontrado');
       }
 
       // Debe estar asignado al profesional que solicita
       if (String(patient.professionalId ?? '') !== String(professionalId)) {
-        return res.status(403).json({ message: 'No tienes permiso para modificar este paciente' });
+        return sendError(res, 403, 'No tienes permiso para modificar este paciente');
       }
 
       // ¿Es primera asignación?
@@ -54,9 +51,7 @@ router.post(
 
       // Si NO es primera asignación, la nueva debe ser distinta
       if (!isFirstAssignment && patient.sessionFrequency === newFrequency) {
-        return res.status(400).json({
-          message: 'La nueva frecuencia debe ser diferente a la frecuencia actual',
-        });
+        return sendError(res, 400, 'La nueva frecuencia debe ser diferente a la frecuencia actual');
       }
 
       // Verificar pendiente existente
@@ -64,7 +59,7 @@ router.post(
         where: { patientId, status: 'pending' },
       });
       if (existing) {
-        return res.status(400).json({ message: 'Ya existe una solicitud pendiente para este paciente' });
+        return sendError(res, 400, 'Ya existe una solicitud pendiente para este paciente');
       }
 
       // Crear solicitud
@@ -96,10 +91,10 @@ router.post(
         }
       );
 
-      return res.status(201).json(toFrequencyRequestDTO(created));
+      return sendSuccess(res, toFrequencyRequestDTO(created), 'Solicitud creada exitosamente', 201);
     } catch (error) {
       logger.error('Error al crear solicitud:', error);
-      return res.status(500).json({ message: 'Error al crear la solicitud' });
+      return sendError(res, 500, 'Error al crear la solicitud');
     }
   }
 );
@@ -117,10 +112,10 @@ router.get(
         order: [['createdAt', 'DESC']],
       });
 
-      return res.json(toFrequencyRequestDTOList(pending));
+      return sendSuccess(res, toFrequencyRequestDTOList(pending));
     } catch (error) {
       logger.error('Error al obtener solicitudes:', error);
-      return res.status(500).json({ message: 'Error al obtener las solicitudes' });
+      return sendError(res, 500, 'Error al obtener las solicitudes');
     }
   }
 );
@@ -140,10 +135,10 @@ router.get(
         order: [['createdAt', 'DESC']],
       });
 
-      return res.json(toFrequencyRequestDTOList(requests));
+      return sendSuccess(res, toFrequencyRequestDTOList(requests));
     } catch (error) {
       logger.error('Error al obtener solicitudes del paciente:', error);
-      return res.status(500).json({ message: 'Error al obtener las solicitudes' });
+      return sendError(res, 500, 'Error al obtener las solicitudes');
     }
   }
 );
@@ -224,14 +219,14 @@ router.post(
       );
 
       // 6) Responder al cliente con DTO
-      return res.json(toFrequencyRequestDTO(snapshot));
+      return sendSuccess(res, toFrequencyRequestDTO(snapshot), 'Solicitud aprobada exitosamente');
     } catch (error) {
       const status = error.status || 500;
       if (status !== 500) {
-        return res.status(status).json({ message: error.message });
+        return sendError(res, status, error.message);
       }
       logger.error('Error al aprobar solicitud:', error);
-      return res.status(500).json({ message: 'Error al aprobar la solicitud' });
+      return sendError(res, 500, 'Error al aprobar la solicitud');
     }
   }
 );
@@ -251,7 +246,7 @@ router.post(
 
     try {
       if (!adminResponse || !String(adminResponse).trim()) {
-        return res.status(400).json({ message: 'Se requiere una razón para el rechazo' });
+        return sendError(res, 400, 'Se requiere una razón para el rechazo');
       }
 
       let snapshot;
@@ -302,14 +297,14 @@ router.post(
       );
 
       // 4) Respuesta
-      return res.json(toFrequencyRequestDTO(snapshot));
+      return sendSuccess(res, toFrequencyRequestDTO(snapshot), 'Solicitud rechazada exitosamente');
     } catch (error) {
       const status = error.status || 500;
       if (status !== 500) {
-        return res.status(status).json({ message: error.message });
+        return sendError(res, status, error.message);
       }
       logger.error('Error al rechazar solicitud:', error);
-      return res.status(500).json({ message: 'Error al rechazar la solicitud' });
+      return sendError(res, 500, 'Error al rechazar la solicitud');
     }
   }
 );

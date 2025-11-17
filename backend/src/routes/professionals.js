@@ -4,6 +4,7 @@ const router = express.Router();
 const { User } = require('../../models');
 const { toProfessionalDTOList } = require('../../mappers/ProfessionalMapper');
 const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // GET /api/professionals - Obtener todos los profesionales
 router.get('/', async (req, res) => {
@@ -14,10 +15,10 @@ router.get('/', async (req, res) => {
       order: [['name', 'ASC']],
     });
 
-    return res.json({ professionals: toProfessionalDTOList(professionals) });
+    return sendSuccess(res, { professionals: toProfessionalDTOList(professionals) });
   } catch (error) {
     logger.error('Error al obtener profesionales:', error);
-    return res.status(500).json({ message: 'Error al obtener los profesionales' });
+    return sendError(res, 500, 'Error al obtener los profesionales');
   }
 });
 
