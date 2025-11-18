@@ -27,27 +27,81 @@ const ReportsPage: React.FC = () => {
     try {
       const users = await userService.getUsers();
       const allPatients = await patientsService.getAllPatients();
+      
       let filtered: any[] = [];
       if (reportType === 'alta') {
-        filtered = allPatients.filter(p => p.status === 'alta' && p.activatedAt);
+        // Incluir pacientes con status='alta' que tengan activatedAt O activationRequest
+        filtered = allPatients.filter(p => 
+          p.status === 'alta' && (p.activatedAt || p.activationRequest?.requestDate)
+        );
       } else {
-        filtered = allPatients.filter(p => p.status === 'inactive' && p.dischargeRequest?.requestDate);
+        // Para bajas: incluir pacientes que tengan dischargeRequest aprobada, independientemente de su status actual
+        // (puede que hayan sido reactivados después de la baja)
+        filtered = allPatients.filter(p => p.dischargeRequest?.requestDate);
       }
       filtered = filtered.filter(p => {
-        const fechaAprobacion = reportType === 'alta'
-          ? (p.activatedAt ? new Date(p.activatedAt) : null)
-          : (p.dischargeRequest?.requestDate ? new Date(p.dischargeRequest.requestDate) : null);
-        if (!fechaAprobacion) return false;
-        const start = startDate ? new Date(startDate) : null;
-        const end = endDate ? new Date(endDate) : null;
-        if (start && end && fechaAprobacion >= start && fechaAprobacion <= end) return true;
-        return false;
+        // Para altas: usar activatedAt si existe, sino usar activationRequest.requestDate
+        let fechaAprobacion: Date | null = null;
+        if (reportType === 'alta') {
+          if (p.activatedAt) {
+            fechaAprobacion = new Date(p.activatedAt);
+          } else if (p.activationRequest?.requestDate) {
+            fechaAprobacion = new Date(p.activationRequest.requestDate);
+          }
+        } else {
+          if (p.dischargeRequest?.requestDate) {
+            fechaAprobacion = new Date(p.dischargeRequest.requestDate);
+          }
+        }
+        if (!fechaAprobacion) {
+          return false;
+        }
+        
+        // Normalizar fechas: start al inicio del día, end al final del día
+        let start: Date | null = null;
+        let end: Date | null = null;
+        
+        if (startDate) {
+          start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+        }
+        
+        if (endDate) {
+          end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+        }
+        
+        // Si no hay filtros de fecha, incluir todos
+        if (!start && !end) {
+          return true;
+        }
+        
+        // Aplicar filtros
+        if (start && fechaAprobacion < start) {
+          return false;
+        }
+        
+        if (end && fechaAprobacion > end) {
+          return false;
+        }
+        
+        return true;
       });
       const rows = filtered.map(p => {
         const professional = users.find(prof => prof.id === p.professionalId);
-        const fechaAprobacion = reportType === 'alta'
-          ? (p.activatedAt ? new Date(p.activatedAt) : null)
-          : (p.dischargeRequest?.requestDate ? new Date(p.dischargeRequest.requestDate) : null);
+        // Para altas: usar activatedAt si existe, sino usar activationRequest.requestDate
+        let fechaAprobacion: Date | null = null;
+        if (reportType === 'alta') {
+          if (p.activatedAt) {
+            fechaAprobacion = new Date(p.activatedAt);
+          } else if (p.activationRequest?.requestDate) {
+            fechaAprobacion = new Date(p.activationRequest.requestDate);
+          }
+        } else {
+          if (p.dischargeRequest?.requestDate) {
+            fechaAprobacion = new Date(p.dischargeRequest.requestDate);
+          }
+        }
         const tipo = reportType === 'alta' ? 'Alta' : 'Inactivo';
         return [
           fechaAprobacion ? fechaAprobacion.toLocaleString('es-ES') : '',

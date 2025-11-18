@@ -55,7 +55,90 @@ async function getAllPatients(req, res) {
       }
     }
 
-    // Enriquecer pacientes con última derivación
+    // Obtener StatusRequests aprobadas de baja para construir dischargeRequest
+    let dischargeMap = {};
+    if (patientIds.length > 0) {
+      const dischargeRequests = await StatusRequest.findAll({
+        where: {
+          patientId: { [Op.in]: patientIds },
+          status: 'approved',
+          requestedStatus: 'inactive',
+          type: { [Op.ne]: 'activation' }
+        },
+        attributes: ['patientId', 'createdAt', 'reason', 'professionalName'],
+        raw: true
+      });
+
+      // Crear mapa: patientId -> dischargeRequest más reciente
+      for (const sr of dischargeRequests) {
+        const pid = String(sr.patientId);
+        const srDate = new Date(sr.createdAt).getTime();
+        
+        // Convertir createdAt a ISO string para el DTO
+        let requestDate;
+        if (sr.createdAt instanceof Date) {
+          requestDate = sr.createdAt.toISOString();
+        } else if (typeof sr.createdAt === 'string') {
+          requestDate = sr.createdAt;
+        } else {
+          requestDate = new Date(sr.createdAt).toISOString();
+        }
+        
+        // Si no existe o esta es más reciente, actualizar
+        const existingDate = dischargeMap[pid] ? new Date(dischargeMap[pid].requestDate).getTime() : 0;
+        if (!dischargeMap[pid] || srDate > existingDate) {
+          dischargeMap[pid] = {
+            requestedBy: sr.professionalName || 'Sistema',
+            requestDate: requestDate,
+            reason: sr.reason || '',
+            status: 'approved'
+          };
+        }
+      }
+    }
+
+    // Obtener StatusRequests aprobadas de alta para construir activationRequest
+    let activationMap = {};
+    if (patientIds.length > 0) {
+      const activationRequests = await StatusRequest.findAll({
+        where: {
+          patientId: { [Op.in]: patientIds },
+          status: 'approved',
+          requestedStatus: 'alta'
+        },
+        attributes: ['patientId', 'createdAt', 'reason', 'professionalName'],
+        raw: true
+      });
+
+      // Crear mapa: patientId -> activationRequest más reciente
+      for (const sr of activationRequests) {
+        const pid = String(sr.patientId);
+        const srDate = new Date(sr.createdAt).getTime();
+        
+        // Convertir createdAt a ISO string para el DTO
+        let requestDate;
+        if (sr.createdAt instanceof Date) {
+          requestDate = sr.createdAt.toISOString();
+        } else if (typeof sr.createdAt === 'string') {
+          requestDate = sr.createdAt;
+        } else {
+          requestDate = new Date(sr.createdAt).toISOString();
+        }
+        
+        // Si no existe o esta es más reciente, actualizar
+        const existingDate = activationMap[pid] ? new Date(activationMap[pid].requestDate).getTime() : 0;
+        if (!activationMap[pid] || srDate > existingDate) {
+          activationMap[pid] = {
+            requestedBy: sr.professionalName || 'Sistema',
+            requestDate: requestDate,
+            reason: sr.reason || '',
+            status: 'approved'
+          };
+        }
+      }
+    }
+
+    // Enriquecer pacientes con última derivación, dischargeRequest y activationRequest
     const dtos = patients.map((p) => {
       const plain = p.get({ plain: true });
       const lastDer = lastDerivationsMap[String(p.id)] || {};
@@ -63,7 +146,10 @@ async function getAllPatients(req, res) {
         ...plain,
         textNote: lastDer.textNote,
         audioNote: lastDer.audioNote,
+        dischargeRequest: dischargeMap[String(p.id)] || undefined,
+        activationRequest: activationMap[String(p.id)] || undefined
       };
+      
       return toPatientDTO(enriched);
     });
 

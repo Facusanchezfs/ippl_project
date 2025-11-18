@@ -139,6 +139,12 @@ const approveRequest = async (req, res) => {
 
       // Nota: no bloqueamos cambios desde/hacia "alta" (por tu decisión de negocio)
       patient.status = newStatus;
+      
+      // Si es alta, setear activatedAt con la fecha actual
+      if (newStatus === 'alta') {
+        patient.activatedAt = new Date();
+      }
+      
       await patient.save({ transaction: t });
 
       // 4) Marcar solicitud como aprobada

@@ -26,6 +26,7 @@ class PatientDTO {
       sessionCost,
       statusChangeReason,
       dischargeRequest,
+      activationRequest,
 
     } = typeof source.get === 'function' ? source.get({ plain: true }) : source;
 
@@ -47,6 +48,7 @@ class PatientDTO {
     this.statusChangeReason = statusChangeReason ?? undefined;
 
     this.dischargeRequest = dischargeRequest ?? undefined;
+    this.activationRequest = activationRequest ?? undefined;
   }
 }
 
