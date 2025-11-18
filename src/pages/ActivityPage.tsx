@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 import frequencyRequestService from '../services/frequencyRequest.service';
+import statusRequestService from '../services/statusRequest.service';
 
 const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
   'PATIENT_DISCHARGE_REQUEST',
@@ -114,6 +115,97 @@ const ActivityPage: React.FC = () => {
         toast.error('No se pudo validar la solicitud');
         setDisabledActivities(prev => ({ ...prev, [activity._id]: false }));
       }
+    } else if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
+      const activityId = activity._id;
+      if (disabledActivities[activityId]) return;
+      setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
+
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        setDisabledActivities(prev => ({ ...prev, [activityId]: false }));
+        return;
+      }
+
+      try {
+        const requests = await statusRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => 
+          String(r.patientId) === String(patientId) && 
+          r.requestedStatus === 'inactive' && 
+          r.type !== 'activation'
+        );
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
+          return;
+        }
+
+        setActivities(prev => prev.filter(a => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openStatusRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+        setDisabledActivities(prev => ({ ...prev, [activity._id]: false }));
+      }
+    } else if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
+      const activityId = activity._id;
+      if (disabledActivities[activityId]) return;
+      setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
+
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        setDisabledActivities(prev => ({ ...prev, [activityId]: false }));
+        return;
+      }
+
+      try {
+        const requests = await statusRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => 
+          String(r.patientId) === String(patientId) && 
+          r.requestedStatus === 'alta'
+        );
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
+          return;
+        }
+
+        setActivities(prev => prev.filter(a => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openActivationRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+        setDisabledActivities(prev => ({ ...prev, [activity._id]: false }));
+      }
     }
   };
 
@@ -129,24 +221,56 @@ const ActivityPage: React.FC = () => {
       setActivities(translatedActivities);
       setError(null);
 
-      // Verificar qué actividades de frecuencia ya están resueltas
+      // Verificar qué actividades de frecuencia y status ya están resueltas
       try {
-        const pendingRequests = await frequencyRequestService.getPendingRequests();
-        const pendingPatientIds = new Set(
-          pendingRequests.map(r => String(r.patientId))
+        const [pendingFrequencyRequests, pendingStatusRequests] = await Promise.all([
+          frequencyRequestService.getPendingRequests(),
+          statusRequestService.getPendingRequests()
+        ]);
+        
+        const pendingFrequencyPatientIds = new Set(
+          pendingFrequencyRequests.map(r => String(r.patientId))
+        );
+        
+        const pendingDischargePatientIds = new Set(
+          pendingStatusRequests
+            .filter(r => r.requestedStatus === 'inactive' && r.type !== 'activation')
+            .map(r => String(r.patientId))
+        );
+        
+        const pendingActivationPatientIds = new Set(
+          pendingStatusRequests
+            .filter(r => r.requestedStatus === 'alta')
+            .map(r => String(r.patientId))
         );
         
         const resolved: Record<string, boolean> = {};
         translatedActivities.forEach(activity => {
-          if (
-            (activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
-             activity.type === 'FREQUENCY_CHANGE_REQUESTED') &&
-            activity.metadata?.patientId
-          ) {
+          if (activity.metadata?.patientId) {
             const patientId = String(activity.metadata.patientId);
-            // Si el patientId NO está en las solicitudes pendientes, está resuelto
-            if (!pendingPatientIds.has(patientId)) {
-              resolved[activity._id] = true;
+            
+            // Verificar actividades de frecuencia
+            if (
+              activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
+              activity.type === 'FREQUENCY_CHANGE_REQUESTED'
+            ) {
+              if (!pendingFrequencyPatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
+            }
+            
+            // Verificar actividades de baja
+            if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
+              if (!pendingDischargePatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
+            }
+            
+            // Verificar actividades de alta
+            if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
+              if (!pendingActivationPatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
             }
           }
         });
@@ -270,6 +394,9 @@ const ActivityPage: React.FC = () => {
             const translated = translateActivity(activity);
             const isFrequencyRequest =
               translated.type === 'FREQUENCY_CHANGE_REQUEST' || translated.type === 'FREQUENCY_CHANGE_REQUESTED';
+            const isStatusRequest =
+              translated.type === 'PATIENT_DISCHARGE_REQUEST' || translated.type === 'PATIENT_ACTIVATION_REQUEST';
+            const isManageable = isFrequencyRequest || isStatusRequest;
 
             return (
               <div
@@ -299,7 +426,7 @@ const ActivityPage: React.FC = () => {
                       <p className="text-xs text-gray-400">
                         {getRelativeTime(translated.date)}
                       </p>
-                      {isFrequencyRequest && (
+                      {isManageable && (
                         <button
                           onClick={() => handleActivityClick(translated)}
                           disabled={!!disabledActivities[translated._id]}

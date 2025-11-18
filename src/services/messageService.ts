@@ -19,19 +19,19 @@ export const messageService = {
 
   // Get all messages
   async getMessages() {
-    const response = await api.get<Message[]>(`/messages`);
-    return response.data;
+    const response = await api.get<{data: Message[]}>(`/messages`);
+    return response.data.data;
   },
 
   // Mark message as read
   async markAsRead(id: string) {
-    const response = await api.put<{ success: boolean }>(`/messages/${id}/read`);
-    return response.data;
+    const response = await api.put<{ data: { success: boolean } }>(`/messages/${id}/read`);
+    return response.data.data;
   },
 
   // Delete all messages
   async clearAllMessages() {
     const response = await api.delete(`/messages/clear-all`);
-    return response.data;
+    return response.data.data;
   }
 }; 

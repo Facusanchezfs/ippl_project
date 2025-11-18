@@ -25,7 +25,7 @@ export interface AssignPatientDTO {
 const patientsService = {
   getAllPatients: async (): Promise<Patient[]> => {
     const response = await api.get('/patients');
-    const patients = response.data.patients || [];
+    const patients = response.data.data.patients || [];
     return patients.map((patient: Patient) => ({
       ...patient,
       audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
@@ -34,7 +34,7 @@ const patientsService = {
 
   getProfessionalPatients: async (professionalId: string): Promise<Patient[]> => {
     const response = await api.get(`/patients/professional/${professionalId}`);
-    const patients = response.data.patients || [];
+    const patients = response.data.data.patients || [];
     return patients.map((patient: Patient) => ({
       ...patient,
       audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
@@ -42,13 +42,13 @@ const patientsService = {
   },
 
   addPatient: async (patient: CreatePatientDTO): Promise<Patient> => {
-    const response = await api.post<Patient>('/patients', patient);
-    return response.data;
+    const response = await api.post<{data: Patient}>('/patients', patient);
+    return response.data.data;
   },
 
   assignPatient: async (data: AssignPatientDTO): Promise<Patient> => {
-    const response = await api.put(`/patients/${data.patientId}/assign`, data);
-    return response.data;
+    const response = await api.put<{data: Patient}>(`/patients/${data.patientId}/assign`, data);
+    return response.data.data;
   },
 
   uploadAudio: async (audioFile: File): Promise<string> => {
@@ -94,7 +94,7 @@ const patientsService = {
   updatePatient: async (id: string, patientData: any): Promise<any> => {
     try {
       const response = await api.put(`/patients/${id}/assign`, patientData);
-      return response.data;
+      return response.data.data;
     } catch (error) {
       console.error('Error al actualizar paciente:', error);
       throw error;

@@ -31,6 +31,7 @@ import {
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import frequencyRequestService from '../../services/frequencyRequest.service';
+import statusRequestService from '../../services/statusRequest.service';
 
 // Interfaces
 interface StatCardProps {
@@ -315,6 +316,85 @@ const Dashboard = () => {
         console.error('Error al validar solicitud:', error);
         toast.error('No se pudo validar la solicitud');
       }
+    } else if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        return;
+      }
+
+      try {
+        const requests = await statusRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => 
+          String(r.patientId) === String(patientId) && 
+          r.requestedStatus === 'inactive' && 
+          r.type !== 'activation'
+        );
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          setResolvedActivities(prev => new Set(prev).add(activity._id));
+          return;
+        }
+
+        setActivities((prev) => prev.filter((a) => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openStatusRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+      }
+    } else if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        return;
+      }
+
+      try {
+        const requests = await statusRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => 
+          String(r.patientId) === String(patientId) && 
+          r.requestedStatus === 'alta'
+        );
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          setResolvedActivities(prev => new Set(prev).add(activity._id));
+          return;
+        }
+
+        setActivities((prev) => prev.filter((a) => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openActivationRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+      }
     }
   };
 
@@ -585,6 +665,10 @@ const Dashboard = () => {
                       const isFrequencyRequest =
                         translated.type === 'FREQUENCY_CHANGE_REQUEST' ||
                         translated.type === 'FREQUENCY_CHANGE_REQUESTED';
+                      const isStatusRequest =
+                        translated.type === 'PATIENT_DISCHARGE_REQUEST' ||
+                        translated.type === 'PATIENT_ACTIVATION_REQUEST';
+                      const isClickable = isFrequencyRequest || isStatusRequest;
                       const isResolved = resolvedActivities.has(translated._id);
 
                       return (
@@ -593,7 +677,7 @@ const Dashboard = () => {
                           color="bg-red-500"
                           text={translated.description}
                           time={formatTimeAgo(new Date(translated.date))}
-                          onClick={isFrequencyRequest ? () => handleActivityClick(translated) : undefined}
+                          onClick={isClickable ? () => handleActivityClick(translated) : undefined}
                           isResolved={isResolved}
                         />
                       );

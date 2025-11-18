@@ -35,27 +35,27 @@ export interface UpdateUserData {
 const userService = {
 	getUserById: async (id: number): Promise<User> => {
 		const response = await api.get(`/users/${id}`);
-		return response.data;
+		return response.data.data;
 	},
 
 	getProfessionals: async (): Promise<User[]> => {
 		const response = await api.get('/users/professionals');
-		return response.data;
+		return response.data.data;
 	},
 
 	getUsers: async (): Promise<User[]> => {
 		const response = await api.get('/users');
-		return response.data.users;
+		return response.data.data.users;
 	},
 
 	createUser: async (userData: CreateUserData): Promise<User> => {
 		const response = await api.post('/users', userData);
-		return response.data;
+		return response.data.data;
 	},
 
 	updateUser: async (id: string, userData: UpdateUserData): Promise<User> => {
 		const response = await api.put(`/users/${id}`, userData);
-		return response.data;
+		return response.data.data;
 	},
 
 	deleteUser: async (id: string): Promise<void> => {
@@ -80,7 +80,7 @@ const userService = {
 		}>
 	> => {
 		const response = await api.get('/users/abonos');
-		return response.data.abonos;
+		return response.data.data.abonos || [];
 	},
 };
 

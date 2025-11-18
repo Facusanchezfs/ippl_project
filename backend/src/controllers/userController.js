@@ -52,47 +52,63 @@ const getUsers = async (req, res) => {
     // SOLUCIÓN: Paginación obligatoria + excluir password a nivel query + filtro opcional por status.
     // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
     
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    const hasLimit = req.query.limit !== undefined;
+    const hasPage = req.query.page !== undefined;
+    
+    // Si solo se pasa limit (sin page), devolver los primeros 'limit' usuarios (truncar array)
+    // Si se pasa page y limit, usar paginación normal
+    // Si no se pasa nada, devolver todos
+    const limit = hasLimit ? parseInt(req.query.limit, 10) : (hasPage ? 20 : null);
+    const page = hasPage ? parseInt(req.query.page, 10) : (hasLimit ? 1 : null);
     const status = req.query.status; // Filtro opcional: 'active', 'inactive', 'pending'
     
-    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
-    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
-    
-    const offset = (page - 1) * limit;
+    if (page !== null && page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit !== null && (limit < 1 || limit > 100)) return sendError(res, 400, 'limit debe estar entre 1 y 100');
     
     const where = {};
     if (status) {
       where.status = status;
     }
     
-    const { count, rows: users } = await User.findAndCountAll({
-      where,
-      attributes: { exclude: ['password'] }, // Excluir password a nivel query (refuerzo de seguridad)
-      order: [['id', 'ASC']],
-      limit,
-      offset,
-    });
-    
-    const dtos = users.map((u) => toUserDTO(u));
-    const totalPages = Math.ceil(count / limit);
-    
-    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
-    // Si se pasa paginación, devolver formato nuevo con paginación
-    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
-    
-    if (hasPagination) {
-      return sendSuccess(res, {
-        users: dtos,
-        pagination: {
-          page,
-          limit,
-          total: count,
-          totalPages,
-        },
+    // Si hay limit, aplicar paginación/truncado
+    if (limit !== null) {
+      const offset = page !== null ? (page - 1) * limit : 0;
+      
+      const { count, rows: users } = await User.findAndCountAll({
+        where,
+        attributes: { exclude: ['password'] }, // Excluir password a nivel query (refuerzo de seguridad)
+        order: [['id', 'ASC']],
+        limit,
+        offset,
       });
+      
+      const dtos = users.map((u) => toUserDTO(u));
+      
+      // Si se pasó page, devolver formato con paginación completa
+      if (hasPage) {
+        const totalPages = Math.ceil(count / limit);
+        return sendSuccess(res, {
+          users: dtos,
+          pagination: {
+            page,
+            limit,
+            total: count,
+            totalPages,
+          },
+        });
+      } else {
+        // Si solo se pasó limit, devolver formato simple (truncado)
+        return sendSuccess(res, { users: dtos });
+      }
     } else {
-      // Formato antiguo para compatibilidad con frontend actual
+      // Sin limit, devolver todos los usuarios (formato antiguo)
+      const users = await User.findAll({
+        where,
+        attributes: { exclude: ['password'] },
+        order: [['id', 'ASC']],
+      });
+      
+      const dtos = users.map((u) => toUserDTO(u));
       return sendSuccess(res, { users: dtos });
     }
   } catch (error) {

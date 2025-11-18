@@ -733,6 +733,57 @@ const PatientManagement = () => {
     }
   };
 
+  const openStatusRequestModal = async (patient: Patient, requestId?: string) => {
+    try {
+      const requests = await statusRequestService.getPendingRequests();
+      const targetRequest = requests.find((r) => {
+        if (requestId) {
+          return String(r.id) === String(requestId);
+        }
+        // Buscar solicitud de baja (inactive) que no sea de activación
+        return r.patientId == patient.id && r.requestedStatus === 'inactive' && r.type !== 'activation';
+      });
+
+      if (!targetRequest) {
+        toast.error('La solicitud ya fue gestionada o no está disponible.');
+        return;
+      }
+
+      setSelectedStatusRequest(targetRequest);
+      setSelectedPatient(patient);
+      setIsStatusRequestModalOpen(true);
+    } catch (error) {
+      console.error('Error al obtener solicitud:', error);
+      toast.error('Error al obtener la solicitud');
+    }
+  };
+
+  const openActivationRequestModal = async (patient: Patient, requestId?: string) => {
+    try {
+      const requests = await statusRequestService.getPendingRequests();
+      const targetRequest = requests.find((r) => {
+        if (requestId) {
+          return String(r.id) === String(requestId);
+        }
+        // Buscar solicitud de alta
+        return r.patientId == patient.id && r.requestedStatus === 'alta';
+      });
+
+      if (!targetRequest) {
+        toast.error('La solicitud ya fue gestionada o no está disponible.');
+        return;
+      }
+
+      setSelectedActivationRequest(targetRequest);
+      setSelectedStatusRequest(targetRequest);
+      setSelectedPatient(patient);
+      setIsActivationRequestModalOpen(true);
+    } catch (error) {
+      console.error('Error al obtener solicitud:', error);
+      toast.error('Error al obtener la solicitud');
+    }
+  };
+
   useEffect(() => {
     if (isLoading) return;
 
@@ -751,6 +802,46 @@ const PatientManagement = () => {
     }
 
     void openFrequencyRequestModal(patient, requestId).finally(finalize);
+  }, [patients, location.state, isLoading, navigate]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const state = location.state as { openStatusRequest?: { patientId: string; requestId?: string } } | null;
+    if (!state?.openStatusRequest) return;
+
+    const { patientId, requestId } = state.openStatusRequest;
+    const patient = patients.find((p) => String(p.id) === String(patientId));
+
+    const finalize = () => navigate('.', { replace: true, state: {} });
+
+    if (!patient) {
+      toast.error('Paciente no encontrado para la solicitud.');
+      finalize();
+      return;
+    }
+
+    void openStatusRequestModal(patient, requestId).finally(finalize);
+  }, [patients, location.state, isLoading, navigate]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const state = location.state as { openActivationRequest?: { patientId: string; requestId?: string } } | null;
+    if (!state?.openActivationRequest) return;
+
+    const { patientId, requestId } = state.openActivationRequest;
+    const patient = patients.find((p) => String(p.id) === String(patientId));
+
+    const finalize = () => navigate('.', { replace: true, state: {} });
+
+    if (!patient) {
+      toast.error('Paciente no encontrado para la solicitud.');
+      finalize();
+      return;
+    }
+
+    void openActivationRequestModal(patient, requestId).finally(finalize);
   }, [patients, location.state, isLoading, navigate]);
 
   const loadData = async () => {

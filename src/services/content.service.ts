@@ -2,7 +2,7 @@ import api from '../config/api';
 
 const getCarouselImages = async (): Promise<string[]> => {
 	const response = await api.get('/content/carousel');
-	return response.data;
+	return response.data.data;
 };
 
 const deleteCarouselImage = async (filename: string): Promise<void> => {
