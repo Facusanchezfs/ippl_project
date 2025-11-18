@@ -73,7 +73,7 @@ const messageService = {
       return newMessage;
     } catch (error) {
       logger.error('Error saving message:', error);
-      throw error;
+      return null;
     }
   },
 
@@ -96,7 +96,7 @@ const messageService = {
       return true;
     } catch (error) {
       logger.error('Error marking message as read:', error);
-      throw error;
+      return false;
     }
   }
 };

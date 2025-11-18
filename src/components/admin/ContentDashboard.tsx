@@ -79,7 +79,6 @@ const ContentDashboard = () => {
 
   const loadUser = async () => {
     const userToLoad = await userService.getUserById(parseNumber(user?.id))
-    console.log(userToLoad);
     setUserLoaded(userToLoad);
   }
 

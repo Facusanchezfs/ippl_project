@@ -203,13 +203,10 @@ const FinancialDashboard: React.FC = () => {
 	const loadRecentAbonos = async () => {
 		try {
 			const abonos = await userService.getAbonos();
-			// Verificar que abonos sea un array antes de procesarlo
 			if (!Array.isArray(abonos)) {
-				console.warn('getAbonos no devolvió un array:', abonos);
 				setRecentAbonos([]);
 				return;
 			}
-			// Ordenar por fecha descendente y tomar los 5 más recientes
 			const recientes = abonos
 				.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 				.map((a) => ({

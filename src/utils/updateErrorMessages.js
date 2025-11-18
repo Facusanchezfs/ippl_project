@@ -54,7 +54,6 @@ function updateFile(filePath) {
     
     if (updated) {
       fs.writeFileSync(filePath, content, 'utf8');
-      console.log(`✅ Actualizado: ${filePath}`);
     }
   } catch (error) {
     console.error(`❌ Error al procesar ${filePath}:`, error.message);
@@ -78,6 +77,4 @@ function walkDirectory(dir) {
 }
 
 // Ejecutar el script
-console.log('🚀 Iniciando actualización de mensajes de error...');
 walkDirectory('./src');
-console.log('✨ Actualización completada!');
