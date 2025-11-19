@@ -324,7 +324,7 @@ module.exports = {
 	},
 
 	async down(queryInterface, Sequelize) {
-		// Elimina los dos usuarios por su email
+		// Elimina los usuarios por su email
 		await queryInterface.bulkDelete(
 			'Users',
 			{

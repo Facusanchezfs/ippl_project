@@ -5,12 +5,16 @@ const multer = require('multer');
 const fs = require('fs').promises;
 const app = require('./app');
 const { sequelize } = require('../models');
+const logger = require('./utils/logger');
 require('dotenv').config();
+
+// Validar configuración crítica al inicio (el servidor fallará si falta JWT_SECRET)
+require('./config/jwt');
 
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+// CORS ya está configurado en app.js
 app.use(express.json());
 
 // Asegurarse de que los directorios existan
@@ -21,6 +25,8 @@ async function ensureDirectories() {
 		path.join(__dirname, '..', 'uploads', 'audios'),
 		path.join(__dirname, '..', 'uploads', 'documents'),
 		path.join(__dirname, '..', 'uploads', 'images'),
+		path.join(__dirname, '..', 'uploads', 'carousel'), // Carpeta para imágenes del carousel
+		path.join(__dirname, '..', 'uploads', 'posts'), // Carpeta para imágenes de posts
 	];
 
 	for (const dir of directories) {
@@ -28,7 +34,7 @@ async function ensureDirectories() {
 			await fs.access(dir);
 		} catch {
 			await fs.mkdir(dir, { recursive: true });
-			console.log(`✅ Directorio creado: ${dir}`);
+			logger.info(`✅ Directorio creado: ${dir}`);
 		}
 	}
 }
@@ -73,6 +79,7 @@ const professionalsRoutes = require('./routes/professionals');
 const activitiesRoutes = require('./routes/activities');
 const messageRoutes = require('./routes/messageRoutes');
 const contentRoutes = require('./routes/content');
+const paymentsRoutes = require('./routes/payments');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -84,6 +91,7 @@ app.use('/api/professionals', professionalsRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/payments', paymentsRoutes);
 
 // Ruta específica para subir archivos de audio
 app.post('/api/upload/audio', upload.single('audio'), (req, res) => {
@@ -116,20 +124,22 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-const FRONTEND_DIST = path.resolve(__dirname, '../../dist');
-app.use(express.static(FRONTEND_DIST, {
-  index: false // importante: el index lo servimos en el fallback
-}));
+// Solo servir dist y SPA fallback en PRODUCCIÓN
+if (process.env.NODE_ENV === 'production') {
+	const FRONTEND_DIST = path.resolve(__dirname, '../../dist');
+	app.use(express.static(FRONTEND_DIST, {
+		index: false // importante: el index lo servimos en el fallback
+	}));
 
-// Fallback SPA: cualquier ruta NO-API devuelve index.html
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
-  res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
-});
+	// Fallback SPA: cualquier ruta NO-API devuelve index.html
+	app.get('*', (req, res, next) => {
+		if (req.path.startsWith('/api')) return next();
+		res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+	});
+}
 
-// Middleware de manejo de errores
+// Middleware de manejo de errores (errorLogger ya está en app.js)
 app.use((err, req, res, next) => {
-	console.error('Error:', err);
 	res.status(500).json({
 		message: 'Error en el servidor',
 		error: process.env.NODE_ENV === 'development' ? err.message : undefined,
@@ -141,13 +151,14 @@ async function startServer() {
 	try {
 		await ensureDirectories();
 		await sequelize.authenticate();
-		+console.log('✅ [DB] Conectada correctamente');
+		logger.info('✅ [DB] Conectada correctamente');
+		logger.info('SQL logging disabled');
 
 		app.listen(PORT, () => {
-			console.log(`Server is running on port ${PORT}`);
+			logger.info(`🚀 Server is running on port ${PORT}`);
 		});
 	} catch (error) {
-		console.error('❌ Error al iniciar el servidor:', error);
+		logger.error('❌ Error al iniciar el servidor:', error);
 		process.exit(1);
 	}
 }

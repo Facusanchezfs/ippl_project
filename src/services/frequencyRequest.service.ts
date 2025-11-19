@@ -26,44 +26,29 @@ const frequencyRequestService = {
 	createRequest: async (
 		data: CreateFrequencyRequestDTO
 	): Promise<FrequencyRequest> => {
-		try {
-			const response = await api.post<FrequencyRequest>(
+			const response = await api.post<{data: FrequencyRequest}>(
 				'/frequency-requests',
 				data
 			);
-			return response.data;
-		} catch (error) {
-			console.error('Error al crear solicitud:', error);
-			throw error;
-		}
+			return response.data.data;
 	},
 
 	// Obtener todas las solicitudes pendientes
 	getPendingRequests: async (): Promise<FrequencyRequest[]> => {
-		try {
-			const response = await api.get<FrequencyRequest[]>(
+			const response = await api.get<{data: FrequencyRequest[]}>(
 				'/frequency-requests/pending'
 			);
-			return response.data;
-		} catch (error) {
-			console.error('Error al obtener solicitudes pendientes:', error);
-			return [];
-		}
+			return response.data.data;
 	},
 
 	// Obtener solicitudes de un paciente específico
 	getPatientRequests: async (
 		patientId: string
 	): Promise<FrequencyRequest[]> => {
-		try {
-			const response = await api.get<FrequencyRequest[]>(
+			const response = await api.get<{data: FrequencyRequest[]}>(
 				`/frequency-requests/patient/${patientId}`
 			);
-			return response.data;
-		} catch (error) {
-			console.error('Error al obtener solicitudes del paciente:', error);
-			return [];
-		}
+			return response.data.data;
 	},
 
 	// Aprobar una solicitud
@@ -71,18 +56,13 @@ const frequencyRequestService = {
 		requestId: string,
 		adminResponse: string
 	): Promise<FrequencyRequest> => {
-		try {
-			const response = await api.post<FrequencyRequest>(
+			const response = await api.post<{data: FrequencyRequest}>(
 				`/frequency-requests/${requestId}/approve`,
 				{
 					adminResponse,
 				}
 			);
-			return response.data;
-		} catch (error) {
-			console.error('Error al aprobar solicitud:', error);
-			throw error;
-		}
+			return response.data.data;
 	},
 
 	// Rechazar una solicitud
@@ -90,18 +70,13 @@ const frequencyRequestService = {
 		requestId: string,
 		adminResponse: string
 	): Promise<FrequencyRequest> => {
-		try {
-			const response = await api.post<FrequencyRequest>(
+			const response = await api.post<{data: FrequencyRequest}>(
 				`/frequency-requests/${requestId}/reject`,
 				{
 					adminResponse,
 				}
 			);
-			return response.data;
-		} catch (error) {
-			console.error('Error al rechazar solicitud:', error);
-			throw error;
-		}
+			return response.data.data;
 	},
 };
 

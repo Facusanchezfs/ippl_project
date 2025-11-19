@@ -30,6 +30,8 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import frequencyRequestService from '../../services/frequencyRequest.service';
+import statusRequestService from '../../services/statusRequest.service';
 
 // Interfaces
 interface StatCardProps {
@@ -59,10 +61,57 @@ interface ActivityItemProps {
   color: string;
   text: string;
   time: string;
+  onClick?: () => Promise<void> | void;
 }
 
 const MAX_MESSAGES = 2; // Número máximo de mensajes a mostrar
 const MAX_ACTIVITIES = 3; // Número máximo de actividades a mostrar
+
+const DASHBOARD_ACTIVITY_TYPES: Activity['type'][] = [
+  'PATIENT_DISCHARGE_REQUEST',
+  'PATIENT_ACTIVATION_REQUEST',
+  'FREQUENCY_CHANGE_REQUEST',
+  'FREQUENCY_CHANGE_REQUESTED'
+];
+
+const translateFrequency = (freq?: string | null) => {
+  switch (freq) {
+    case 'weekly':
+      return 'Semanal';
+    case 'biweekly':
+      return 'Quincenal';
+    case 'monthly':
+      return 'Mensual';
+    default:
+      return freq || '';
+  }
+};
+
+const translateActivity = (activity: Activity): Activity => {
+  if (activity.type.startsWith('FREQUENCY_CHANGE')) {
+    const professionalName = activity.metadata?.professionalName || 'Un profesional';
+    const patientName = activity.metadata?.patientName || 'un paciente';
+    const currentFrequency = translateFrequency(activity.metadata?.currentFrequency as string);
+    const requestedFrequency = translateFrequency((activity.metadata?.requestedFrequency as string) || (activity.metadata?.newFrequency as string));
+
+    if (activity.type === 'FREQUENCY_CHANGE_REQUEST' || activity.type === 'FREQUENCY_CHANGE_REQUESTED') {
+      return {
+        ...activity,
+        title: 'Solicitud de cambio de frecuencia',
+        description: `${professionalName} solicitó cambiar la frecuencia de sesiones de ${patientName} de ${currentFrequency} a ${requestedFrequency}`,
+      };
+    }
+
+    const actionText = activity.type === 'FREQUENCY_CHANGE_APPROVED' ? 'aprobó' : 'rechazó';
+    return {
+      ...activity,
+      title: `Solicitud de cambio de frecuencia ${actionText}`,
+      description: `Se ${actionText} el cambio de frecuencia para ${patientName} a ${requestedFrequency}`,
+    };
+  }
+
+  return activity;
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -79,6 +128,7 @@ const Dashboard = () => {
   const [statsError, setStatsError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [userLoaded, setUserLoaded] = useState<User>();
+  const [resolvedActivities, setResolvedActivities] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadStats();
@@ -164,12 +214,39 @@ const Dashboard = () => {
     try {
       setActivityError(null);
       const data = await activityService.getActivities();
-      // Filtrar solo las actividades de tipo PATIENT_DISCHARGE_REQUEST y tomar las más recientes
       const filteredActivities = data
-        .filter(activity => activity.type === 'PATIENT_DISCHARGE_REQUEST')
+        .filter(activity => DASHBOARD_ACTIVITY_TYPES.includes(activity.type))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, MAX_ACTIVITIES);
+        .slice(0, MAX_ACTIVITIES)
+        .map(translateActivity);
       setActivities(filteredActivities);
+
+      // Verificar qué actividades de frecuencia ya están resueltas
+      try {
+        const pendingRequests = await frequencyRequestService.getPendingRequests();
+        const pendingPatientIds = new Set(
+          pendingRequests.map(r => String(r.patientId))
+        );
+        
+        const resolved = new Set<string>();
+        filteredActivities.forEach(activity => {
+          if (
+            (activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
+             activity.type === 'FREQUENCY_CHANGE_REQUESTED') &&
+            activity.metadata?.patientId
+          ) {
+            const patientId = String(activity.metadata.patientId);
+            // Si el patientId NO está en las solicitudes pendientes, está resuelto
+            if (!pendingPatientIds.has(patientId)) {
+              resolved.add(activity._id);
+            }
+          }
+        });
+        setResolvedActivities(resolved);
+      } catch (error) {
+        console.error('Error al verificar solicitudes pendientes:', error);
+        // Si falla, no marcamos nada como resuelto para mantener el comportamiento actual
+      }
     } catch (error) {
       console.error('Error loading activities:', error);
       setActivityError('Error al cargar las actividades');
@@ -198,6 +275,126 @@ const Dashboard = () => {
       console.error('Error al cambiar contraseña:', e);
       const friendlyMessage = getFriendlyErrorMessage(e, ErrorMessages.PASSWORD_CHANGE_FAILED);
       toast.error(friendlyMessage);
+    }
+  };
+
+  const handleActivityClick = async (activity: Activity) => {
+    if (activity.type === 'FREQUENCY_CHANGE_REQUEST' || activity.type === 'FREQUENCY_CHANGE_REQUESTED') {
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        return;
+      }
+
+      try {
+        const requests = await frequencyRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => String(r.patientId) === String(patientId));
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          // Actualizar el estado para marcar esta actividad como resuelta
+          setResolvedActivities(prev => new Set(prev).add(activity._id));
+          return;
+        }
+
+        setActivities((prev) => prev.filter((a) => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openFrequencyRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+      }
+    } else if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        return;
+      }
+
+      try {
+        const requests = await statusRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => 
+          String(r.patientId) === String(patientId) && 
+          r.requestedStatus === 'inactive' && 
+          r.type !== 'activation'
+        );
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          setResolvedActivities(prev => new Set(prev).add(activity._id));
+          return;
+        }
+
+        setActivities((prev) => prev.filter((a) => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openStatusRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+      }
+    } else if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
+      const patientId = activity.metadata?.patientId;
+      if (!patientId) {
+        toast.error('No se encontró información del paciente para esta solicitud');
+        return;
+      }
+
+      try {
+        const requests = await statusRequestService.getPendingRequests();
+        const pendingRequest = requests.find((r) => 
+          String(r.patientId) === String(patientId) && 
+          r.requestedStatus === 'alta'
+        );
+
+        if (!pendingRequest) {
+          toast.error('La solicitud ya fue resuelta');
+          setResolvedActivities(prev => new Set(prev).add(activity._id));
+          return;
+        }
+
+        setActivities((prev) => prev.filter((a) => a._id !== activity._id));
+        try {
+          await activityService.markAsRead(activity._id);
+        } catch (error) {
+          console.error('Error al marcar actividad como leída:', error);
+        }
+
+        navigate('/admin/pacientes', {
+          state: {
+            openActivationRequest: {
+              patientId: String(patientId),
+              requestId: pendingRequest.id,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error al validar solicitud:', error);
+        toast.error('No se pudo validar la solicitud');
+      }
     }
   };
 
@@ -449,7 +646,7 @@ const Dashboard = () => {
                 </div>
                 <div className="space-y-4">
                   {activityError ? (
-                    <div className="text-center py-4">
+                    <div key="activity-error" className="text-center py-4">
                       <p className="text-red-600">{activityError}</p>
                       <button
                         onClick={loadActivities}
@@ -463,14 +660,28 @@ const Dashboard = () => {
                       <p className="text-gray-500">No hay notificaciones pendientes</p>
                     </div>
                   ) : (
-                    activities.map((activity) => (
-                      <ActivityItem
-                        key={activity._id}
-                        color="bg-red-500"
-                        text={activity.description}
-                        time={formatTimeAgo(new Date(activity.date))}
-                      />
-                    ))
+                    activities.map((activity) => {
+                      const translated = translateActivity(activity);
+                      const isFrequencyRequest =
+                        translated.type === 'FREQUENCY_CHANGE_REQUEST' ||
+                        translated.type === 'FREQUENCY_CHANGE_REQUESTED';
+                      const isStatusRequest =
+                        translated.type === 'PATIENT_DISCHARGE_REQUEST' ||
+                        translated.type === 'PATIENT_ACTIVATION_REQUEST';
+                      const isClickable = isFrequencyRequest || isStatusRequest;
+                      const isResolved = resolvedActivities.has(translated._id);
+
+                      return (
+                        <ActivityItem
+                          key={translated._id}
+                          color="bg-red-500"
+                          text={translated.description}
+                          time={formatTimeAgo(new Date(translated.date))}
+                          onClick={isClickable ? () => handleActivityClick(translated) : undefined}
+                          isResolved={isResolved}
+                        />
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -564,15 +775,45 @@ interface ActivityItemProps {
   color: string;
   text: string;
   time: string;
+  onClick?: () => Promise<void> | void;
+  isResolved?: boolean;
 }
 
-const ActivityItem: React.FC<ActivityItemProps> = ({ color, text, time }) => (
-  <div className="flex items-center bg-[#F9FAFB] rounded-lg p-4 shadow-sm">
-    <div className={`w-2 h-2 ${color} rounded-full mr-3`}></div>
-    <span className="text-gray-600 flex-grow text-sm">{text}</span>
-    <span className="text-xs text-gray-400">{time}</span>
-  </div>
-);
+const ActivityItem: React.FC<ActivityItemProps> = ({ color, text, time, onClick, isResolved = false }) => {
+  const [isDisabled, setIsDisabled] = useState(isResolved);
+
+  const handleClick = async () => {
+    if (!onClick || isDisabled) return;
+
+    setIsDisabled(true);
+    try {
+      await onClick();
+    } catch (error) {
+      console.error('Error al gestionar actividad:', error);
+      setIsDisabled(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center bg-[#F9FAFB] rounded-lg p-4 shadow-sm">
+      <div className={`w-2 h-2 ${color} rounded-full mr-3`}></div>
+      <span className="text-gray-600 flex-grow text-sm">{text}</span>
+      <div className="flex items-center gap-3">
+        {onClick && (
+          <button
+            onClick={handleClick}
+            disabled={isDisabled}
+            className={`text-xs font-semibold ${isDisabled ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'}`}
+            title={isDisabled ? 'La solicitud ya fue resuelta' : 'Gestionar la solicitud'}
+          >
+            {isDisabled ? 'Resuelto' : 'Gestionar'}
+          </button>
+        )}
+        <span className="text-xs text-gray-400 whitespace-nowrap">{time}</span>
+      </div>
+    </div>
+  );
+};
 
 const MessageItem: React.FC<{
   name: string;

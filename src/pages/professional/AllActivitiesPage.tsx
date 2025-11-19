@@ -90,6 +90,55 @@ const AllActivitiesPage = () => {
     });
   };
 
+  // Función para traducir frecuencia
+  const translateFrequency = (freq: string | undefined): string => {
+    switch (freq) {
+      case 'weekly': return 'Semanal';
+      case 'biweekly': return 'Quincenal';
+      case 'monthly': return 'Mensual';
+      default: return freq || '';
+    }
+  };
+
+  // Función para traducir descripción de actividad
+  const translateDescription = (description: string, metadata?: Activity['metadata']): string => {
+    let translated = description;
+    
+    // Reemplazar frecuencias en inglés
+    translated = translated.replace(/\bweekly\b/gi, 'Semanal');
+    translated = translated.replace(/\bbiweekly\b/gi, 'Quincenal');
+    translated = translated.replace(/\bmonthly\b/gi, 'Mensual');
+    
+    // Reemplazar estados en inglés
+    translated = translated.replace(/\bapproved\b/gi, 'Aprobado');
+    translated = translated.replace(/\brejected\b/gi, 'Rechazado');
+    translated = translated.replace(/\bpending\b/gi, 'Pendiente');
+    translated = translated.replace(/\bactive\b/gi, 'Activo');
+    translated = translated.replace(/\binactive\b/gi, 'Inactivo');
+    
+    // Si hay metadata con newFrequency, currentFrequency, etc., traducirlos también
+    if (metadata?.newFrequency) {
+      translated = translated.replace(
+        metadata.newFrequency as string,
+        translateFrequency(metadata.newFrequency as string)
+      );
+    }
+    if (metadata?.currentFrequency) {
+      translated = translated.replace(
+        metadata.currentFrequency as string,
+        translateFrequency(metadata.currentFrequency as string)
+      );
+    }
+    if (metadata?.requestedFrequency) {
+      translated = translated.replace(
+        metadata.requestedFrequency as string,
+        translateFrequency(metadata.requestedFrequency as string)
+      );
+    }
+    
+    return translated;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -146,7 +195,7 @@ const AllActivitiesPage = () => {
                     {activity.title}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {activity.description}
+                    {translateDescription(activity.description, activity.metadata)}
                   </p>
                   {activity.metadata?.adminResponse && (
                     <p className="mt-1 text-sm text-gray-600 italic">

@@ -2,6 +2,8 @@
 
 const { Message } = require('../../models');
 const { toMessageDTOList } = require('../../mappers/MessageMapper');
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // Create a new message
 async function createMessage(req, res) {
@@ -10,7 +12,7 @@ async function createMessage(req, res) {
 
     // Validaciones básicas
     if (!nombre || !apellido || !correoElectronico || !mensaje) {
-      return res.status(400).json({ error: 'Faltan campos requeridos' });
+      return sendError(res, 400, 'Faltan campos requeridos');
     }
 
     await Message.create({
@@ -23,30 +25,71 @@ async function createMessage(req, res) {
       leido: false,
     });
 
-    // Si preferís devolver el objeto creado:
-    // return res.status(201).json(toMessageDTO(created));
-
-    return res.status(201).json({ message: 'Mensaje enviado exitosamente' });
+    return sendSuccess(res, null, 'Mensaje enviado exitosamente', 201);
   } catch (error) {
-    console.error('Error al crear mensaje:', error);
-    return res.status(500).json({ error: 'Error al enviar el mensaje' });
+    logger.error('Error al crear mensaje:', error);
+    return sendError(res, 500, 'Error al enviar el mensaje');
   }
 }
 
 // Get all messages (array plano)
 async function getAllMessages(req, res) {
   try {
-    const rows = await Message.findAll({
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getAllMessages
+    // PROBLEMA: Sin paginación, trae todos los mensajes. Sin filtro opcional por leído.
+    // IMPACTO: Con muchos mensajes = transferencia masiva, lento.
+    // SOLUCIÓN: Paginación obligatoria + filtro opcional por leído + índice compuesto.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const leido = req.query.leido !== undefined ? req.query.leido === 'true' : undefined;
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
+    
+    const where = {};
+    if (leido !== undefined) {
+      where.leido = leido;
+    }
+    
+    const { count, rows } = await Message.findAndCountAll({
+      where,
       order: [
         ['fecha', 'DESC'],
         ['createdAt', 'DESC'],
       ],
+      limit,
+      offset,
     });
-    console.log(rows)
-    return res.json(toMessageDTOList(rows));
+    
+    logger.debug('Mensajes obtenidos:', { count: rows.length, total: count });
+    
+    const totalPages = Math.ceil(count / limit);
+    
+    // COMPATIBILIDAD: Si no se pasa paginación, devolver formato antiguo (array directo)
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        messages: toMessageDTOList(rows),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, toMessageDTOList(rows));
+    }
   } catch (error) {
-    console.error('Error al obtener mensajes:', error);
-    return res.status(500).json({ error: 'Error al obtener los mensajes' });
+    logger.error('Error al obtener mensajes:', error);
+    return sendError(res, 500, 'Error al obtener los mensajes');
   }
 }
 
@@ -57,27 +100,27 @@ async function markAsRead(req, res) {
 
     const msg = req.message || await Message.findByPk(id)
     if (!msg) {
-      return res.status(404).json({ error: 'Mensaje no encontrado' });
+      return sendError(res, 404, 'Mensaje no encontrado');
     }
 
     if (!msg.leido) {
       await msg.update({ leido: true });
     }
 
-    return res.json({ message: 'Mensaje marcado como leído' });
+    return sendSuccess(res, null, 'Mensaje marcado como leído');
   } catch (error) {
-    console.error('Error al marcar mensaje como leído:', error);
-    return res.status(500).json({ error: 'Error al actualizar el mensaje' });
+    logger.error('Error al marcar mensaje como leído:', error);
+    return sendError(res, 500, 'Error al actualizar el mensaje');
   }
 }
 
 async function clearAllMessages(req, res) {
   try {
     await Message.destroy({ where: {} });
-    return res.json({ success: true, message: 'Todos los mensajes han sido eliminados' });
+    return sendSuccess(res, null, 'Todos los mensajes han sido eliminados', 204);
   } catch (error) {
-    console.error('Error al limpiar mensajes:', error);
-    return res.status(500).json({ error: 'Error al eliminar los mensajes' });
+    logger.error('Error al limpiar mensajes:', error);
+    return sendError(res, 500, 'Error al eliminar los mensajes');
   }
 }
 

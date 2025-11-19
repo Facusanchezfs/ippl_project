@@ -79,7 +79,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const loadPatients = async () => {
     try {
       const response = await api.get('/patients');
-      setPatients(response.data.patients || []);
+      setPatients(response.data.data.patients || []);
     } catch (error) {
       console.error('Error al cargar pacientes:', error);
       toast.error('Error al cargar la lista de pacientes');
@@ -89,7 +89,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const loadProfessionals = async () => {
     try {
       const response = await api.get('/professionals');
-      setProfessionals(response.data.professionals || []);
+      setProfessionals(response.data.data.professionals || []);
     } catch (error) {
       console.error('Error al cargar profesionales:', error);
       toast.error('Error al cargar la lista de profesionales');
@@ -110,7 +110,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
       setFormData(prev => ({
         ...prev,
-        audioNote: response.data.audioUrl
+        audioNote: response.data.data.audioUrl
       }));
 
       toast.success('Audio grabado correctamente');

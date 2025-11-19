@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const logger = require('../utils/logger');
 
 const dataDir = path.join(__dirname, '../data');
 const messagesFilePath = path.join(dataDir, 'messages.json');
@@ -22,7 +23,7 @@ async function initializeMessagesFile() {
       );
     }
   } catch (error) {
-    console.error('Error initializing messages file:', error);
+    logger.error('Error initializing messages file:', error);
   }
 }
 
@@ -38,7 +39,7 @@ const messageService = {
       // Sort messages by date in descending order (newest first)
       return messages.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     } catch (error) {
-      console.error('Error reading messages:', error);
+      logger.error('Error reading messages:', error);
       return [];
     }
   },
@@ -71,8 +72,8 @@ const messageService = {
       
       return newMessage;
     } catch (error) {
-      console.error('Error saving message:', error);
-      throw error;
+      logger.error('Error saving message:', error);
+      return null;
     }
   },
 
@@ -94,8 +95,8 @@ const messageService = {
       
       return true;
     } catch (error) {
-      console.error('Error marking message as read:', error);
-      throw error;
+      logger.error('Error marking message as read:', error);
+      return false;
     }
   }
 };

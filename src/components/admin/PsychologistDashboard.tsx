@@ -326,7 +326,7 @@ const PsychologistDashboard = () => {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onSubmit={changePassword}
-      />;
+      />
     </div>
   );
 };

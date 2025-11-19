@@ -46,8 +46,8 @@ const medicalHistoryService = {
   // Obtener todos los historiales médicos
   getAllMedicalHistories: async () => {
     try {
-      const response = await api.get<MedicalHistory[]>('/medical-history');
-      return response.data;
+      const response = await api.get<{data: MedicalHistory[]}>('/medical-history');
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return [];
@@ -57,8 +57,8 @@ const medicalHistoryService = {
   // Obtener historiales médicos por paciente
   getPatientMedicalHistories: async (patientId: string) => {
     try {
-      const response = await api.get<MedicalHistory[]>(`/medical-history/patient/${patientId}`);
-      return response.data;
+      const response = await api.get<{data: MedicalHistory[]}>(`/medical-history/patient/${patientId}`);
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return [];
@@ -68,8 +68,8 @@ const medicalHistoryService = {
   // Obtener historiales médicos por profesional
   getProfessionalMedicalHistories: async (professionalId: string) => {
     try {
-      const response = await api.get<MedicalHistory[]>(`/medical-history/professional/${professionalId}`);
-      return response.data;
+      const response = await api.get<{data: MedicalHistory[]}>(`/medical-history/professional/${professionalId}`);
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return [];
@@ -79,8 +79,8 @@ const medicalHistoryService = {
   // Obtener un historial médico específico
   getMedicalHistoryById: async (id: string) => {
     try {
-      const response = await api.get<MedicalHistory>(`/medical-history/${id}`);
-      return response.data;
+      const response = await api.get<{data: MedicalHistory}>(`/medical-history/${id}`);
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return null;
@@ -90,8 +90,8 @@ const medicalHistoryService = {
   // Crear un nuevo historial médico
   createMedicalHistory: async (data: CreateMedicalHistoryDto) => {
     try {
-      const response = await api.post<MedicalHistory>('/medical-history', data);
-      return response.data;
+      const response = await api.post<{data: MedicalHistory}>('/medical-history', data);
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return null;
@@ -101,8 +101,8 @@ const medicalHistoryService = {
   // Actualizar un historial médico
   updateMedicalHistory: async (id: string, data: UpdateMedicalHistoryDto) => {
     try {
-      const response = await api.put<MedicalHistory>(`/medical-history/${id}`, data);
-      return response.data;
+      const response = await api.put<{data: MedicalHistory}>(`/medical-history/${id}`, data);
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return null;
@@ -113,7 +113,7 @@ const medicalHistoryService = {
   deleteMedicalHistory: async (id: string) => {
     try {
       const response = await api.delete(`/medical-history/${id}`);
-      return response.data;
+      return response.data.data;
     } catch (error) {
       handleError(error);
       return null;

@@ -19,6 +19,12 @@ export interface Patient {
     reason: string;
     status: string;
   };
+  activationRequest?: {
+    requestedBy: string;
+    requestDate: string;
+    reason: string;
+    status: string;
+  };
   audioNote?: string;
   sessionFrequency: 'weekly' | 'biweekly' | 'monthly';
 } 

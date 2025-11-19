@@ -6,7 +6,7 @@ const activityService = {
 	async getActivities(): Promise<Activity[]> {
 		try {
 			const response = await api.get('/activities');
-			return response.data;
+			return response.data.data;
 		} catch (error) {
 			console.error('Error fetching activities:', error);
 			return [];
@@ -35,7 +35,7 @@ const activityService = {
 	async getUnreadCount(): Promise<number> {
 		try {
 			const response = await api.get('/activities/unread-count');
-			return response.data.count || 0;
+			return response.data.data.count || 0;
 		} catch (error) {
 			console.error('Error getting unread count:', error);
 			return 0;

@@ -2,8 +2,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { User } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'tu_secreto_super_seguro';
+const { JWT_SECRET } = require('../config/jwt');
+const logger = require('../utils/logger');
+const { sendError } = require('../utils/response');
 
 const generateToken = (user) => {
 	return jwt.sign(
@@ -28,18 +29,16 @@ const login = async (req, res) => {
 		});
 
 		if (!user) {
-			return res.status(401).json({ message: 'Usuario no encontrado' });
+			return sendError(res, 401, 'Usuario no encontrado');
 		}
 
 		const valid = await bcrypt.compare(password, user.password);
 		if (!valid) {
-			return res.status(401).json({ message: 'Contraseña incorrecta' });
+			return sendError(res, 401, 'Contraseña incorrecta');
 		}
 
 		if (user.status === 'inactive') {
-			return res
-				.status(403)
-				.json({ message: 'Cuenta inactiva. Contacta al administrador.' });
+			return sendError(res, 403, 'Cuenta inactiva. Contacta al administrador.');
 		}
 
 		const token = generateToken(user);
@@ -50,8 +49,8 @@ const login = async (req, res) => {
 
 		res.json({ token, user: userDTO });
 	} catch (err) {
-		console.error('Error en login:', err);
-		res.status(500).json({ message: 'Error en el servidor' });
+		logger.error('Error en login:', err);
+		return sendError(res, 500, 'Error en el servidor');
 	}
 };
 
@@ -59,7 +58,7 @@ const refreshToken = async (req, res) => {
 	try {
 		const { token } = req.body;
 		if (!token) {
-			return res.status(400).json({ message: 'Token no proporcionado' });
+			return sendError(res, 400, 'Token no proporcionado');
 		}
 
 		// Decodifica sin importar expiración
@@ -68,17 +67,16 @@ const refreshToken = async (req, res) => {
 		// 🔍 Busca usuario en DB
 		const user = await User.findByPk(decoded.id);
 		if (!user || user.status === 'inactive') {
-			return res.status(403).json({ message: 'Usuario no válido o inactivo' });
+			return sendError(res, 403, 'Usuario no válido o inactivo');
 		}
 
 		// 🆕 Nuevo token
 		const newToken = generateToken(user);
 		res.json({ token: newToken });
 	} catch (error) {
-		console.error('Error al renovar token:', error);
+		logger.error('Error al renovar token:', error);
 		const isExpired = error.name === 'TokenExpiredError';
-		return res.status(401).json({
-			message: isExpired ? 'Token expirado' : 'Token inválido',
+		return sendError(res, 401, isExpired ? 'Token expirado' : 'Token inválido', {
 			code: isExpired ? 'TOKEN_EXPIRED' : undefined,
 		});
 	}
@@ -87,18 +85,49 @@ const refreshToken = async (req, res) => {
 const verifyToken = (req, res, next) => {
 	const token = req.header('Authorization')?.replace('Bearer ', '');
 	if (!token) {
-		return res.status(401).json({ message: 'Acceso denegado' });
+		return sendError(res, 401, 'Acceso denegado');
 	}
 	try {
 		req.user = jwt.verify(token, JWT_SECRET);
 		next();
 	} catch (error) {
 		const isExpired = error.name === 'TokenExpiredError';
-		return res.status(401).json({
-			message: isExpired ? 'Token expirado' : 'Token inválido',
+		return sendError(res, 401, isExpired ? 'Token expirado' : 'Token inválido', {
 			code: isExpired ? 'TOKEN_EXPIRED' : undefined,
 		});
 	}
 };
 
-module.exports = { login, refreshToken, verifyToken };
+/**
+ * Obtiene el usuario actual autenticado
+ * Requiere token válido en el header Authorization
+ */
+const getCurrentUser = async (req, res) => {
+	try {
+		// req.user viene del middleware authenticateToken
+		if (!req.user || !req.user.id) {
+			return sendError(res, 401, 'Usuario no autenticado');
+		}
+
+		// Buscar usuario en la base de datos
+		const user = await User.findByPk(req.user.id);
+
+		if (!user) {
+			return sendError(res, 404, 'Usuario no encontrado');
+		}
+
+		// Verificar que el usuario esté activo
+		if (user.status === 'inactive') {
+			return sendError(res, 403, 'Cuenta inactiva. Contacta al administrador.');
+		}
+
+		// Devolver usuario en formato DTO (mantener formato { user } para compatibilidad con frontend)
+		const userDTO = toUserDTO(user);
+		return res.json({ user: userDTO });
+	} catch (error) {
+		logger.error('Error al obtener usuario actual:', error);
+		return sendError(res, 500, 'Error al obtener usuario');
+	}
+};
+
+module.exports = { login, refreshToken, verifyToken, getCurrentUser };

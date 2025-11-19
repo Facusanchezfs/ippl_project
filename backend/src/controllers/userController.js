@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const { User, Abono, sequelize } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 // helper numérico para DECIMAL
 function toAmount(v) {
@@ -10,41 +12,110 @@ function toAmount(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function round2(v) {
+  return Math.round((Number(v) || 0) * 100) / 100;
+}
+
 // Get user by id
 
 const getUserById = async (req, res) => {
   const { id } = req.params;
-try {
+  try {
     const user = await User.findByPk(id);
+    if (!user) {
+      return sendError(res, 404, 'Usuario no encontrado');
+    }
     const dtos = toUserDTO(user);
-    res.json(dtos);
+    return sendSuccess(res, dtos);
   } catch (error) {
-    console.error('Error getting user:', error);
-    res.status(500).json({ message: 'Error al obtener usuario' });
+    logger.error('Error getting user:', error);
+    return sendError(res, 500, 'Error al obtener usuario');
   }
-}
+};
 
-const getProfessionals = async (req, res) =>{
-  try{
-    const professionals = await User.findAll({where: {role: 'professional'}})
+const getProfessionals = async (req, res) => {
+  try {
+    const professionals = await User.findAll({ where: { role: 'professional' } });
     const dtos = professionals.map(x => toUserDTO(x));
-    res.json(dtos);
+    return sendSuccess(res, dtos);
   } catch (error) {
-    console.error('Error getting professionals:', error);
-    res.status(500).json({ message: 'Error al obtener profesionales' });
+    logger.error('Error getting professionals:', error);
+    return sendError(res, 500, 'Error al obtener profesionales');
   }
-}
+};
 // Get all users
 const getUsers = async (req, res) => {
   try {
-    const users = await User.findAll({ order: [['id', 'ASC']] });
-    const dtos = users.map((u) => toUserDTO(u));
-    res.json({ users: dtos });
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getUsers
+    // PROBLEMA: Sin paginación, trae todos los usuarios. Password incluido (aunque DTO lo excluye, mejor excluirlo a nivel query).
+    // IMPACTO: Con muchos usuarios = transferencia masiva, riesgo de exponer passwords.
+    // SOLUCIÓN: Paginación obligatoria + excluir password a nivel query + filtro opcional por status.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
+    const hasLimit = req.query.limit !== undefined;
+    const hasPage = req.query.page !== undefined;
+    
+    // Si solo se pasa limit (sin page), devolver los primeros 'limit' usuarios (truncar array)
+    // Si se pasa page y limit, usar paginación normal
+    // Si no se pasa nada, devolver todos
+    const limit = hasLimit ? parseInt(req.query.limit, 10) : (hasPage ? 20 : null);
+    const page = hasPage ? parseInt(req.query.page, 10) : (hasLimit ? 1 : null);
+    const status = req.query.status; // Filtro opcional: 'active', 'inactive', 'pending'
+    
+    if (page !== null && page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit !== null && (limit < 1 || limit > 100)) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const where = {};
+    if (status) {
+      where.status = status;
+    }
+    
+    // Si hay limit, aplicar paginación/truncado
+    if (limit !== null) {
+      const offset = page !== null ? (page - 1) * limit : 0;
+      
+      const { count, rows: users } = await User.findAndCountAll({
+        where,
+        attributes: { exclude: ['password'] }, // Excluir password a nivel query (refuerzo de seguridad)
+        order: [['id', 'ASC']],
+        limit,
+        offset,
+      });
+      
+      const dtos = users.map((u) => toUserDTO(u));
+      
+      // Si se pasó page, devolver formato con paginación completa
+      if (hasPage) {
+        const totalPages = Math.ceil(count / limit);
+        return sendSuccess(res, {
+          users: dtos,
+          pagination: {
+            page,
+            limit,
+            total: count,
+            totalPages,
+          },
+        });
+      } else {
+        // Si solo se pasó limit, devolver formato simple (truncado)
+        return sendSuccess(res, { users: dtos });
+      }
+    } else {
+      // Sin limit, devolver todos los usuarios (formato antiguo)
+      const users = await User.findAll({
+        where,
+        attributes: { exclude: ['password'] },
+        order: [['id', 'ASC']],
+      });
+      
+      const dtos = users.map((u) => toUserDTO(u));
+      return sendSuccess(res, { users: dtos });
+    }
   } catch (error) {
-    console.error('Error getting users:', error);
-    res.status(500).json({ message: 'Error al obtener usuarios' });
+    logger.error('Error getting users:', error);
+    return sendError(res, 500, 'Error al obtener usuarios');
   }
-}
+};
 
 // Create a new user
 const createUser = async (req, res) => {
@@ -52,11 +123,11 @@ const createUser = async (req, res) => {
     const { name, email, password, role, status, commission, saldoTotal, saldoPendiente } = req.body;
 
     if (!name || !email || !password || !role) {
-      return res.status(400).json({ message: 'Todos los campos (name, email, password, role) son requeridos' });
+      return sendError(res, 400, 'Todos los campos (name, email, password, role) son requeridos');
     }
 
     const exists = await User.findOne({ where: { email } });
-    if (exists) return res.status(409).json({ message: 'El email ya está registrado' });
+    if (exists) return sendError(res, 409, 'El email ya está registrado');
 
     const salt = await bcrypt.genSalt(10);
     const passwordHashed = await bcrypt.hash(password, salt);
@@ -75,13 +146,13 @@ const createUser = async (req, res) => {
       saldoPendiente: saldoPendiente || 0,
     });
 
-    return res.status(201).json(toUserDTO(created));
+    return sendSuccess(res, toUserDTO(created), 'Usuario creado correctamente', 201);
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({ message: 'El email ya está registrado' });
+      return sendError(res, 409, 'El email ya está registrado');
     }
-    console.error('Error creating user:', error);
-    res.status(500).json({ message: 'Error al crear usuario' });
+    logger.error('Error creating user:', error);
+    return sendError(res, 500, 'Error al crear usuario');
   }
 };
 
@@ -91,13 +162,13 @@ const updateUser = async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user) return sendError(res, 404, 'Usuario no encontrado');
 
     const data = { ...req.body };
 
     if (Object.prototype.hasOwnProperty.call(data, 'password')) {
       if (!data.password) {
-        return res.status(400).json({ message: 'La contraseña no puede ser vacía' });
+        return sendError(res, 400, 'La contraseña no puede ser vacía');
       }
       const salt = await bcrypt.genSalt(10);
       data.password = await bcrypt.hash(data.password, salt);
@@ -107,38 +178,78 @@ const updateUser = async (req, res) => {
     const payload = {};
     for (const k of allowed) if (data[k] !== undefined) payload[k] = data[k];
 
+    if (payload.saldoTotal !== undefined) {
+      payload.saldoTotal = round2(toAmount(payload.saldoTotal));
+    }
+
+    const commissionWasProvided = Object.prototype.hasOwnProperty.call(payload, 'commission');
+    if (commissionWasProvided) {
+      const newCommission = round2(toAmount(payload.commission));
+      payload.commission = newCommission;
+
+      if (user.role === 'professional') {
+        const baseTotal = payload.saldoTotal !== undefined
+          ? payload.saldoTotal
+          : round2(toAmount(user.saldoTotal));
+
+        payload.saldoPendiente = round2(baseTotal * (newCommission / 100));
+      }
+    }
+
     await user.update(payload);
 
     await user.reload();
-    return res.json(toUserDTO(user));
+    return sendSuccess(res, toUserDTO(user), 'Usuario actualizado correctamente');
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({ message: 'El email ya está registrado' });
+      return sendError(res, 409, 'El email ya está registrado');
     }
-    console.error('Error updating user:', error);
-    res.status(500).json({ message: 'Error al actualizar usuario' });
+    logger.error('Error updating user:', error);
+    return sendError(res, 500, 'Error al actualizar usuario');
   }
 };
 
-// Delete a user
+// Delete a user (soft delete - desactivar)
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
     const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user) return sendError(res, 404, 'Usuario no encontrado');
 
     if (user.status === 'inactive') {
-      return res.json({ message: 'El usuario ya estaba inactivo', user: toUserDTO(user) });
+      return sendSuccess(res, { user: toUserDTO(user) }, 'El usuario ya estaba inactivo');
     }
 
     await user.update({ status: 'inactive' });
     await user.reload();
 
-    return res.json({ message: 'Usuario desactivado correctamente', user: toUserDTO(user) });
+    return sendSuccess(res, { user: toUserDTO(user) }, 'Usuario desactivado correctamente');
   } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ message: 'Error al desactivar usuario' });
+    logger.error('Error deleting user:', error);
+    return sendError(res, 500, 'Error al desactivar usuario');
+  }
+};
+
+// Permanent delete a user (eliminación física)
+const permanentDeleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByPk(id);
+    if (!user) return sendError(res, 404, 'Usuario no encontrado');
+
+    // Solo permitir eliminar usuarios inactivos
+    if (user.status === 'active') {
+      return sendError(res, 400, 'No se puede eliminar permanentemente un usuario activo. Primero debe desactivarlo.');
+    }
+
+    await user.destroy();
+
+    return sendSuccess(res, null, 'Usuario eliminado permanentemente', 204);
+  } catch (error) {
+    logger.error('Error permanently deleting user:', error);
+    return sendError(res, 500, 'Error al eliminar usuario permanentemente');
   }
 };
 
@@ -152,7 +263,7 @@ const abonarComision = async (req, res) => {
     const amount = Number(abono);
     if (!amount || isNaN(amount) || amount <= 0) {
       await t.rollback();
-      return res.status(400).json({ message: 'Abono inválido' });
+      return sendError(res, 400, 'Abono inválido');
     }
 
     // lock para evitar race conditions en saldo
@@ -164,7 +275,7 @@ const abonarComision = async (req, res) => {
 
     if (!professional) {
       await t.rollback();
-      return res.status(404).json({ message: 'Profesional no encontrado' });
+      return sendError(res, 404, 'Profesional no encontrado');
     }
 
     const prevSaldo = toAmount(professional.saldoPendiente);
@@ -196,15 +307,14 @@ const abonarComision = async (req, res) => {
     );
 
     await t.commit();
-    return res.json({
-      success: true,
+    return sendSuccess(res, {
       saldoPendiente: nextSaldo,
       paidInFull, // booleano para que el cliente muestre alerta
-    });
+    }, 'Comisión abonada correctamente');
   } catch (error) {
     await t.rollback();
-    console.error('Error al abonar comisión:', error);
-    return res.status(500).json({ message: 'Error al abonar comisión' });
+    logger.error('Error al abonar comisión:', error);
+    return sendError(res, 500, 'Error al abonar comisión');
   }
 };
 
@@ -218,10 +328,10 @@ const getAbonos = async (req, res) => {
       ],
     });
 
-    return res.json({ abonos: toAbonoDTOList(abonos) });
+    return sendSuccess(res, { abonos: toAbonoDTOList(abonos) });
   } catch (error) {
-    console.error('Error al obtener abonos:', error);
-    return res.status(500).json({ message: 'Error al obtener abonos' });
+    logger.error('Error al obtener abonos:', error);
+    return sendError(res, 500, 'Error al obtener abonos');
   }
 };
 
@@ -232,6 +342,7 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  permanentDeleteUser,
   abonarComision,
   getAbonos
 };

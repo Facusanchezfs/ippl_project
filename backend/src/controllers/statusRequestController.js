@@ -2,6 +2,8 @@
 const { sequelize, StatusRequest, Patient } = require('../../models');
 const { toStatusRequestDTO, toStatusRequestDTOList } = require('../../mappers/StatusRequestMapper');
 const { createActivity } = require('./activityController');
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 const VALID_STATUSES = ['active', 'pending', 'inactive', 'absent', 'alta'];
 
@@ -20,24 +22,20 @@ const createRequest = async (req, res) => {
 
     // Validaciones básicas
     if (!patientId) {
-      return res.status(400).json({ message: 'Falta patientId' });
+      return sendError(res, 400, 'Falta patientId');
     }
     if (!VALID_STATUSES.includes(currentStatus) || !VALID_STATUSES.includes(requestedStatus)) {
-      return res.status(400).json({
-        message: 'Estado no válido. Permitidos: active, pending, inactive, absent, alta',
-      });
+      return sendError(res, 400, 'Estado no válido. Permitidos: active, pending, inactive, absent, alta');
     }
     // Regla original: este endpoint permite únicamente active -> inactive
     if (currentStatus === 'active' && requestedStatus !== 'inactive') {
-      return res.status(400).json({
-        message: 'Solo se permiten solicitudes de cambio de estado de active a inactive',
-      });
+      return sendError(res, 400, 'Solo se permiten solicitudes de cambio de estado de active a inactive');
     }
 
     // Cargar paciente para snapshot y verificación
     const patient = await Patient.findByPk(patientId);
     if (!patient) {
-      return res.status(404).json({ message: 'Paciente no encontrado' });
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     // Evitar duplicados pendientes para el mismo paciente
@@ -45,9 +43,7 @@ const createRequest = async (req, res) => {
       where: { patientId, status: 'pending' },
     });
     if (existingPending) {
-      return res.status(400).json({
-        message: 'Ya existe una solicitud pendiente para este paciente',
-      });
+      return sendError(res, 400, 'Ya existe una solicitud pendiente para este paciente');
     }
 
     // Determinar profesional (si no viene en body, tomamos del usuario autenticado si existe)
@@ -72,10 +68,10 @@ const createRequest = async (req, res) => {
       type: type ?? computedType,
     });
 
-    return res.status(201).json(toStatusRequestDTO(created));
+    return sendSuccess(res, toStatusRequestDTO(created), 'Solicitud creada correctamente', 201);
   } catch (error) {
-    console.error('Error al crear solicitud:', error);
-    return res.status(500).json({ message: 'Error al crear la solicitud' });
+    logger.error('Error al crear solicitud:', error);
+    return sendError(res, 500, 'Error al crear la solicitud');
   }
 };
 
@@ -87,10 +83,10 @@ const getPendingRequests = async (req, res) => {
       order: [['createdAt', 'DESC']],
     });
 
-    return res.json({ requests: toStatusRequestDTOList(pending) });
+    return sendSuccess(res, { requests: toStatusRequestDTOList(pending) });
   } catch (error) {
-    console.error('Error al obtener solicitudes:', error);
-    return res.status(500).json({ message: 'Error al obtener las solicitudes' });
+    logger.error('Error al obtener solicitudes:', error);
+    return sendError(res, 500, 'Error al obtener las solicitudes');
   }
 };
 
@@ -99,7 +95,7 @@ const getProfessionalRequests = async (req, res) => {
   try {
     const { professionalId } = req.params;
     if (!professionalId) {
-      return res.status(400).json({ message: 'Falta professionalId' });
+      return sendError(res, 400, 'Falta professionalId');
     }
 
     const rows = await StatusRequest.findAll({
@@ -107,16 +103,16 @@ const getProfessionalRequests = async (req, res) => {
       order: [['createdAt', 'DESC']],
     });
 
-    return res.json({ requests: toStatusRequestDTOList(rows) });
+    return sendSuccess(res, { requests: toStatusRequestDTOList(rows) });
   } catch (error) {
-    console.error('Error al obtener solicitudes del profesional:', error);
-    return res.status(500).json({ message: 'Error al obtener las solicitudes' });
+    logger.error('Error al obtener solicitudes del profesional:', error);
+    return sendError(res, 500, 'Error al obtener las solicitudes');
   }
 };
 
 // Aprobar una solicitud de cambio de estado
 const approveRequest = async (req, res) => {
-  console.log('DEBUG: Llamada a approveRequest con ID:', req.params.requestId);
+  logger.debug('Llamada a approveRequest con ID:', { requestId: req.params.requestId });
   const { requestId } = req.params;
   const { adminResponse } = req.body;
 
@@ -143,6 +139,12 @@ const approveRequest = async (req, res) => {
 
       // Nota: no bloqueamos cambios desde/hacia "alta" (por tu decisión de negocio)
       patient.status = newStatus;
+      
+      // Si es alta, setear activatedAt con la fecha actual
+      if (newStatus === 'alta') {
+        patient.activatedAt = new Date();
+      }
+      
       await patient.save({ transaction: t });
 
       // 4) Marcar solicitud como aprobada
@@ -155,14 +157,14 @@ const approveRequest = async (req, res) => {
 
     // Manejo de resultados fuera de la transacción
     if (result.kind === 'not_found') {
-      console.log('DEBUG: Solicitud no encontrada para ID:', requestId);
-      return res.status(404).json({ message: 'Solicitud no encontrada' });
+      logger.debug('Solicitud no encontrada para ID:', { requestId });
+      return sendError(res, 404, 'Solicitud no encontrada');
     }
     if (result.kind === 'already_processed') {
-      return res.status(400).json({ message: 'Esta solicitud ya fue procesada' });
+      return sendError(res, 400, 'Esta solicitud ya fue procesada');
     }
     if (result.kind === 'patient_not_found') {
-      return res.status(404).json({ message: 'Paciente no encontrado' });
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     const { request, patient, oldStatus, newStatus } = result;
@@ -194,14 +196,14 @@ const approveRequest = async (req, res) => {
         adminResponse: adminResponse ?? undefined,
       });
     } catch (logErr) {
-      console.error('WARN: No se pudo registrar la actividad de aprobación:', logErr);
+      logger.warn('No se pudo registrar la actividad de aprobación:', logErr);
     }
 
     // 6) Devolver DTO de la solicitud aprobada
-    return res.json(toStatusRequestDTO(request));
+    return sendSuccess(res, toStatusRequestDTO(request), 'Solicitud aprobada correctamente');
   } catch (error) {
-    console.error('Error al aprobar solicitud:', error);
-    return res.status(500).json({ message: 'Error al aprobar la solicitud' });
+    logger.error('Error al aprobar solicitud:', error);
+    return sendError(res, 500, 'Error al aprobar la solicitud');
   }
 };
 
@@ -213,22 +215,22 @@ const rejectRequest = async (req, res) => {
     const { adminResponse } = req.body;
 
     if (!adminResponse || !String(adminResponse).trim()) {
-      return res.status(400).json({ message: 'Se requiere una razón para el rechazo' });
+      return sendError(res, 400, 'Se requiere una razón para el rechazo');
     }
 
     // Traer la solicitud
     const sr = await StatusRequest.findByPk(requestId);
     if (!sr) {
-      return res.status(404).json({ message: 'Solicitud no encontrada' });
+      return sendError(res, 404, 'Solicitud no encontrada');
     }
     if (sr.status !== 'pending') {
-      return res.status(400).json({ message: 'Esta solicitud ya fue procesada' });
+      return sendError(res, 400, 'Esta solicitud ya fue procesada');
     }
 
     // (Opcional) Traer paciente para validar existencia/estado actual (no modificamos al paciente en un rechazo)
     const patient = await Patient.findByPk(sr.patientId);
     if (!patient) {
-      return res.status(404).json({ message: 'Paciente no encontrado' });
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     // Transacción para garantizar consistencia entre la actualización y la actividad
@@ -267,10 +269,10 @@ const rejectRequest = async (req, res) => {
 
     // Refrescar y devolver DTO
     await sr.reload();
-    return res.json(toStatusRequestDTO(sr));
+    return sendSuccess(res, toStatusRequestDTO(sr), 'Solicitud rechazada correctamente');
   } catch (error) {
-    console.error('Error al rechazar solicitud:', error);
-    return res.status(500).json({ message: 'Error al rechazar la solicitud' });
+    logger.error('Error al rechazar solicitud:', error);
+    return sendError(res, 500, 'Error al rechazar la solicitud');
   }
 };
 

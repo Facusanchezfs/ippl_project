@@ -2,14 +2,17 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
-const carouselDir = path.join(__dirname, '../../../public/images/carousel');
+// Cambiado: ahora guarda en uploads/carousel en lugar de public/images/carousel
+const carouselDir = path.join(__dirname, '../../uploads/carousel');
 
 async function ensureCarouselDir() {
   try {
     await fsp.mkdir(carouselDir, { recursive: true });
   } catch (e) {
-    console.error('No se pudo crear el directorio del carrusel:', e);
+    logger.error('No se pudo crear el directorio del carrusel:', e);
   }
 }
 ensureCarouselDir();
@@ -43,18 +46,11 @@ const upload = multer({
 const getCarouselImages = (req, res) => {
   fs.readdir(carouselDir, (err, files) => {
     if (err) {
-      console.error('Error al leer el directorio del carrusel:', err);
-      return res
-        .status(500)
-        .json({ message: 'No se pudieron cargar las imágenes del carrusel.' });
+      logger.error('Error al leer el directorio del carrusel:', err);
+      return sendError(res, 500, 'No se pudieron cargar las imágenes del carrusel.');
     }
     const imageFiles = files.filter((f) => imageExtensions.has(path.extname(f).toLowerCase()));
-    // si querés devolver URLs absolutas:
-    // const base = `${req.protocol}://${req.get('host')}`;
-    // const urls = imageFiles.map((f) => `${base}/images/carousel/${f}`);
-    // return res.status(200).json(urls);
-
-    return res.status(200).json(imageFiles);
+    return sendSuccess(res, imageFiles);
   });
 };
 
@@ -63,20 +59,20 @@ const deleteCarouselImage = (req, res) => {
   const { filename } = req.params;
 
   if (!filename || filename.includes('..') || filename.includes('/')) {
-    return res.status(400).json({ message: 'Nombre de archivo no válido.' });
+    return sendError(res, 400, 'Nombre de archivo no válido.');
   }
 
   const filePath = path.join(carouselDir, filename);
 
   fs.unlink(filePath, (err) => {
     if (err) {
-      console.error(`Error al eliminar el archivo ${filename}:`, err);
+      logger.error(`Error al eliminar el archivo ${filename}:`, err);
       if (err.code === 'ENOENT') {
-        return res.status(404).json({ message: 'El archivo no fue encontrado.' });
+        return sendError(res, 404, 'El archivo no fue encontrado.');
       }
-      return res.status(500).json({ message: 'Error al eliminar la imagen.' });
+      return sendError(res, 500, 'Error al eliminar la imagen.');
     }
-    return res.status(200).json({ message: `Imagen '${filename}' eliminada correctamente.` });
+    return sendSuccess(res, null, `Imagen '${filename}' eliminada correctamente.`, 204);
   });
 };
 
@@ -84,21 +80,11 @@ const deleteCarouselImage = (req, res) => {
 // Usar con upload.array('images', 10)
 const uploadCarouselImages = (req, res) => {
   if (!req.files || req.files.length === 0) {
-    return res
-      .status(400)
-      .json({ message: 'No se recibieron imágenes del carrusel.' });
+    return sendError(res, 400, 'No se recibieron imágenes del carrusel.');
   }
 
   const uploadedFiles = req.files.map((f) => f.filename);
-  // si querés devolver URLs absolutas:
-  // const base = `${req.protocol}://${req.get('host')}`;
-  // const urls = req.files.map((f) => `${base}/images/carousel/${f.filename}`);
-
-  return res.status(201).json({
-    message: 'Imágenes subidas correctamente.',
-    files: uploadedFiles,
-    // urls,
-  });
+  return sendSuccess(res, { files: uploadedFiles }, 'Imágenes subidas correctamente.', 201);
 };
 
 module.exports = {

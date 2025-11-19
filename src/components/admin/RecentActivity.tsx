@@ -4,10 +4,25 @@ import activityService from '../../services/activity.service';
 import { BellIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 
+const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
+  'PATIENT_DISCHARGE_REQUEST',
+  'PATIENT_ACTIVATION_REQUEST',
+  'STATUS_CHANGE_APPROVED',
+  'STATUS_CHANGE_REJECTED',
+  'FREQUENCY_CHANGE_REQUEST',
+  'FREQUENCY_CHANGE_REQUESTED',
+  'FREQUENCY_CHANGE_APPROVED',
+  'FREQUENCY_CHANGE_REJECTED'
+];
+
 const RecentActivity: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const filteredActivities = activities.filter(activity =>
+    RELEVANT_ACTIVITY_TYPES.includes(activity.type)
+  );
 
   useEffect(() => {
     loadActivities();
@@ -129,29 +144,13 @@ const RecentActivity: React.FC = () => {
       </div>
 
       <div className="divide-y divide-gray-200">
-        {activities.filter(activity => [
-          'PATIENT_DISCHARGE_REQUEST',
-          'PATIENT_ACTIVATION_REQUEST',
-          'STATUS_CHANGE_APPROVED',
-          'STATUS_CHANGE_REJECTED',
-          'FREQUENCY_CHANGE_REQUEST',
-          'FREQUENCY_CHANGE_APPROVED',
-          'FREQUENCY_CHANGE_REJECTED'
-        ].includes(activity.type)).length === 0 ? (
+        {filteredActivities.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
             <BellIcon className="mx-auto h-12 w-12 text-gray-400" />
             <p className="mt-2">No hay notificaciones pendientes</p>
           </div>
         ) : (
-          activities.filter(activity => [
-            'PATIENT_DISCHARGE_REQUEST',
-            'PATIENT_ACTIVATION_REQUEST',
-            'STATUS_CHANGE_APPROVED',
-            'STATUS_CHANGE_REJECTED',
-            'FREQUENCY_CHANGE_REQUEST',
-            'FREQUENCY_CHANGE_APPROVED',
-            'FREQUENCY_CHANGE_REJECTED'
-          ].includes(activity.type)).map((activity) => (
+          filteredActivities.map((activity) => (
             <div
               key={activity._id}
               className={`p-4 ${!activity.read ? 'bg-blue-50' : ''} hover:bg-gray-50`}

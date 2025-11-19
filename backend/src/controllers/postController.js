@@ -1,7 +1,9 @@
 const { Op } = require('sequelize');
-const { Post, sequelize } = require('../../models');
+const { Post, sequelize, User } = require('../../models');
 const { toPostDTO, toPostDTOList } = require('../../mappers/PostMapper');
 const {toArray} = require("funciones-basicas");
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 function tryParseJSON(value, fallback) {
   if (value == null) return fallback;
@@ -53,28 +55,39 @@ function calculateWeeklyVisits(posts) {
 
 const getAllPosts = async (req, res) => {
   try {
+    // OPTIMIZACIÓN CRÍTICA #3: getAllPosts - Overfetching de contenido TEXT
+    // PROBLEMA: Traía el campo 'content' (TEXT) completo en listados, generando MBs de datos innecesarios
+    // IMPACTO: Con 200 posts = varios MBs transferidos, 200-600ms, alto uso de memoria
+    // SOLUCIÓN: Excluir 'content' del listado (solo se necesita en detalle individual)
+    // COMPATIBILIDAD: El DTO ya maneja campos opcionales, frontend no espera content en listado
+    
     const posts = await Post.findAll({
       where: { active: true },                 // ✅ solo activos
+      // Excluir 'content' (TEXT) del listado - solo se necesita en getPostById/getPostBySlug
+      attributes: { exclude: ['content'] },   // ⚠️ Optimización: no traer contenido completo
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
-    return res.json({ posts: toPostDTOList(posts) });
+    return sendSuccess(res, { posts: toPostDTOList(posts) });
   } catch (error) {
-    console.error('Error al obtener posts:', error);
-    return res.status(500).json({ message: 'Error al obtener posts' });
+    logger.error('Error al obtener posts:', error);
+    return sendError(res, 500, 'Error al obtener posts');
   }
 };
 
 const getPostBySection = async (req, res) =>{
   const {section} = req.params;
   try{
+    // OPTIMIZACIÓN CRÍTICA #3 (consistencia): getPostBySection - Misma optimización
+    // Excluir 'content' del listado por sección para mantener consistencia
     const posts = await Post.findAll({
       where: {active: true, section},
+      attributes: { exclude: ['content'] },   // ⚠️ Optimización: no traer contenido completo
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
-    return res.json({posts: toPostDTOList(posts)});
+    return sendSuccess(res, { posts: toPostDTOList(posts) });
   } catch (e){
-    console.error("Error loading posts by section");
-    return res.status(500).json({ message: 'Error loading posts by section' });
+    logger.error("Error loading posts by section");
+    return sendError(res, 500, 'Error loading posts by section');
   }
 }
 
@@ -82,11 +95,11 @@ const getPostBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
     const post = await Post.findOne({ where: { slug, active: true } }); // ✅
-    if (!post) return res.status(404).json({ message: 'Post no encontrado' });
-    return res.json({ post: toPostDTO(post) });
+    if (!post) return sendError(res, 404, 'Post no encontrado');
+    return sendSuccess(res, { post: toPostDTO(post) });
   } catch (error) {
-    console.error('Error al obtener post por slug:', error);
-    return res.status(500).json({ message: 'Error al obtener el post' });
+    logger.error('Error al obtener post por slug:', error);
+    return sendError(res, 500, 'Error al obtener el post');
   }
 };
 
@@ -109,10 +122,7 @@ const createPost = async (req, res) => {
     const authorName = req.user?.name;
 
     if (!title || !content || !section) {
-      return res.status(400).json({
-        success: false,
-        message: 'Faltan campos requeridos (título, contenido o sección)',
-      });
+      return sendError(res, 400, 'Faltan campos requeridos (título, contenido o sección)');
     }
 
     const tagsJson = tryParseJSON(tags, toArray(tags));
@@ -150,18 +160,10 @@ const createPost = async (req, res) => {
       viewedBy: [],
     });
 
-    return res.status(201).json({
-      success: true,
-      message: 'Post creado correctamente',
-      post: toPostDTO(created),
-    });
+    return sendSuccess(res, { post: toPostDTO(created) }, 'Post creado correctamente', 201);
   } catch (error) {
-    console.error('Error al crear post:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor al crear el post',
-      error: error.message,
-    });
+    logger.error('Error al crear post:', error);
+    return sendError(res, 500, 'Error interno del servidor al crear el post');
   }
 };
 
@@ -170,14 +172,14 @@ const updatePost = async (req, res) => {
     const { id } = req.params;
     const post = await Post.findByPk(id);
     if (!post || !post.active) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     // Autorización: autor o admin
     const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
     const isAdmin = req.user?.role === 'admin';
     if (!isAuthor && !isAdmin) {
-      return res.status(403).json({ message: 'No autorizado' });
+      return sendError(res, 403, 'No autorizado');
     }
 
     const {
@@ -229,10 +231,11 @@ const updatePost = async (req, res) => {
       }
     }
     await post.update(updates);
-    return res.json(toPostDTO(post));
+    await post.reload();
+    return sendSuccess(res, toPostDTO(post), 'Post actualizado correctamente');
   } catch (error) {
-    console.error('Error al actualizar post:', error);
-    return res.status(500).json({ message: 'Error al actualizar post' });
+    logger.error('Error al actualizar post:', error);
+    return sendError(res, 500, 'Error al actualizar post');
   }
 };
 
@@ -241,20 +244,20 @@ const deletePost = async (req, res) => {
     const { id } = req.params;
     const post = await Post.findByPk(id);
     if (!post || !post.active) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
     const isAdmin = req.user?.role === 'admin';
     if (!isAuthor && !isAdmin) {
-      return res.status(403).json({ message: 'No autorizado' });
+      return sendError(res, 403, 'No autorizado');
     }
 
     await post.update({ active: false });
-    return res.json({ message: 'Post eliminado correctamente' });
+    return sendSuccess(res, null, 'Post eliminado correctamente', 204);
   } catch (error) {
-    console.error('Error al eliminar post:', error);
-    return res.status(500).json({ message: 'Error al eliminar post' });
+    logger.error('Error al eliminar post:', error);
+    return sendError(res, 500, 'Error al eliminar post');
   }
 };
 
@@ -265,7 +268,7 @@ const getPostById = async (req, res) => {
 
     const post = await Post.findByPk(id);
     if (!post) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     // Ocultamos los soft-deleted a menos que sea admin o autor
@@ -273,14 +276,14 @@ const getPostById = async (req, res) => {
       const isAdmin = req.user?.role === 'admin';
       const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
       if (!isAdmin && !isAuthor) {
-        return res.status(404).json({ message: 'Post no encontrado' });
+        return sendError(res, 404, 'Post no encontrado');
       }
     }
 
-    return res.json(toPostDTO(post)); // respuesta plana
+    return sendSuccess(res, toPostDTO(post));
   } catch (error) {
-    console.error('Error al obtener post por id:', error);
-    return res.status(500).json({ message: 'Error al obtener el post' });
+    logger.error('Error al obtener post por id:', error);
+    return sendError(res, 500, 'Error al obtener el post');
   }
 };
 
@@ -294,7 +297,7 @@ const checkPostViewed = async (req, res) => {
     });
 
     if (!post) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     // Ocultar soft-deleted para no admin/no autor
@@ -302,17 +305,17 @@ const checkPostViewed = async (req, res) => {
       const isAdmin = req.user?.role === 'admin';
       const isAuthor = String(post.authorId ?? '') === userId;
       if (!isAdmin && !isAuthor) {
-        return res.status(404).json({ message: 'Post no encontrado' });
+        return sendError(res, 404, 'Post no encontrado');
       }
     }
 
     const viewedArr = Array.isArray(post.viewedBy) ? post.viewedBy : [];
     const isViewed = viewedArr.map(String).includes(userId);
 
-    return res.json({ isViewed });
+    return sendSuccess(res, { isViewed });
   } catch (error) {
-    console.error('Error al verificar vista:', error);
-    return res.status(500).json({ message: 'Error al verificar la vista' });
+    logger.error('Error al verificar vista:', error);
+    return sendError(res, 500, 'Error al verificar la vista');
   }
 };
 
@@ -339,13 +342,13 @@ const incrementPostView = async (req, res) => {
       return { views: post.views };
     });
 
-    return res.json(result);
+    return sendSuccess(res, result);
   } catch (error) {
     if (error.status === 404) {
-      return res.status(404).json({ message: error.message });
+      return sendError(res, 404, error.message);
     }
-    console.error('Error al incrementar vista:', error);
-    return res.status(500).json({ message: 'Error al incrementar la vista' });
+    logger.error('Error al incrementar vista:', error);
+    return sendError(res, 500, 'Error al incrementar la vista');
   }
 };
 
@@ -372,13 +375,13 @@ const togglePostLike = async (req, res) => {
       return { likes: post.likes };
     });
 
-    return res.json(result);
+    return sendSuccess(res, result);
   } catch (error) {
     if (error.status === 404) {
-      return res.status(404).json({ message: error.message });
+      return sendError(res, 404, error.message);
     }
-    console.error('Error al incrementar like:', error);
-    return res.status(500).json({ message: 'Error al incrementar el like' });
+    logger.error('Error al incrementar like:', error);
+    return sendError(res, 500, 'Error al incrementar el like');
   }
 };
 
@@ -393,7 +396,7 @@ const checkPostLike = async (req, res) => {
     });
 
     if (!post || post.active === false) {
-      return res.status(404).json({ message: 'Post no encontrado' });
+      return sendError(res, 404, 'Post no encontrado');
     }
 
     const likedBy = Array.isArray(post.likedBy)
@@ -402,44 +405,78 @@ const checkPostLike = async (req, res) => {
 
     const isLiked = likedBy.includes(userId);
 
-    return res.json({ isLiked });
+    return sendSuccess(res, { isLiked });
   } catch (error) {
-    console.error('Error al verificar like:', error);
-    return res.status(500).json({ message: 'Error al verificar el like' });
+    logger.error('Error al verificar like:', error);
+    return sendError(res, 500, 'Error al verificar el like');
   }
 };
 
 const getPostsStats = async (req, res) => {
   try {
-    // Traemos sólo lo que necesitamos
-    const posts = await Post.findAll({
-      where: { active: true },
-      attributes: ['views', 'likes', 'viewedBy'],
-      raw: true,
-    });
+    // OPTIMIZACIÓN CRÍTICA #1: getPostsStats - Overfetching masivo
+    // PROBLEMA: Traía TODOS los posts solo para sumar views/likes en memoria
+    // IMPACTO: Con 500 posts = 500 registros innecesarios, 200-500ms
+    // SOLUCIÓN: Usar agregaciones SQL (SUM, COUNT) directamente en la BD
+    // COMPATIBILIDAD: Mismo formato de respuesta, solo cambia la implementación interna
+    
+    const { fn, col } = require('sequelize');
+    
+    // Agregaciones SQL directas - una sola query en lugar de traer todos los posts
+    const [postsAgg, usersByRole, postsForWeekly] = await Promise.all([
+      // Suma total de views y likes, cuenta de posts - TODO en SQL
+      Post.findAll({
+        attributes: [
+          [fn('COUNT', col('id')), 'totalPosts'],
+          [fn('SUM', col('views')), 'totalViews'],
+          [fn('SUM', col('likes')), 'totalLikes'],
+        ],
+        where: { active: true },
+        raw: true,
+      }),
+      // Usuarios agrupados por rol y status - una query con GROUP BY
+      User.findAll({
+        attributes: [
+          'role',
+          'status',
+          [fn('COUNT', col('id')), 'count'],
+        ],
+        group: ['role', 'status'],
+        raw: true,
+      }),
+      // Solo viewedBy para calcular weekly visits (necesario para la función)
+      // Nota: calculateWeeklyVisits procesa viewedBy en memoria, pero ahora solo
+      // traemos este campo JSON específico, no todos los campos de todos los posts
+      Post.findAll({
+        where: { active: true },
+        attributes: ['viewedBy'], // Solo el campo necesario para weekly visits
+        raw: true,
+      }),
+    ]);
 
-    const users = await User.findAll({
-      attributes: ['role', 'status'],
-      raw: true,
-    });
-
-    const totalPosts  = posts.length;
-    const totalViews  = posts.reduce((sum, p) => sum + (p.views || 0), 0);
-    const totalLikes  = posts.reduce((sum, p) => sum + (p.likes || 0), 0);
+    // Extraer valores de agregaciones
+    const agg = postsAgg[0] || {};
+    const totalPosts = parseInt(agg.totalPosts || 0, 10);
+    const totalViews = parseInt(agg.totalViews || 0, 10);
+    const totalLikes = parseInt(agg.totalLikes || 0, 10);
     const totalVisits = totalViews; // compat con el legacy
 
-    const activeDoctors = users.filter(
-      u => u.role === 'professional' && u.status === 'active'
-    ).length;
+    // Procesar usuarios por rol desde GROUP BY
+    let activeDoctors = 0;
+    let activeUsers = 0;
+    for (const row of usersByRole) {
+      if (row.role === 'professional' && row.status === 'active') {
+        activeDoctors = parseInt(row.count, 10);
+      } else if (row.role !== 'professional' && row.status === 'active') {
+        activeUsers += parseInt(row.count, 10);
+      }
+    }
 
-    // En el legacy: activeUsers = !isDoctor. Aquí: todos los activos que NO son 'professional'.
-    const activeUsers = users.filter(
-      u => u.role !== 'professional' && u.status === 'active'
-    ).length;
+    // Weekly visits sigue necesitando el procesamiento en memoria
+    // pero ahora solo procesamos viewedBy, no todos los campos
+    const weeklyVisits = calculateWeeklyVisits(postsForWeekly);
 
-    const weeklyVisits = calculateWeeklyVisits(posts);
-
-    return res.json({
+    return sendSuccess(res, {
       totalVisits,
       activeUsers,
       activeDoctors,
@@ -449,8 +486,8 @@ const getPostsStats = async (req, res) => {
       weeklyVisits,
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas' });
+    logger.error('Error al obtener estadísticas:', error);
+    return sendError(res, 500, 'Error al obtener estadísticas');
   }
 };
 

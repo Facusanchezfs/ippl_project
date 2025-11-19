@@ -18,7 +18,8 @@ import {
   BookmarkIcon,
   DocumentTextIcon,
   AdjustmentsHorizontalIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import contentManagementService from '../../services/content.service';
@@ -294,18 +295,27 @@ const ContentDashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {user?.role === 'content_manager' && (
-              <button
-                onClick={() => setShowModal(true)}
-                disabled={!userLoaded}
-                className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${userLoaded
-                    ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
-                    : 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                  }`}
-              >
-                <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
-                  Cambiar contraseña
+            {(user?.role === 'content_manager' || user?.role === 'admin') && (
+              <>
+                <button
+                  onClick={() => setShowModal(true)}
+                  disabled={!userLoaded}
+                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${userLoaded
+                      ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                      : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    }`}
+                >
+                  <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
+                    Cambiar contraseña
+                  </button>
+                <button
+                  onClick={() => navigate('/content/mensajes')}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <ChatBubbleLeftRightIcon className="h-5 w-5 mr-2" />
+                  Ver mensajes
                 </button>
+              </>
             )}
             <button
               onClick={handleRefresh}
@@ -314,7 +324,7 @@ const ContentDashboard = () => {
             >
               <ArrowPathIcon className="h-5 w-5" />
             </button>
-            {user?.role === 'content_manager' && (
+            {(user?.role === 'content_manager' || user?.role === 'admin') && (
             <button
               onClick={() => handleOpenModalToCreate()}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -545,7 +555,7 @@ const ContentDashboard = () => {
                   {carouselImages.map(imageFile => (
                     <div key={imageFile} className="relative group rounded-lg overflow-hidden shadow-md">
                       <img 
-                        src={`${API_URL}/images/carousel/${imageFile}`} 
+                        src={`${API_URL}/uploads/carousel/${imageFile}`}
                         alt={`Imagen del carrusel: ${imageFile}`}
                         className="w-full h-24 object-cover"
                       />

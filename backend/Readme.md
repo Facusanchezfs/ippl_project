@@ -6,6 +6,29 @@
 - npm (v9.0.0 or higher)
 - MySQL (v8.0 or higher)
 
+## Configuración Inicial
+
+### Variables de Entorno
+
+1. Copia el archivo `.env.example` a `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **OBLIGATORIO:** Configura `JWT_SECRET`:
+   - Debe tener al menos 32 caracteres
+   - Debe ser aleatorio y seguro
+   - Genera uno con: `openssl rand -base64 32`
+   - **El servidor NO iniciará sin esta variable configurada**
+
+3. Configura las credenciales de base de datos según tu entorno.
+
+### Variables Críticas
+
+- `JWT_SECRET` (OBLIGATORIO): Secreto para firmar tokens JWT. Mínimo 32 caracteres.
+- `DB_USER`, `DB_PASS`, `DB_NAME`: Credenciales de base de datos para desarrollo (tienen fallbacks para facilitar setup local).
+- `DB_USER_PROD`, `DB_PASS_PROD`, `DB_NAME_PROD`, `DB_HOST_PROD` (OBLIGATORIAS en producción): Credenciales para producción. **El servidor NO iniciará en producción si faltan estas variables.**
+
 ## Scripts
 - `npm start:` Inicia el servidor.
 - `npm run dev`: Inicia el servidor en modo desarrollo con nodemon.

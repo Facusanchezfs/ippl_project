@@ -4,9 +4,11 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { requireMessageManager, loadMessageById } = require('../middleware/message');
 const messageController = require('../controllers/messageController');
+const validate = require('../middleware/validate');
+const messageValidators = require('../validators/messageValidator');
 
 // Ruta pública para enviar mensajes
-router.post('/', messageController.createMessage);
+router.post('/', validate(messageValidators.create), messageController.createMessage);
 
 
 // Rutas protegidas (requieren autenticación)
@@ -15,6 +17,7 @@ router.get('/', authenticateToken, requireMessageManager, messageController.getA
 router.put('/:id/read',
   authenticateToken,
   requireMessageManager,
+  validate(messageValidators.markAsRead),
   loadMessageById,
   messageController.markAsRead
 );

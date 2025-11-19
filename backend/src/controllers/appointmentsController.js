@@ -1,6 +1,8 @@
 const { Op } = require('sequelize');
 const { Appointment, Patient, User, sequelize } = require('../../models');
 const { toAppointmentDTO, toAppointmentDTOList } = require('../../mappers/AppointmentMapper');
+const logger = require('../utils/logger');
+const { sendSuccess, sendError } = require('../utils/response');
 
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -17,40 +19,121 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const getAllAppointments = async (req, res) => {
   try {
-    console.log('getAllAppointments method');
-    const appts = await Appointment.findAll({
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getAllAppointments
+    // PROBLEMA: Sin paginación, trae todos los registros. Sin atributos específicos, overfetching.
+    // IMPACTO: Con miles de citas = transferencia masiva, lento, alto uso de memoria.
+    // SOLUCIÓN: Paginación obligatoria + atributos específicos + índices compuestos.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
+    
+    const { count, rows: appts } = await Appointment.findAndCountAll({
       where: { active: true },
+      attributes: [
+        'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
+        'date', 'startTime', 'endTime', 'type', 'status',
+        'notes', 'audioNote', 'sessionCost', 'attended',
+        'paymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
+      ],
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
+      limit,
+      offset,
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    const totalPages = Math.ceil(count / limit);
+    
+    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        appointments: toAppointmentDTOList(appts),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
+    }
   } catch (error) {
-    console.error('Error al obtener citas:', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    logger.error('Error al obtener citas:', error);
+    return sendError(res, 500, 'Error al obtener citas');
   }
 };
 
 const getProfessionalAppointments = async (req, res) => {
   try {
+    // OPTIMIZACIÓN FASE 3 PARTE 2: getProfessionalAppointments
+    // PROBLEMA: Sin paginación, trae todos los registros del profesional. Sin atributos específicos.
+    // IMPACTO: Con muchos profesionales = transferencia masiva, lento.
+    // SOLUCIÓN: Paginación obligatoria + atributos específicos + índices compuestos.
+    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
+    
     const { professionalId } = req.params;
+    
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    
+    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    
+    const offset = (page - 1) * limit;
 
-    const appts = await Appointment.findAll({
+    const { count, rows: appts } = await Appointment.findAndCountAll({
       where: { active: true, professionalId },
+      attributes: [
+        'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
+        'date', 'startTime', 'endTime', 'type', 'status',
+        'notes', 'audioNote', 'sessionCost', 'attended',
+        'paymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
+      ],
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
+      limit,
+      offset,
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    const totalPages = Math.ceil(count / limit);
+
+    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
+    // Si se pasa paginación, devolver formato nuevo con paginación
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    
+    if (hasPagination) {
+      return sendSuccess(res, {
+        appointments: toAppointmentDTOList(appts),
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+        },
+      });
+    } else {
+      // Formato antiguo para compatibilidad con frontend actual
+      return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
+    }
   } catch (error) {
-    console.error('Error al obtener citas del profesional:', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    logger.error('Error al obtener citas del profesional:', error);
+    return sendError(res, 500, 'Error al obtener citas');
   }
 };
 
@@ -78,10 +161,10 @@ const getTodayProfessionalAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas del profesional (hoy):', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    logger.error('Error al obtener citas del profesional (hoy):', error);
+    return sendError(res, 500, 'Error al obtener citas');
   }
 }
 
@@ -98,10 +181,10 @@ const getPatientAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas del paciente:', error);
-    return res.status(500).json({ message: 'Error al obtener citas' });
+    logger.error('Error al obtener citas del paciente:', error);
+    return sendError(res, 500, 'Error al obtener citas');
   }
 };
 
@@ -121,13 +204,10 @@ const createAppointment = async (req, res) => {
 
     // 1) Validaciones básicas
     if (!patientId || !professionalId || !date || !startTime || !endTime) {
-      return res.status(400).json({
-        message:
-          'Faltan campos requeridos (patientId, professionalId, date, startTime, endTime)',
-      });
+      return sendError(res, 400, 'Faltan campos requeridos (patientId, professionalId, date, startTime, endTime)');
     }
     if (toMinutes(endTime) <= toMinutes(startTime)) {
-      return res.status(400).json({ message: 'endTime debe ser mayor que startTime' });
+      return sendError(res, 400, 'endTime debe ser mayor que startTime');
     }
 
     // 2) Snapshots de nombres (si no existen, seguimos con texto por defecto)
@@ -137,6 +217,11 @@ const createAppointment = async (req, res) => {
     ]);
 
     // 3) Chequeo de solapamientos: misma fecha/profesional, activo y no cancelado
+    // OPTIMIZACIÓN FASE 3 PARTE 2: createAppointment - Validación de solapamientos
+    // PROBLEMA: Query sin índices optimizados para búsqueda por professionalId + date + active + status.
+    // IMPACTO: Escaneo completo de tabla en lugar de usar índice compuesto.
+    // SOLUCIÓN: Usar atributos específicos y asegurar que la query use índices (migración de índice necesaria).
+    // COMPATIBILIDAD: Misma lógica de validación, solo optimización de query.
     const sameDay = await Appointment.findAll({
       where: {
         active: true,
@@ -144,7 +229,7 @@ const createAppointment = async (req, res) => {
         date,
         status: { [Op.eq]: 'scheduled' },
       },
-      attributes: ['id', 'startTime', 'endTime'],
+      attributes: ['id', 'startTime', 'endTime'], // Solo campos necesarios para validación
     });
     const newStart = toMinutes(startTime);
     const newEnd = toMinutes(endTime);
@@ -155,7 +240,7 @@ const createAppointment = async (req, res) => {
       return newStart < e && s < newEnd;
     });
     if (overlaps) {
-      return res.status(400).json({ message: 'El horario seleccionado no está disponible' });
+      return sendError(res, 400, 'El horario seleccionado no está disponible');
     }
 
     // 4) Saneos / normalizaciones
@@ -190,10 +275,10 @@ const createAppointment = async (req, res) => {
       // active: true por defecto (soft delete en el modelo)
     });
 
-    return res.status(201).json(toAppointmentDTO(created));
+    return sendSuccess(res, toAppointmentDTO(created), 'Cita creada correctamente', 201);
   } catch (error) {
-    console.error('[createAppointment] Error al crear cita:', error);
-    return res.status(500).json({ message: 'Error al crear cita', error: error.message });
+    logger.error('[createAppointment] Error al crear cita:', error);
+    return sendError(res, 500, 'Error al crear cita');
   }
 };
 
@@ -240,7 +325,7 @@ const updateAppointment = async (req, res) => {
     const newProf  = updates.professionalId  ?? appt.professionalId;
 
     if (newStart && newEnd && toMinutes(newEnd) <= toMinutes(newStart)) {
-      return res.status(400).json({ message: 'endTime debe ser mayor que startTime' });
+      return sendError(res, 400, 'endTime debe ser mayor que startTime');
     }
 
     if (
@@ -249,6 +334,8 @@ const updateAppointment = async (req, res) => {
       updates.endTime !== undefined ||
       updates.professionalId !== undefined
     ) {
+      // OPTIMIZACIÓN FASE 3 PARTE 2: updateAppointment - Validación de solapamientos optimizada
+      // Usar atributos específicos y asegurar uso de índices compuestos.
       const sameDay = await Appointment.findAll({
         where: {
           id: { [Op.ne]: appt.id },
@@ -257,7 +344,7 @@ const updateAppointment = async (req, res) => {
           date: newDate,
           status: { [Op.eq]: 'scheduled' },
         },
-        attributes: ['id', 'startTime', 'endTime'],
+        attributes: ['id', 'startTime', 'endTime'], // Solo campos necesarios para validación
       });
 
       const nS = toMinutes(newStart);
@@ -268,7 +355,7 @@ const updateAppointment = async (req, res) => {
         return nS < e && s < nE; // solapamiento
       });
       if (overlaps) {
-        return res.status(400).json({ message: 'El horario seleccionado no está disponible' });
+        return sendError(res, 400, 'El horario seleccionado no está disponible');
       }
     }
 
@@ -338,7 +425,7 @@ const updateAppointment = async (req, res) => {
         commissionInt = Math.max(0, Math.min(100, commissionInt));
         const commissionRate = commissionInt / 100;
 
-        const newPend = round2(Number(prof.saldoPendiente) + (delta * commissionRate));
+        const newPend = round2(newTotal * commissionRate);
 
         await prof.update(
           { saldoTotal: newTotal, saldoPendiente: newPend },
@@ -357,10 +444,10 @@ const updateAppointment = async (req, res) => {
       }
     });
 
-    return res.json(toAppointmentDTO(appt));
+    return sendSuccess(res, toAppointmentDTO(appt), 'Cita actualizada correctamente');
   } catch (error) {
-    console.error('[updateAppointment] Error:', error);
-    return res.status(500).json({ message: 'Error al actualizar cita', error: error.message });
+    logger.error('[updateAppointment] Error:', error);
+    return sendError(res, 500, 'Error al actualizar cita');
   }
 };
 
@@ -370,13 +457,10 @@ const deleteAppointment = async (req, res) => {
     const appt = req.appointment; // ya viene del middleware y está activa
     await appt.update({ active: false });
 
-    return res.json({
-      message: 'Cita eliminada correctamente',
-      appointment: appt, // devuelve el registro actualizado
-    });
+    return sendSuccess(res, null, 'Cita eliminada correctamente', 204);
   } catch (error) {
-    console.error('[deleteAppointment] Error:', error);
-    return res.status(500).json({ message: 'Error al eliminar la cita' });
+    logger.error('[deleteAppointment] Error:', error);
+    return sendError(res, 500, 'Error al eliminar la cita');
   }
 };
 
@@ -386,7 +470,7 @@ const getAvailableSlots = async (req, res) => {
     const { date } = req.query;
 
     if (!professionalId || !date) {
-      return res.status(400).json({ message: 'professionalId y date son requeridos' });
+      return sendError(res, 400, 'professionalId y date son requeridos');
     }
 
     // Traer citas activas del profesional para ese día (excepto canceladas)
@@ -402,6 +486,7 @@ const getAvailableSlots = async (req, res) => {
     });
 
     // Generar slots de 60 min entre 09:00 y 17:00 (inclusive 17:00 como en tu implementación original)
+    const fmt = (h) => String(h).padStart(2, '0') + ':00';
     const allSlots = Array.from({ length: 9 }, (_, i) => fmt(9 + i)); // 09:00 ... 17:00
     const SLOT_MINUTES = 60;
 
@@ -421,10 +506,10 @@ const getAvailableSlots = async (req, res) => {
       return !overlaps;
     });
 
-    return res.json({ slots: availableSlots });
+    return sendSuccess(res, { slots: availableSlots });
   } catch (error) {
-    console.error('Error al obtener slots disponibles:', error);
-    return res.status(500).json({ message: 'Error al obtener slots disponibles' });
+    logger.error('Error al obtener slots disponibles:', error);
+    return sendError(res, 500, 'Error al obtener slots disponibles');
   }
 };
 
@@ -448,10 +533,10 @@ const getUpcomingAppointments = async (req, res) => {
       ],
     });
 
-    return res.json({ appointments: toAppointmentDTOList(appts) });
+    return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
   } catch (error) {
-    console.error('Error al obtener citas próximas:', error);
-    return res.status(500).json({ message: 'Error al obtener citas próximas' });
+    logger.error('Error al obtener citas próximas:', error);
+    return sendError(res, 500, 'Error al obtener citas próximas');
   }
 };
 

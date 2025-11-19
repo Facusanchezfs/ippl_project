@@ -51,14 +51,14 @@ export interface ProfessionalStats {
 const statsService = {
 	getSystemStats: async (): Promise<SystemStats> => {
 		const [statsResponse, upcomingAppointments] = await Promise.all([
-			api.get<SystemStats>('/stats/system'),
+			api.get<{data: SystemStats}>('/stats/system'),
 			appointmentsService.getUpcomingAppointments(),
 		]);
 
 		return {
-			...statsResponse.data,
+			...statsResponse.data.data,
 			appointments: {
-				...statsResponse.data.appointments,
+				...statsResponse.data.data.appointments,
 				upcoming: upcomingAppointments.length,
 			},
 		};

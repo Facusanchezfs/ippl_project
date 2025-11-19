@@ -41,7 +41,7 @@ import FinancialSolicitudesPage from './pages/FinancialSolicitudesPage';
 import TodayAppointmentsPage from './pages/professional/TodayAppointmentsPage';
 import AllActivitiesPage from './pages/professional/AllActivitiesPage';
 import CompletedAppointmentsPage from './pages/professional/CompletedAppointmentsPage';
-import NotFoundReports from './pages/404';
+import NotFoundPage from './pages/404';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -81,6 +81,7 @@ function App() {
             <Route path="/blog/:section" element={<BlogPage />} />
             <Route path="/blog/:slug" element={<BlogPostPage />} />
             <Route path="/contacto" element={<ContactPage />} />
+            <Route path="/404" element={<NotFoundPage />} />
           </Route>
           
           {/* Auth routes */}
@@ -103,6 +104,7 @@ function App() {
             <Route path="estadisticas" element={<StatsPage />} />
             <Route path="solicitudes" element={<StatusRequestsManagement />} />
             <Route path="actividad" element={<ActivityPage />} />
+            <Route path="reportes" element={<ReportsPage />} />
           </Route>
 
           {/* Financial routes */}
@@ -126,6 +128,7 @@ function App() {
             </ProtectedRoute>
           }>
             <Route index element={<ContentDashboard />} />
+            <Route path="mensajes" element={<AdminMessages />} />
           </Route>
 
           {/* Professional routes */}
@@ -166,7 +169,6 @@ function App() {
           } />
           
           {/* Fallback routes */}
-          <Route path="/404" element={<NotFoundReports />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
       </Router>

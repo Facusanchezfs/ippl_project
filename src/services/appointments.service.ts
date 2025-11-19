@@ -16,8 +16,8 @@ export interface CreateAppointmentDTO {
 class AppointmentsService {
   async getAllAppointments(): Promise<Appointment[]> {
     try {
-      const response = await api.get('/appointments');
-      return response.data.appointments || [];
+      const response = await api.get<{data: {appointments: Appointment[]}}>('/appointments');
+      return response.data.data.appointments || [];
     } catch (error) {
       console.error('Error fetching all appointments:', error);
       return [];
@@ -27,7 +27,7 @@ class AppointmentsService {
   async getUpcomingAppointments(): Promise<Appointment[]> {
     try {
       const response = await api.get('/appointments/upcoming');
-      return response.data.appointments || [];
+      return response.data.data.appointments || [];
     } catch (error) {
       console.error('Error fetching upcoming appointments:', error);
       return [];
@@ -37,7 +37,7 @@ class AppointmentsService {
   async getProfessionalAppointments(professionalId: string): Promise<Appointment[]> {
     try {
       const response = await api.get(`/appointments/professional/${professionalId}`);
-      return response.data.appointments || [];
+      return response.data.data.appointments || [];
     } catch (error) {
       console.error('Error fetching professional appointments:', error);
       return [];
@@ -47,7 +47,7 @@ class AppointmentsService {
     async getTodayProfessionalAppointments(professionalId: string): Promise<Appointment[]> {
     try {
       const response = await api.get(`/appointments/professional/today/${professionalId}`);
-      return response.data.appointments || [];
+      return response.data.data.appointments || [];
     } catch (error) {
       console.error('Error fetching today professional appointments:', error);
       return [];
@@ -57,7 +57,7 @@ class AppointmentsService {
   async getPatientAppointments(patientId: string): Promise<Appointment[]> {
     try {
       const response = await api.get(`/appointments/patient/${patientId}`);
-      return response.data.appointments || [];
+      return response.data.data.appointments || [];
     } catch (error) {
       console.error('Error fetching patient appointments:', error);
       return [];
@@ -66,8 +66,8 @@ class AppointmentsService {
 
   async createAppointment(appointmentData: Partial<Appointment>): Promise<Appointment> {
     try {
-      const response = await api.post('/appointments', appointmentData);
-      return response.data;
+      const response = await api.post<{data: Appointment}>('/appointments', appointmentData);
+      return response.data.data;
     } catch (error) {
       console.error('Error creating appointment:', error);
       throw error;
@@ -76,8 +76,8 @@ class AppointmentsService {
 
   async updateAppointment(appointmentId: string, appointmentData: Partial<Appointment>): Promise<Appointment> {
     try {
-      const response = await api.put(`/appointments/${appointmentId}`, appointmentData);
-      return response.data;
+      const response = await api.put<{data: Appointment}>(`/appointments/${appointmentId}`, appointmentData);
+      return response.data.data;
     } catch (error) {
       console.error('Error updating appointment:', error);
       throw error;
@@ -90,7 +90,7 @@ class AppointmentsService {
       let appointment = appointmentData;
       if (!appointment) {
         const response = await api.get(`/appointments/${appointmentId}`);
-        appointment = response.data;
+        appointment = response.data.data;
       }
 
       // Eliminamos la cita
@@ -107,7 +107,7 @@ class AppointmentsService {
       const response = await api.get(`/appointments/slots/${professionalId}`, {
         params: { date }
       });
-      return response.data.slots || [];
+      return response.data.data.slots || [];
     } catch (error) {
       console.error('Error fetching available slots:', error);
       return [];
@@ -117,7 +117,7 @@ class AppointmentsService {
   async updateAppointmentStatus(id: string, status: string, appointmentData: any): Promise<any> {
     try {
       const response = await api.put(`/appointments/${id}/status`, { status });
-      return response.data;
+      return response.data.data;
     } catch (error) {
       console.error('Error al actualizar estado de cita:', error);
       throw error;
