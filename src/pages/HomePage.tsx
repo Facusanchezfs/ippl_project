@@ -164,10 +164,11 @@ const HomePage = () => {
             <div className="flex flex-col items-center gap-6 w-full" data-aos="fade-left">
               <div className="rounded-2xl overflow-hidden shadow-2xl border-4 border-[#80C0D0] bg-white w-full max-w-xl aspect-video">
                 <iframe 
-                  src="https://www.youtube.com/embed/Ma2HjKwul0Y" 
-                  title="YouTube video" 
+                  src="https://www.youtube.com/embed/Ma2HjKwul0Y?si=CsoY8Kna0pfwRDTh" 
+                  title="YouTube video player" 
                   frameBorder="0" 
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                  referrerPolicy="strict-origin-when-cross-origin" 
                   allowFullScreen 
                   className="w-full h-full"
                 ></iframe>
