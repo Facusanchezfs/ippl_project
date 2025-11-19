@@ -17,7 +17,8 @@ class AppointmentsService {
   async getAllAppointments(): Promise<Appointment[]> {
     try {
       const response = await api.get<{data: {appointments: Appointment[]}}>('/appointments');
-      return response.data.data.appointments || [];
+      const appointments = response.data?.data?.appointments || response.data?.data || [];
+      return Array.isArray(appointments) ? appointments : [];
     } catch (error) {
       console.error('Error fetching all appointments:', error);
       return [];
@@ -27,7 +28,8 @@ class AppointmentsService {
   async getUpcomingAppointments(): Promise<Appointment[]> {
     try {
       const response = await api.get('/appointments/upcoming');
-      return response.data.data.appointments || [];
+      const appointments = response.data?.data?.appointments || response.data?.data || [];
+      return Array.isArray(appointments) ? appointments : [];
     } catch (error) {
       console.error('Error fetching upcoming appointments:', error);
       return [];
@@ -37,7 +39,8 @@ class AppointmentsService {
   async getProfessionalAppointments(professionalId: string): Promise<Appointment[]> {
     try {
       const response = await api.get(`/appointments/professional/${professionalId}`);
-      return response.data.data.appointments || [];
+      const appointments = response.data?.data?.appointments || response.data?.data || [];
+      return Array.isArray(appointments) ? appointments : [];
     } catch (error) {
       console.error('Error fetching professional appointments:', error);
       return [];
@@ -47,7 +50,8 @@ class AppointmentsService {
     async getTodayProfessionalAppointments(professionalId: string): Promise<Appointment[]> {
     try {
       const response = await api.get(`/appointments/professional/today/${professionalId}`);
-      return response.data.data.appointments || [];
+      const appointments = response.data?.data?.appointments || response.data?.data || [];
+      return Array.isArray(appointments) ? appointments : [];
     } catch (error) {
       console.error('Error fetching today professional appointments:', error);
       return [];
@@ -57,7 +61,8 @@ class AppointmentsService {
   async getPatientAppointments(patientId: string): Promise<Appointment[]> {
     try {
       const response = await api.get(`/appointments/patient/${patientId}`);
-      return response.data.data.appointments || [];
+      const appointments = response.data?.data?.appointments || response.data?.data || [];
+      return Array.isArray(appointments) ? appointments : [];
     } catch (error) {
       console.error('Error fetching patient appointments:', error);
       return [];
@@ -67,7 +72,22 @@ class AppointmentsService {
   async createAppointment(appointmentData: Partial<Appointment>): Promise<Appointment> {
     try {
       const response = await api.post<{data: Appointment}>('/appointments', appointmentData);
-      return response.data.data;
+      return response.data?.data || response.data || {
+        id: '',
+        patientId: appointmentData.patientId || '',
+        patientName: '',
+        professionalId: appointmentData.professionalId || '',
+        professionalName: '',
+        date: appointmentData.date || '',
+        startTime: appointmentData.startTime || '',
+        endTime: appointmentData.endTime || '',
+        type: appointmentData.type || 'regular',
+        status: 'scheduled',
+        notes: appointmentData.notes,
+        audioNote: appointmentData.audioNote,
+        sessionCost: appointmentData.sessionCost,
+        createdAt: new Date().toISOString()
+      };
     } catch (error) {
       console.error('Error creating appointment:', error);
       throw error;
@@ -77,7 +97,22 @@ class AppointmentsService {
   async updateAppointment(appointmentId: string, appointmentData: Partial<Appointment>): Promise<Appointment> {
     try {
       const response = await api.put<{data: Appointment}>(`/appointments/${appointmentId}`, appointmentData);
-      return response.data.data;
+      return response.data?.data || response.data || {
+        id: appointmentId,
+        patientId: appointmentData.patientId || '',
+        patientName: appointmentData.patientName || '',
+        professionalId: appointmentData.professionalId || '',
+        professionalName: appointmentData.professionalName || '',
+        date: appointmentData.date || '',
+        startTime: appointmentData.startTime || '',
+        endTime: appointmentData.endTime || '',
+        type: appointmentData.type || 'regular',
+        status: appointmentData.status || 'scheduled',
+        notes: appointmentData.notes,
+        audioNote: appointmentData.audioNote,
+        sessionCost: appointmentData.sessionCost,
+        createdAt: appointmentData.createdAt || new Date().toISOString()
+      };
     } catch (error) {
       console.error('Error updating appointment:', error);
       throw error;
@@ -107,17 +142,18 @@ class AppointmentsService {
       const response = await api.get(`/appointments/slots/${professionalId}`, {
         params: { date }
       });
-      return response.data.data.slots || [];
+      const slots = response.data?.data?.slots || response.data?.slots || [];
+      return Array.isArray(slots) ? slots : [];
     } catch (error) {
       console.error('Error fetching available slots:', error);
       return [];
     }
   }
 
-  async updateAppointmentStatus(id: string, status: string, appointmentData: any): Promise<any> {
+  async updateAppointmentStatus(id: string, status: string): Promise<any> {
     try {
       const response = await api.put(`/appointments/${id}/status`, { status });
-      return response.data.data;
+      return response.data?.data || response.data || {};
     } catch (error) {
       console.error('Error al actualizar estado de cita:', error);
       throw error;

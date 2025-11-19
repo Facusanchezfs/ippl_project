@@ -47,7 +47,8 @@ const medicalHistoryService = {
   getAllMedicalHistories: async () => {
     try {
       const response = await api.get<{data: MedicalHistory[]}>('/medical-history');
-      return response.data.data;
+      const histories = response.data?.data || response.data || [];
+      return Array.isArray(histories) ? histories : [];
     } catch (error) {
       handleError(error);
       return [];
@@ -58,7 +59,8 @@ const medicalHistoryService = {
   getPatientMedicalHistories: async (patientId: string) => {
     try {
       const response = await api.get<{data: MedicalHistory[]}>(`/medical-history/patient/${patientId}`);
-      return response.data.data;
+      const histories = response.data?.data || response.data || [];
+      return Array.isArray(histories) ? histories : [];
     } catch (error) {
       handleError(error);
       return [];
@@ -69,7 +71,8 @@ const medicalHistoryService = {
   getProfessionalMedicalHistories: async (professionalId: string) => {
     try {
       const response = await api.get<{data: MedicalHistory[]}>(`/medical-history/professional/${professionalId}`);
-      return response.data.data;
+      const histories = response.data?.data || response.data || [];
+      return Array.isArray(histories) ? histories : [];
     } catch (error) {
       handleError(error);
       return [];
@@ -80,7 +83,7 @@ const medicalHistoryService = {
   getMedicalHistoryById: async (id: string) => {
     try {
       const response = await api.get<{data: MedicalHistory}>(`/medical-history/${id}`);
-      return response.data.data;
+      return response.data?.data || response.data || null;
     } catch (error) {
       handleError(error);
       return null;
@@ -91,7 +94,7 @@ const medicalHistoryService = {
   createMedicalHistory: async (data: CreateMedicalHistoryDto) => {
     try {
       const response = await api.post<{data: MedicalHistory}>('/medical-history', data);
-      return response.data.data;
+      return response.data?.data || response.data || null;
     } catch (error) {
       handleError(error);
       return null;
@@ -102,7 +105,7 @@ const medicalHistoryService = {
   updateMedicalHistory: async (id: string, data: UpdateMedicalHistoryDto) => {
     try {
       const response = await api.put<{data: MedicalHistory}>(`/medical-history/${id}`, data);
-      return response.data.data;
+      return response.data?.data || response.data || null;
     } catch (error) {
       handleError(error);
       return null;

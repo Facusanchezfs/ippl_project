@@ -24,31 +24,61 @@ export interface AssignPatientDTO {
 
 const patientsService = {
   getAllPatients: async (): Promise<Patient[]> => {
-    const response = await api.get('/patients');
-    const patients = response.data.data.patients || [];
-    return patients.map((patient: Patient) => ({
-      ...patient,
-      audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
-    }));
+    try {
+      const response = await api.get('/patients');
+      const patients = response.data?.data?.patients || response.data?.data || response.data || [];
+      const patientsArray = Array.isArray(patients) ? patients : [];
+      return patientsArray.map((patient: Patient) => ({
+        ...patient,
+        audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
+      }));
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      return [];
+    }
   },
 
   getProfessionalPatients: async (professionalId: string): Promise<Patient[]> => {
-    const response = await api.get(`/patients/professional/${professionalId}`);
-    const patients = response.data.data.patients || [];
-    return patients.map((patient: Patient) => ({
-      ...patient,
-      audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
-    }));
+    try {
+      const response = await api.get(`/patients/professional/${professionalId}`);
+      const patients = response.data?.data?.patients || response.data?.data || response.data || [];
+      const patientsArray = Array.isArray(patients) ? patients : [];
+      return patientsArray.map((patient: Patient) => ({
+        ...patient,
+        audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
+      }));
+    } catch (error) {
+      console.error('Error fetching professional patients:', error);
+      return [];
+    }
   },
 
   addPatient: async (patient: CreatePatientDTO): Promise<Patient> => {
     const response = await api.post<{data: Patient}>('/patients', patient);
-    return response.data.data;
+    return response.data?.data || response.data || {
+      id: '',
+      name: patient.name,
+      description: patient.description,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      sessionFrequency: 'weekly'
+    };
   },
 
   assignPatient: async (data: AssignPatientDTO): Promise<Patient> => {
     const response = await api.put<{data: Patient}>(`/patients/${data.patientId}/assign`, data);
-    return response.data.data;
+    return response.data?.data || response.data || {
+      id: data.patientId,
+      name: '',
+      status: data.status || 'active',
+      professionalId: data.professionalId,
+      professionalName: data.professionalName,
+      createdAt: new Date().toISOString(),
+      assignedAt: data.assignedAt,
+      textNote: data.textNote,
+      sessionFrequency: data.sessionFrequency,
+      statusChangeReason: data.statusChangeReason
+    };
   },
 
   uploadAudio: async (audioFile: File): Promise<string> => {
@@ -94,7 +124,7 @@ const patientsService = {
   updatePatient: async (id: string, patientData: any): Promise<any> => {
     try {
       const response = await api.put(`/patients/${id}/assign`, patientData);
-      return response.data.data;
+      return response.data?.data || response.data || patientData;
     } catch (error) {
       console.error('Error al actualizar paciente:', error);
       throw error;

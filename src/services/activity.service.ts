@@ -6,7 +6,9 @@ const activityService = {
 	async getActivities(): Promise<Activity[]> {
 		try {
 			const response = await api.get('/activities');
-			return response.data.data;
+			// Asegurar que siempre devolvemos un array
+			const activities = response.data?.data || response.data || [];
+			return Array.isArray(activities) ? activities : [];
 		} catch (error) {
 			console.error('Error fetching activities:', error);
 			return [];
@@ -35,7 +37,8 @@ const activityService = {
 	async getUnreadCount(): Promise<number> {
 		try {
 			const response = await api.get('/activities/unread-count');
-			return response.data.data.count || 0;
+			const count = response.data?.data?.count || response.data?.count || 0;
+			return typeof count === 'number' ? count : 0;
 		} catch (error) {
 			console.error('Error getting unread count:', error);
 			return 0;

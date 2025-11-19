@@ -20,7 +20,9 @@ export const messageService = {
   // Get all messages
   async getMessages() {
     const response = await api.get<{data: Message[]}>(`/messages`);
-    return response.data.data;
+    // Asegurar que siempre devolvemos un array
+    const messages = response.data?.data || response.data || [];
+    return Array.isArray(messages) ? messages : [];
   },
 
   // Mark message as read
