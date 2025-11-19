@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   UserGroupIcon, 
@@ -11,20 +11,15 @@ import {
 } from '@heroicons/react/24/outline';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
-import Modal from '../components/Modal';
 import contentManagementService from '../services/content.service';
-import { useAuth } from '../context/AuthContext';
-import Logo from '../../public/Logo-removebg-preview.png';
 import Button from '../components/common/Button';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const HomePage = () => {
-  const { user } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [images, setImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Inicializar las animaciones al montar el componente
@@ -64,21 +59,56 @@ const HomePage = () => {
 
   const [aboutExpanded, setAboutExpanded] = useState(false);
 
-  if (isLoading) {
+  const renderCarouselContent = useCallback(() => {
+    if (isLoading) {
+      return (
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-200 rounded-lg">
+          <p>Cargando carrusel...</p>
+        </div>
+      );
+    }
+
+    if (images.length === 0) {
+      return (
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100 rounded-lg">
+          <p className="text-gray-500">No hay imágenes disponibles en este momento.</p>
+        </div>
+      );
+    }
+
     return (
-      <div className="relative w-full max-w-5xl mx-auto h-96 flex items-center justify-center bg-gray-200 rounded-lg">
-        <p>Cargando carrusel...</p>
-      </div>
+      <>
+        {/* Carousel */}
+        <div className="absolute inset-0 w-full h-full">
+          {images.map((img, i) => (
+            <img
+              key={`carousel-img-${i}-${img}`}
+              src={img}
+              alt={`Carrusel ${i + 1}`}
+              className={`w-full h-full object-cover object-center transition-all duration-700 absolute inset-0 ${i === currentIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+            />
+          ))}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
+        </div>
+        
+        <button onClick={prev} className="absolute left-3 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/60 rounded-full hover:bg-white transition-colors shadow-md">
+          <ChevronLeftIcon className="h-5 w-5 text-gray-800"/>
+        </button>
+        <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/60 rounded-full hover:bg-white transition-colors shadow-md">
+          <ChevronRightIcon className="h-5 w-5 text-gray-800"/>
+        </button>
+
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex space-x-2">
+          {images.map((_, i) => (
+            <div
+              key={`carousel-dot-${i}`}
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 shadow-sm ${i === currentIndex ? 'bg-white' : 'bg-white/50'}`}
+            />
+          ))}
+        </div>
+      </>
     );
-  }
-  
-  if (images.length === 0) {
-    return (
-      <div className="relative w-full max-w-5xl mx-auto h-96 flex items-center justify-center bg-gray-100 rounded-lg">
-        <p className="text-gray-500">No hay imágenes disponibles en este momento.</p>
-      </div>
-    );
-  }
+  }, [isLoading, images, currentIndex, prev, next]);
 
   return (
     <div className="min-h-screen">
@@ -91,36 +121,9 @@ const HomePage = () => {
           onMouseLeave={() => setIsHovering(false)}
           data-aos="fade-up"
         >
-          {/* Carousel */}
-          <div className="absolute inset-0 w-full h-full">
-            {images.map((img, i) => (
-              <img
-                key={img}
-                src={img}
-                alt={`Carrusel ${i + 1}`}
-                className={`w-full h-full object-cover object-center transition-all duration-700 absolute inset-0 ${i === currentIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
-              />
-            ))}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
-          </div>
-          
-          <button onClick={prev} className="absolute left-3 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/60 rounded-full hover:bg-white transition-colors shadow-md">
-            <ChevronLeftIcon className="h-5 w-5 text-gray-800"/>
-          </button>
-          <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/60 rounded-full hover:bg-white transition-colors shadow-md">
-            <ChevronRightIcon className="h-5 w-5 text-gray-800"/>
-          </button>
+          {renderCarouselContent()}
 
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex space-x-2">
-            {images.map((_, i) => (
-              <div
-                key={i}
-                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 shadow-sm ${i === currentIndex ? 'bg-white' : 'bg-white/50'}`}
-              />
-            ))}
-          </div>
-
-          {/* Logo */}
+          {/* Logo - Siempre visible */}
           <div className="relative z-20 flex flex-col items-center justify-center w-full max-w-4xl mx-auto px-4">
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] rounded-full bg-white/50 blur-xl z-0"></div>
             <img
@@ -139,7 +142,7 @@ const HomePage = () => {
               <h2 className="text-2xl font-bold text-[#006C73] mb-2 font-sans">¿QUIENES SOMOS?</h2>
               <div className="text-gray-700 text-[1.08rem] leading-relaxed font-sans" style={{fontFamily: 'Inter, Roboto, Nunito, sans-serif'}}>
                 <div className={`overflow-hidden transition-all duration-700 ease-in-out ${aboutExpanded ? 'max-h-screen' : 'max-h-24'}`}>
-                  {fullAboutText.map((t, i) => <p key={i} className="mb-3 text-gray-700">{t}</p>)}
+                  {fullAboutText.map((t, i) => <p key={`about-text-${i}-${t.substring(0, 20)}`} className="mb-3 text-gray-700">{t}</p>)}
                 </div>
                 <Button 
                   variant="primary" 
@@ -342,7 +345,5 @@ const fullAboutText = [
   "Sostenemos la necesidad de una revisión y reformulación de las teorías existentes y del psicoanálisis en particular que nos permita nuevas enunciaciones y dispositivos, con una mirada desde la complejidad, con una perspectiva transdisciplinaria, histórica, sociológica, jurídica, antropológica, semiótica.",
   "El compromiso y la fidelidad es no para con una teoría, sino para con nuestros pacientes, consultantes y estudiantes."
 ];
-
-const aboutSummary = fullAboutText[0];
 
 export default HomePage;
