@@ -32,24 +32,35 @@ app.set('trust proxy', 1);
 const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(helmet({
-	contentSecurityPolicy: {
+	contentSecurityPolicy: isProduction ? {
 		directives: {
 			defaultSrc: ["'self'"],
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval necesario para Vite en desarrollo
 			styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind puede generar estilos inline
-			imgSrc: isProduction
-				? ["'self'", "data:", "https://images.pexels.com", "https://via.placeholder.com"]
-				: ["'self'", "data:", "http://localhost:5000", "https://images.pexels.com", "https://via.placeholder.com"],
+			imgSrc: ["'self'", "data:", "https://images.pexels.com", "https://via.placeholder.com"],
 			fontSrc: ["'self'", "data:"],
-			connectSrc: isProduction
-				? ["'self'", "https://www.ippl.com.ar"]
-				: ["'self'", "http://localhost:5000", "http://localhost:5173", "https://www.ippl.com.ar"],
+			connectSrc: ["*"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
 			objectSrc: ["'none'"],
 			baseUri: ["'self'"],
 			formAction: ["'self'"],
 			frameAncestors: ["'none'"], // Previene clickjacking
-			upgradeInsecureRequests: isProduction ? [] : null, // Solo en producción
+			upgradeInsecureRequests: [],
+		},
+	} : {
+		directives: {
+			defaultSrc: ["'self'"],
+			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+			styleSrc: ["'self'", "'unsafe-inline'"],
+			imgSrc: ["'self'", "data:", "http://localhost:5000", "https://images.pexels.com", "https://via.placeholder.com"],
+			fontSrc: ["'self'", "data:"],
+			connectSrc: ["*"],
+			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
+			objectSrc: ["'none'"],
+			baseUri: ["'self'"],
+			formAction: ["'self'"],
+			frameAncestors: ["'none'"],
+			upgradeInsecureRequests: null,
 		},
 	},
 	// Forzar HTTPS en producción
