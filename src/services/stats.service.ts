@@ -55,11 +55,15 @@ const statsService = {
 			appointmentsService.getUpcomingAppointments(),
 		]);
 
+		const stats = statsResponse.data?.data || statsResponse.data || {};
+		
 		return {
-			...statsResponse.data.data,
+			users: stats.users || { total: 0, active: 0, byRole: { admin: 0, professional: 0, content_manager: 0 } },
+			patients: stats.patients || { total: 0, active: 0, withAppointments: 0, byProfessional: {} },
+			posts: stats.posts || { total: 0, published: 0, drafts: 0, comments: 0, totalViews: 0, totalLikes: 0, bySection: {} },
 			appointments: {
-				...statsResponse.data.data.appointments,
-				upcoming: upcomingAppointments.length,
+				...(stats.appointments || { completed: 0 }),
+				upcoming: Array.isArray(upcomingAppointments) ? upcomingAppointments.length : 0,
 			},
 		};
 	},

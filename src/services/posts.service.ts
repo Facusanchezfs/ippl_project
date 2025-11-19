@@ -54,7 +54,11 @@ interface IncrementViewsResponse {
 class PostsService {
 	async getAllPosts(): Promise<PostsResponse> {
 		const res = await api.get<{data: PostsResponse}>('/posts');
-		return res.data.data;
+		const data = res.data?.data || res.data || { posts: [] };
+		// Asegurar que posts siempre sea un array
+		return {
+			posts: Array.isArray(data.posts) ? data.posts : (Array.isArray(data) ? data : [])
+		};
 	}
 
 	async getPostBySection(section: string): Promise<PostsResponse>{

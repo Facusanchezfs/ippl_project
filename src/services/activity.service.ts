@@ -6,7 +6,9 @@ const activityService = {
 	async getActivities(): Promise<Activity[]> {
 		try {
 			const response = await api.get('/activities');
-			return response.data.data;
+			// Asegurar que siempre devolvemos un array
+			const activities = response.data?.data || response.data || [];
+			return Array.isArray(activities) ? activities : [];
 		} catch (error) {
 			console.error('Error fetching activities:', error);
 			return [];
