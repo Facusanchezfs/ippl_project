@@ -165,55 +165,62 @@ const FinancialSolicitudesPage: React.FC = () => {
       {/* Modal para mostrar solicitudes */}
       {showModal && selectedPatient && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
-            <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-              onClick={() => setShowModal(false)}
-            >
-              ✕
-            </button>
-            <h2 className="text-xl font-bold mb-4">Solicitudes de {selectedPatient.name}</h2>
-            {modalType === 'frequency' && (
-              <div>
-                <h3 className="font-semibold mb-2">Solicitudes de Cambio de Frecuencia</h3>
-                {frequencyRequests.length === 0 ? (
-                  <p>No hay solicitudes de cambio de frecuencia.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {frequencyRequests.map(req => (
-                      <li key={req.id} className="border p-2 rounded">
-                        <div><b>Solicitado:</b> {translateFrequency(req.currentFrequency)} → {translateFrequency(req.requestedFrequency)}</div>
-                        <div><b>Motivo:</b> {req.reason}</div>
-                        <div><b>Estado:</b> {translateRequestStatus(req.status)}</div>
-                        <div><b>Fecha:</b> {new Date(req.createdAt).toLocaleString('es-ES')}</div>
-                        {req.adminResponse && <div><b>Respuesta Admin:</b> {req.adminResponse}</div>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {modalType !== 'frequency' && (
-              <div>
-                <h3 className="font-semibold mb-2">Solicitudes de Cambio de Estado</h3>
-                {statusRequests.length === 0 ? (
-                  <p>No hay solicitudes de este tipo.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {statusRequests.map(req => (
-                      <li key={req.id} className="border p-2 rounded">
-                        <div><b>Estado Actual:</b> {translatePatientStatus(req.currentStatus)}</div>
-                        <div><b>Solicitado:</b> {translatePatientStatus(req.requestedStatus)}</div>
-                        <div><b>Motivo:</b> {req.reason}</div>
-                        <div><b>Estado Solicitud:</b> {translateRequestStatus(req.status)}</div>
-                        <div><b>Fecha:</b> {new Date(req.createdAt).toLocaleString('es-ES')}</div>
-                        {req.adminResponse && <div><b>Respuesta Admin:</b> {req.adminResponse}</div>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg max-h-[85vh] flex flex-col relative">
+            {/* Header fijo */}
+            <div className="p-6 pb-4 border-b border-gray-200 flex-shrink-0">
+              <button
+                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                onClick={() => setShowModal(false)}
+              >
+                ✕
+              </button>
+              <h2 className="text-xl font-bold pr-8">Solicitudes de {selectedPatient.name}</h2>
+            </div>
+            
+            {/* Contenido scrolleable */}
+            <div className="p-6 pt-4 overflow-y-auto flex-1">
+              {modalType === 'frequency' && (
+                <div>
+                  <h3 className="font-semibold mb-2">Solicitudes de Cambio de Frecuencia</h3>
+                  {frequencyRequests.length === 0 ? (
+                    <p>No hay solicitudes de cambio de frecuencia.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {frequencyRequests.map(req => (
+                        <li key={req.id} className="border p-2 rounded">
+                          <div><b>Solicitado:</b> {translateFrequency(req.currentFrequency)} → {translateFrequency(req.requestedFrequency)}</div>
+                          <div><b>Motivo:</b> {req.reason}</div>
+                          <div><b>Estado:</b> {translateRequestStatus(req.status)}</div>
+                          <div><b>Fecha:</b> {new Date(req.createdAt).toLocaleString('es-ES')}</div>
+                          {req.adminResponse && <div><b>Respuesta Admin:</b> {req.adminResponse}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {modalType !== 'frequency' && (
+                <div>
+                  <h3 className="font-semibold mb-2">Solicitudes de Cambio de Estado</h3>
+                  {statusRequests.length === 0 ? (
+                    <p>No hay solicitudes de este tipo.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {statusRequests.map(req => (
+                        <li key={req.id} className="border p-2 rounded">
+                          <div><b>Estado Actual:</b> {translatePatientStatus(req.currentStatus)}</div>
+                          <div><b>Solicitado:</b> {translatePatientStatus(req.requestedStatus)}</div>
+                          <div><b>Motivo:</b> {req.reason}</div>
+                          <div><b>Estado Solicitud:</b> {translateRequestStatus(req.status)}</div>
+                          <div><b>Fecha:</b> {new Date(req.createdAt).toLocaleString('es-ES')}</div>
+                          {req.adminResponse && <div><b>Respuesta Admin:</b> {req.adminResponse}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
