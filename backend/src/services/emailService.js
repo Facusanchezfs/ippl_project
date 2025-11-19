@@ -2,7 +2,7 @@ const nodemailer = require('nodemailer');
 
 const DEFAULT_SMTP_HOST = 'smtp.gmail.com';
 const DEFAULT_SMTP_PORT = 465;
-const DEFAULT_FINANCE_EMAIL = 'softsys95@gmail.com'; // DEBUG: original 'ipplcdlu@gmail.com'
+const DEFAULT_FINANCE_EMAIL = 'ippl.comprobantes@gmail.com';
 
 function boolFromEnv(value, fallback) {
   if (value === undefined) return fallback;
@@ -47,16 +47,6 @@ function formatCurrency(value, currency = 'ARS') {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
-}
-
-function formatDate(isoDate) {
-  if (!isoDate) return 'N/D';
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return 'N/D';
-  return date.toLocaleString('es-AR', {
-    dateStyle: 'long',
-    timeStyle: 'short',
-  });
 }
 
 async function sendPaymentReceiptsEmail({
