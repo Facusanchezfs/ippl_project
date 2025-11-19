@@ -42,7 +42,7 @@ app.use(helmet({
 				: ["'self'", "data:", "http://localhost:5000", "https://images.pexels.com", "https://via.placeholder.com"],
 			fontSrc: ["'self'", "data:"],
 			connectSrc: isProduction
-				? ["'self'", "http://localhost:5000", "https://www.ippl.com.ar"]
+				? ["'self'", "https://www.ippl.com.ar"]
 				: ["'self'", "http://localhost:5000", "http://localhost:5173", "https://www.ippl.com.ar"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
 			objectSrc: ["'none'"],
