@@ -37,7 +37,8 @@ const activityService = {
 	async getUnreadCount(): Promise<number> {
 		try {
 			const response = await api.get('/activities/unread-count');
-			return response.data.data.count || 0;
+			const count = response.data?.data?.count || response.data?.count || 0;
+			return typeof count === 'number' ? count : 0;
 		} catch (error) {
 			console.error('Error getting unread count:', error);
 			return 0;

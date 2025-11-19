@@ -30,7 +30,18 @@ const frequencyRequestService = {
 				'/frequency-requests',
 				data
 			);
-			return response.data.data;
+			return response.data?.data || response.data || {
+				id: '',
+				patientId: data.patientId,
+				patientName: '',
+				professionalId: '',
+				professionalName: '',
+				currentFrequency: 'weekly',
+				requestedFrequency: data.newFrequency,
+				reason: data.reason,
+				status: 'pending',
+				createdAt: new Date().toISOString()
+			};
 	},
 
 	// Obtener todas las solicitudes pendientes
@@ -38,7 +49,8 @@ const frequencyRequestService = {
 			const response = await api.get<{data: FrequencyRequest[]}>(
 				'/frequency-requests/pending'
 			);
-			return response.data.data;
+			const requests = response.data?.data || response.data || [];
+			return Array.isArray(requests) ? requests : [];
 	},
 
 	// Obtener solicitudes de un paciente específico
@@ -48,7 +60,8 @@ const frequencyRequestService = {
 			const response = await api.get<{data: FrequencyRequest[]}>(
 				`/frequency-requests/patient/${patientId}`
 			);
-			return response.data.data;
+			const requests = response.data?.data || response.data || [];
+			return Array.isArray(requests) ? requests : [];
 	},
 
 	// Aprobar una solicitud
@@ -62,7 +75,19 @@ const frequencyRequestService = {
 					adminResponse,
 				}
 			);
-			return response.data.data;
+			return response.data?.data || response.data || {
+				id: requestId,
+				patientId: '',
+				patientName: '',
+				professionalId: '',
+				professionalName: '',
+				currentFrequency: 'weekly',
+				requestedFrequency: 'weekly',
+				reason: '',
+				status: 'approved',
+				adminResponse,
+				createdAt: new Date().toISOString()
+			};
 	},
 
 	// Rechazar una solicitud
@@ -76,7 +101,19 @@ const frequencyRequestService = {
 					adminResponse,
 				}
 			);
-			return response.data.data;
+			return response.data?.data || response.data || {
+				id: requestId,
+				patientId: '',
+				patientName: '',
+				professionalId: '',
+				professionalName: '',
+				currentFrequency: 'weekly',
+				requestedFrequency: 'weekly',
+				reason: '',
+				status: 'rejected',
+				adminResponse,
+				createdAt: new Date().toISOString()
+			};
 	},
 };
 
