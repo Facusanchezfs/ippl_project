@@ -37,7 +37,7 @@ app.use(helmet({
 			defaultSrc: ["'self'"],
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval necesario para Vite en desarrollo
 			styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind puede generar estilos inline
-			imgSrc: ["'self'", "data:", "https://images.pexels.com", "https://via.placeholder.com"],
+			imgSrc: ["*"],
 			fontSrc: ["'self'", "data:"],
 			connectSrc: ["*"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
@@ -52,7 +52,7 @@ app.use(helmet({
 			defaultSrc: ["'self'"],
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
 			styleSrc: ["'self'", "'unsafe-inline'"],
-			imgSrc: ["'self'", "data:", "http://localhost:5000", "https://images.pexels.com", "https://via.placeholder.com"],
+			imgSrc: ["*"],
 			fontSrc: ["'self'", "data:"],
 			connectSrc: ["*"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
