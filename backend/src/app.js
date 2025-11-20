@@ -37,7 +37,7 @@ app.use(helmet({
 			defaultSrc: ["'self'"],
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval necesario para Vite en desarrollo
 			styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind puede generar estilos inline
-			imgSrc: ["*"],
+			imgSrc: ["'self'", "data:", "blob:", "*"], // Permitir imágenes desde self, data URLs, blob URLs y cualquier origen
 			fontSrc: ["'self'", "data:"],
 			connectSrc: ["*"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
@@ -52,7 +52,7 @@ app.use(helmet({
 			defaultSrc: ["'self'"],
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
 			styleSrc: ["'self'", "'unsafe-inline'"],
-			imgSrc: ["*"],
+			imgSrc: ["'self'", "data:", "blob:", "*"], // Permitir imágenes desde self, data URLs, blob URLs y cualquier origen
 			fontSrc: ["'self'", "data:"],
 			connectSrc: ["*"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
@@ -71,8 +71,8 @@ app.use(helmet({
 	} : false,
 	// Cross-Origin-Opener-Policy: solo en producción
 	crossOriginOpenerPolicy: isProduction ? { policy: "same-origin" } : false,
-	// Cross-Origin-Resource-Policy: solo en producción
-	crossOriginResourcePolicy: isProduction ? { policy: "same-origin" } : false,
+	// Cross-Origin-Resource-Policy: permitir cross-origin para imágenes y recursos estáticos
+	crossOriginResourcePolicy: false, // Deshabilitado para permitir carga de imágenes desde cualquier origen
 	// Prevenir MIME type sniffing
 	noSniff: true,
 	// Prevenir que la página sea embebida en iframes (clickjacking)
@@ -136,6 +136,21 @@ const imagesUploadsDir = path.join(uploadsDir, 'images');
 // Configurar middleware para servir archivos estáticos desde /uploads
 // Manejar diferentes tipos de archivos (audio, imágenes, etc.)
 app.use('/uploads', (req, res, next) => {
+  // Agregar headers CORS para permitir carga de imágenes desde cualquier origen
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else if (!origin) {
+    // Permitir requests sin origin (navegadores, herramientas, etc.)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  // Headers adicionales para CORS
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  
   // Manejar diferentes tipos de archivos de audio
   if (req.path.match(/\.(webm|ogg|mp3|wav)$/)) {
     const extension = path.extname(req.path).toLowerCase();
@@ -150,20 +165,58 @@ app.use('/uploads', (req, res, next) => {
     res.setHeader('Accept-Ranges', 'bytes');
   }
   
+  // Manejar tipos de imágenes
+  if (req.path.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+    const extension = path.extname(req.path).toLowerCase();
+    const mimeTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml'
+    };
+    
+    if (mimeTypes[extension]) {
+      res.setHeader('Content-Type', mimeTypes[extension]);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache de 1 año para imágenes
+  }
+  
+  // Responder a OPTIONS requests (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
   next();
 }, express.static(path.join(__dirname, '..', 'uploads'), {
   setHeaders: (res, filePath) => {
     const extension = path.extname(filePath).toLowerCase();
-    const mimeTypes = {
+    
+    // MIME types para audio
+    const audioMimeTypes = {
       '.webm': 'audio/webm',
       '.ogg': 'audio/ogg',
       '.mp3': 'audio/mpeg',
       '.wav': 'audio/wav'
     };
     
-    if (mimeTypes[extension]) {
-      res.setHeader('Content-Type', mimeTypes[extension]);
+    // MIME types para imágenes
+    const imageMimeTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml'
+    };
+    
+    if (audioMimeTypes[extension]) {
+      res.setHeader('Content-Type', audioMimeTypes[extension]);
       res.setHeader('Accept-Ranges', 'bytes');
+    } else if (imageMimeTypes[extension]) {
+      res.setHeader('Content-Type', imageMimeTypes[extension]);
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
     }
   }
 }));
