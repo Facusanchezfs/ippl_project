@@ -70,7 +70,10 @@ const getPostBySlugSchema = Joi.object({
 
 const getPostBySectionSchema = Joi.object({
   params: Joi.object({
-    section: Joi.string().required(),
+    section: Joi.string().valid('ninos', 'adultos', 'noticias').required().messages({
+      'any.only': 'La sección debe ser uno de los valores permitidos: ninos, adultos, noticias',
+      'any.required': 'La sección es requerida',
+    }),
   }),
 });
 
