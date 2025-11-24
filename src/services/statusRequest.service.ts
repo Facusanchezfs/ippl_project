@@ -49,6 +49,21 @@ const statusRequestService = {
 		return [];
 	},
 
+	getPatientPendingRequests: async (
+		patientId: string
+	): Promise<StatusRequest[]> => {
+		const response = await api.get(`/status-requests/patient/${patientId}/pending`);
+		const data = response.data?.data || response.data || {};
+		
+		if ('requests' in data && Array.isArray(data.requests)) {
+			return data.requests;
+		}
+		if (Array.isArray(data)) {
+			return data;
+		}
+		return [];
+	},
+
 	approveRequest: async (
 		requestId: string,
 		adminResponse?: string

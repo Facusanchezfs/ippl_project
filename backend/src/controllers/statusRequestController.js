@@ -110,6 +110,29 @@ const getProfessionalRequests = async (req, res) => {
   }
 };
 
+// Obtener solicitudes pendientes de un paciente específico
+const getPatientPendingRequests = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (!patientId) {
+      return sendError(res, 400, 'Falta patientId');
+    }
+
+    const rows = await StatusRequest.findAll({
+      where: { 
+        patientId,
+        status: 'pending' 
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    return sendSuccess(res, { requests: toStatusRequestDTOList(rows) });
+  } catch (error) {
+    logger.error('Error al obtener solicitudes pendientes del paciente:', error);
+    return sendError(res, 500, 'Error al obtener las solicitudes');
+  }
+};
+
 // Aprobar una solicitud de cambio de estado
 const approveRequest = async (req, res) => {
   logger.debug('Llamada a approveRequest con ID:', { requestId: req.params.requestId });
@@ -280,6 +303,7 @@ module.exports = {
   createRequest,
   getPendingRequests,
   getProfessionalRequests,
+  getPatientPendingRequests,
   approveRequest,
   rejectRequest,
 }; 
