@@ -30,8 +30,7 @@ const patientsService = {
       const patientsArray = Array.isArray(patients) ? patients : [];
       return patientsArray.map((patient: Patient) => ({
         ...patient,
-        // Usar URL relativa directamente para que la CSP la reconozca como 'self'
-        audioNote: patient.audioNote ? (patient.audioNote.startsWith('/') ? patient.audioNote : `/${patient.audioNote}`) : undefined
+        audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
       }));
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -46,8 +45,7 @@ const patientsService = {
       const patientsArray = Array.isArray(patients) ? patients : [];
       return patientsArray.map((patient: Patient) => ({
         ...patient,
-        // Usar URL relativa directamente para que la CSP la reconozca como 'self'
-        audioNote: patient.audioNote ? (patient.audioNote.startsWith('/') ? patient.audioNote : `/${patient.audioNote}`) : undefined
+        audioNote: patient.audioNote ? `${API_URL}${patient.audioNote}` : undefined
       }));
     } catch (error) {
       console.error('Error fetching professional patients:', error);
