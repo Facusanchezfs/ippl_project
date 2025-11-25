@@ -83,22 +83,37 @@ const patientsService = {
 
   uploadAudio: async (audioFile: File): Promise<string> => {
     try {
+      // Validar que el archivo tenga datos
+      if (!audioFile || audioFile.size === 0) {
+        throw new Error('El archivo de audio está vacío');
+      }
       
-    const formData = new FormData();
-    formData.append('audio', audioFile);
-    
-    const response = await api.post('/upload/audio', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    
+      const formData = new FormData();
+      formData.append('audio', audioFile);
       
-      if (!response.data.audioUrl) {
+      console.log('Enviando request de audio:', { 
+        size: audioFile.size, 
+        type: audioFile.type,
+        name: audioFile.name 
+      });
+      
+      const response = await api.post('/upload/audio', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      console.log('Respuesta del servidor:', response.data);
+      
+      // El backend devuelve { success: true, data: { audioUrl: ... } }
+      const audioUrl = response.data?.data?.audioUrl || response.data?.data?.url;
+      
+      if (!audioUrl) {
+        console.error('Estructura de respuesta inesperada:', response.data);
         throw new Error('No se recibió la URL del audio del servidor');
       }
       
-      return response.data.audioUrl;
+      return audioUrl;
     } catch (error: any) {
       console.error('Error detallado al subir audio:', {
         message: error.message,

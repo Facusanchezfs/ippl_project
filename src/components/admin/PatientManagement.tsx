@@ -81,13 +81,23 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
       let audioNoteUrl = '';
       if (noteType === 'audio' && audioBlob) {
         try {
+          // Validar que el blob tenga datos
+          if (audioBlob.size === 0) {
+            toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
+            return;
+          }
+          
           const audioFile = new File([audioBlob], 'note.webm', { 
             type: 'audio/webm'
           });
+          
+          console.log('Subiendo audio:', { size: audioFile.size, type: audioFile.type });
           audioNoteUrl = await patientsService.uploadAudio(audioFile);
-        } catch (error) {
+          console.log('Audio subido exitosamente:', audioNoteUrl);
+        } catch (error: any) {
           console.error('Error al subir el audio:', error);
-          toast.error('Error al subir el audio');
+          const errorMessage = error?.message || 'Error al subir el audio';
+          toast.error(errorMessage);
           return;
         }
       }
