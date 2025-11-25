@@ -91,7 +91,9 @@ const MedicalHistoryModal: React.FC<MedicalHistoryModalProps> = ({
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Fecha <span className="text-red-500">*</span>
+            </label>
             <input
               type="date"
               value={formData.date}
@@ -102,7 +104,9 @@ const MedicalHistoryModal: React.FC<MedicalHistoryModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Diagnóstico</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Diagnóstico <span className="text-red-500">*</span>
+            </label>
             <textarea
               value={formData.diagnosis}
               onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
@@ -113,7 +117,9 @@ const MedicalHistoryModal: React.FC<MedicalHistoryModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Tratamiento</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Tratamiento <span className="text-red-500">*</span>
+            </label>
             <textarea
               value={formData.treatment}
               onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}

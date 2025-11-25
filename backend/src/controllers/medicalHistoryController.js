@@ -12,15 +12,19 @@ const { sendSuccess, sendError } = require('../utils/response');
 async function getMedicalHistories(req, res) {
   try {
     // Permite ambos orígenes
-    const patientId =
+    const patientIdParam =
       req.params.patientId ?? req.query.patientId ?? undefined;
 
-    const professionalId =
+    const professionalIdParam =
       req.params.professionalId ?? req.query.professionalId ?? undefined;
 
-    if (!patientId && !professionalId) {
+    if (!patientIdParam && !professionalIdParam) {
       return sendError(res, 400, 'Debe proporcionar patientId o professionalId (params o query)');
     }
+
+    // Convertir strings a números si es necesario
+    const patientId = patientIdParam ? parseInt(patientIdParam, 10) : undefined;
+    const professionalId = professionalIdParam ? parseInt(professionalIdParam, 10) : undefined;
 
     const where = {};
     if (patientId) where.patientId = patientId;
@@ -58,12 +62,15 @@ async function getMedicalHistoryById(req, res) {
 
 async function createMedicalHistory(req, res) {
   try {
-    const { patientId, date, diagnosis, treatment, notes } = req.body;
+    const { patientId: patientIdParam, date, diagnosis, treatment, notes } = req.body;
 
-    // Validaciones básicas
-    if (!patientId || !date || !diagnosis || !treatment || !notes) {
+    // Validaciones básicas (notes es opcional)
+    if (!patientIdParam || !date || !diagnosis || !treatment) {
       return sendError(res, 400, 'Faltan campos requeridos');
     }
+
+    // Convertir patientId a número si es necesario
+    const patientId = typeof patientIdParam === 'string' ? parseInt(patientIdParam, 10) : patientIdParam;
 
     // Verificar que el paciente exista
     const patient = await Patient.findByPk(patientId, { attributes: ['id'] });
