@@ -41,6 +41,28 @@ const translateActivity = (activity: Activity): Activity => {
     const requestedFrequency = translateFrequency((activity.metadata?.requestedFrequency as string) || (activity.metadata?.newFrequency as string));
 
     if (activity.type === 'FREQUENCY_CHANGE_REQUEST' || activity.type === 'FREQUENCY_CHANGE_REQUESTED') {
+      // Si falta información de frecuencia, mostrar un mensaje más claro
+      if (!currentFrequency && !requestedFrequency) {
+        return {
+          ...activity,
+          title: 'Solicitud de cambio de frecuencia',
+          description: `${professionalName} solicitó cambiar la frecuencia de sesiones de ${patientName}`,
+        };
+      }
+      if (!currentFrequency) {
+        return {
+          ...activity,
+          title: 'Solicitud de cambio de frecuencia',
+          description: `${professionalName} solicitó cambiar la frecuencia de sesiones de ${patientName} a ${requestedFrequency}`,
+        };
+      }
+      if (!requestedFrequency) {
+        return {
+          ...activity,
+          title: 'Solicitud de cambio de frecuencia',
+          description: `${professionalName} solicitó cambiar la frecuencia de sesiones de ${patientName} desde ${currentFrequency}`,
+        };
+      }
       return {
         ...activity,
         title: 'Solicitud de cambio de frecuencia',
@@ -52,7 +74,7 @@ const translateActivity = (activity: Activity): Activity => {
     return {
       ...activity,
       title: `Solicitud de cambio de frecuencia ${actionText}`,
-      description: `Se ${actionText} el cambio de frecuencia para ${patientName} a ${requestedFrequency}`,
+      description: `Se ${actionText} el cambio de frecuencia para ${patientName}${requestedFrequency ? ` a ${requestedFrequency}` : ''}`,
     };
   }
 
@@ -78,9 +100,10 @@ const ActivityPage: React.FC = () => {
       if (disabledActivities[activityId]) return;
       setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
 
-      const patientId = activity.metadata?.patientId;
+      const patientId = activity.metadata?.patientId ? String(activity.metadata.patientId) : null;
       if (!patientId) {
-        toast.error('No se encontró información del paciente para esta solicitud');
+        toast.error('No se encontró información del paciente para esta solicitud. Por favor, contacte al administrador.');
+        setDisabledActivities(prev => ({ ...prev, [activityId]: false }));
         return;
       }
 
@@ -120,9 +143,9 @@ const ActivityPage: React.FC = () => {
       if (disabledActivities[activityId]) return;
       setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
 
-      const patientId = activity.metadata?.patientId;
+      const patientId = activity.metadata?.patientId ? String(activity.metadata.patientId) : null;
       if (!patientId) {
-        toast.error('No se encontró información del paciente para esta solicitud');
+        toast.error('No se encontró información del paciente para esta solicitud. Por favor, contacte al administrador.');
         setDisabledActivities(prev => ({ ...prev, [activityId]: false }));
         return;
       }
@@ -166,9 +189,9 @@ const ActivityPage: React.FC = () => {
       if (disabledActivities[activityId]) return;
       setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
 
-      const patientId = activity.metadata?.patientId;
+      const patientId = activity.metadata?.patientId ? String(activity.metadata.patientId) : null;
       if (!patientId) {
-        toast.error('No se encontró información del paciente para esta solicitud');
+        toast.error('No se encontró información del paciente para esta solicitud. Por favor, contacte al administrador.');
         setDisabledActivities(prev => ({ ...prev, [activityId]: false }));
         return;
       }

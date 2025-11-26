@@ -19,15 +19,18 @@ export interface Activity {
   description: string;
   date: string;
   metadata?: {
-    patientId?: string;
+    patientId?: string | number;
     patientName?: string;
-    professionalId?: string;
+    professionalId?: string | number;
     professionalName?: string;
     postId?: string;
     postTitle?: string;
     appointmentId?: string;
     reason?: string;
     adminResponse?: string;
+    currentFrequency?: string;
+    requestedFrequency?: string;
+    newFrequency?: string;
     [k: string]: unknown;
   };
   read: boolean;

@@ -15,6 +15,8 @@ class ActivityDTO {
     occurredAt, // <- columna en BD
     metadata,
     read,
+    patientId,
+    professionalId,
   }) {
     this._id = String(id);
     this.type = type;
@@ -22,7 +24,15 @@ class ActivityDTO {
     this.description = description;
     this.date  = toIso(occurredAt);
     this.read = !!read;
-    this.metadata = metadata ?? undefined;
+    // Asegurar que metadata tenga patientId y professionalId si están en el modelo
+    const enrichedMetadata = metadata ? { ...metadata } : {};
+    if (patientId && !enrichedMetadata.patientId) {
+      enrichedMetadata.patientId = String(patientId);
+    }
+    if (professionalId && !enrichedMetadata.professionalId) {
+      enrichedMetadata.professionalId = String(professionalId);
+    }
+    this.metadata = Object.keys(enrichedMetadata).length > 0 ? enrichedMetadata : undefined;
     this.id = this._id;
     this.createdAt = this.date;
   }
