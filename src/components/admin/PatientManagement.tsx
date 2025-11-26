@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PlusIcon, TrashIcon, MicrophoneIcon, EyeIcon, ClockIcon, DocumentTextIcon, UserPlusIcon, BellIcon, MagnifyingGlassIcon, ArrowUpCircleIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import patientsService, { AssignPatientDTO, CreatePatientDTO } from '../../services/patients.service';
 import { Patient } from '../../types/Patient';
@@ -722,7 +722,7 @@ const PatientManagement = () => {
     loadData();
   }, []);
 
-  const openFrequencyRequestModal = async (patient: Patient, requestId?: string) => {
+  const openFrequencyRequestModal = useCallback(async (patient: Patient, requestId?: string) => {
     try {
       const requests = await frequencyRequestService.getPendingRequests();
       const targetRequest = requests.find((r) =>
@@ -741,9 +741,9 @@ const PatientManagement = () => {
       console.error('Error al obtener solicitud:', error);
       toast.error('Error al obtener la solicitud');
     }
-  };
+  }, []);
 
-  const openStatusRequestModal = async (patient: Patient, requestId?: string) => {
+  const openStatusRequestModal = useCallback(async (patient: Patient, requestId?: string) => {
     try {
       const requests = await statusRequestService.getPendingRequests();
       const targetRequest = requests.find((r) => {
@@ -766,9 +766,9 @@ const PatientManagement = () => {
       console.error('Error al obtener solicitud:', error);
       toast.error('Error al obtener la solicitud');
     }
-  };
+  }, []);
 
-  const openActivationRequestModal = async (patient: Patient, requestId?: string) => {
+  const openActivationRequestModal = useCallback(async (patient: Patient, requestId?: string) => {
     try {
       const requests = await statusRequestService.getPendingRequests();
       const targetRequest = requests.find((r) => {
@@ -792,7 +792,7 @@ const PatientManagement = () => {
       console.error('Error al obtener solicitud:', error);
       toast.error('Error al obtener la solicitud');
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -812,7 +812,7 @@ const PatientManagement = () => {
     }
 
     void openFrequencyRequestModal(patient, requestId).finally(finalize);
-  }, [patients, location.state, isLoading, navigate]);
+  }, [patients, location.state, isLoading, navigate, openFrequencyRequestModal]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -832,7 +832,7 @@ const PatientManagement = () => {
     }
 
     void openStatusRequestModal(patient, requestId).finally(finalize);
-  }, [patients, location.state, isLoading, navigate]);
+  }, [patients, location.state, isLoading, navigate, openStatusRequestModal]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -852,7 +852,7 @@ const PatientManagement = () => {
     }
 
     void openActivationRequestModal(patient, requestId).finally(finalize);
-  }, [patients, location.state, isLoading, navigate]);
+  }, [patients, location.state, isLoading, navigate, openActivationRequestModal]);
 
   const loadData = async () => {
     try {
