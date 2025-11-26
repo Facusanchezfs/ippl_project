@@ -217,6 +217,9 @@ async function assignPatient(req, res) {
     const patient = await Patient.findByPk(patientId);
     if (!patient) return sendError(res, 404, 'Paciente no encontrado');
 
+    // Guardar el professionalId original para comparar después
+    const originalProfessionalId = patient.professionalId;
+
     // Actualiza campos del paciente
     if (professionalId !== undefined) patient.professionalId = professionalId;
 
@@ -228,7 +231,21 @@ async function assignPatient(req, res) {
     }
 
     if (status !== undefined) patient.status = status;
-    if (assignedAt !== undefined) patient.assignedAt = new Date(assignedAt);
+    
+    // Setear assignedAt: si viene en el body, usarlo; si no, setearlo automáticamente cuando se asigna un profesional
+    if (assignedAt !== undefined) {
+      patient.assignedAt = new Date(assignedAt);
+    } else if (professionalId !== undefined && professionalId !== null) {
+      // Si se está asignando un profesional
+      if (!patient.assignedAt) {
+        // Si el paciente no tiene assignedAt, setearlo ahora
+        patient.assignedAt = new Date();
+      } else if (originalProfessionalId !== professionalId) {
+        // Si se está cambiando de profesional, actualizar la fecha de asignación
+        patient.assignedAt = new Date();
+      }
+    }
+    
     if (sessionFrequency !== undefined) patient.sessionFrequency = sessionFrequency;
 
     await patient.save();

@@ -107,6 +107,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
         professionalId: selectedProfessional,
         professionalName: selectedProf.name,
         status,
+        assignedAt: new Date().toISOString(),
         textNote: textNote.trim() || undefined,
         audioNote: audioNoteUrl || undefined,
         sessionFrequency
