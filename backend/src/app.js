@@ -38,7 +38,7 @@ app.use(helmet({
 			scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval necesario para Vite en desarrollo
 			styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind puede generar estilos inline
 			imgSrc: ["'self'", "data:", "blob:", "*"], // Permitir imágenes desde self, data URLs, blob URLs y cualquier origen
-			mediaSrc: ["*"], // TEMPORAL: Permitir todos los orígenes para validar que el problema es solo CSP
+			mediaSrc: ["'self'", "blob:", "https://ippl.com.ar", "https://www.ippl.com.ar"], // Permitir audio/video desde self, blob URLs y dominio de producción
 			fontSrc: ["'self'", "data:"],
 			connectSrc: ["*"],
 			frameSrc: ["'self'", "https://www.google.com", "https://www.youtube.com"],
