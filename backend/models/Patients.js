@@ -61,7 +61,7 @@ module.exports = (sequelize, DataTypes) => {
       },
 
       status: {
-        type: DataTypes.ENUM('active', 'pending', 'inactive', 'absent', 'alta'),
+        type: DataTypes.ENUM('active', 'pending', 'inactive'),
         allowNull: false,
         defaultValue: 'active',
       },
@@ -82,7 +82,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
-      // Se setea cuando el admin aprueba "alta" médica
+      // Se setea cuando el admin aprueba una solicitud de activación
       activatedAt: {
         type: DataTypes.DATE,
         allowNull: true,

@@ -42,10 +42,6 @@ const translatePatientStatus = (status: Patient['status']) => {
       return 'Pendiente';
     case 'inactive':
       return 'Inactivo';
-    case 'absent':
-      return 'Ausente';
-    case 'alta':
-      return 'Alta';
     default:
       return status;
   }
@@ -62,7 +58,7 @@ const FinancialSolicitudesPage: React.FC = () => {
   const [frequencyRequests, setFrequencyRequests] = useState<FrequencyRequest[]>([]);
   const [statusRequests, setStatusRequests] = useState<StatusRequest[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<'frequency' | 'inactive' | 'alta' | null>(null);
+  const [modalType, setModalType] = useState<'frequency' | 'inactive' | 'activation' | null>(null);
   
   // Estados para búsqueda, paginación y ordenamiento
   const [searchTerm, setSearchTerm] = useState('');
@@ -127,7 +123,7 @@ const FinancialSolicitudesPage: React.FC = () => {
     setFrequencyRequests(requests);
   };
 
-  const handleViewStatusRequests = async (patient: Patient, type: 'inactive' | 'alta') => {
+  const handleViewStatusRequests = async (patient: Patient, type: 'inactive' | 'activation') => {
     setSelectedPatient(patient);
     setModalType(type);
     setShowModal(true);
@@ -174,8 +170,8 @@ const FinancialSolicitudesPage: React.FC = () => {
           </button>
           <button
             className="group p-2 rounded-full hover:bg-green-100 transition"
-            title="Ver Solicitud Alta"
-            onClick={() => handleViewStatusRequests(patient, 'alta')}
+            title="Ver Solicitud de Activación"
+            onClick={() => handleViewStatusRequests(patient, 'activation')}
           >
             <CheckCircleIcon className="h-6 w-6 text-green-600 group-hover:text-green-800" />
           </button>
@@ -310,14 +306,14 @@ const FinancialSolicitudesPage: React.FC = () => {
               {modalType !== 'frequency' && (() => {
                 const modalTitle = modalType === 'inactive' 
                   ? 'Solicitudes de Inactivación/Baja' 
-                  : modalType === 'alta'
-                  ? 'Solicitudes de Alta'
+                  : modalType === 'activation'
+                  ? 'Solicitudes de Activación'
                   : 'Solicitudes de Cambio de Estado';
                 
                 const emptyMessage = modalType === 'inactive' 
                   ? 'de inactivación/baja' 
-                  : modalType === 'alta' 
-                  ? 'de alta' 
+                  : modalType === 'activation' 
+                  ? 'de activación' 
                   : 'de este tipo';
                 
                 return (

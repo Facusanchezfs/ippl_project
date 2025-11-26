@@ -97,14 +97,15 @@ async function getAllPatients(req, res) {
       }
     }
 
-    // Obtener StatusRequests aprobadas de alta para construir activationRequest
+    // Obtener StatusRequests aprobadas de activación para construir activationRequest
     let activationMap = {};
     if (patientIds.length > 0) {
       const activationRequests = await StatusRequest.findAll({
         where: {
           patientId: { [Op.in]: patientIds },
           status: 'approved',
-          requestedStatus: 'alta'
+          type: 'activation',
+          requestedStatus: 'active'
         },
         attributes: ['patientId', 'createdAt', 'reason', 'professionalName'],
         raw: true
@@ -375,7 +376,7 @@ async function requestDischargePatient(req, res) {
 
 
 
-// Solicitar alta de un paciente
+// Solicitar activación de un paciente
 async function requestActivationPatient(req, res) {
   try {
     const { patientId } = req.params;
@@ -387,12 +388,22 @@ async function requestActivationPatient(req, res) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    // 1) Ya existe solicitud de ALTA pendiente para este paciente
+    // Validar que el paciente esté inactive
+    if (patient.status !== 'inactive') {
+      return sendError(res, 400, 'Solo se puede solicitar la activación de pacientes inactivos');
+    }
+
+    // 1) Ya existe solicitud de activación pendiente para este paciente
     const existingActivation = await StatusRequest.findOne({
-      where: { patientId, status: 'pending', requestedStatus: 'alta' },
+      where: { 
+        patientId, 
+        status: 'pending', 
+        type: 'activation',
+        requestedStatus: 'active'
+      },
     });
     if (existingActivation) {
-      return sendError(res, 400, 'Ya existe una solicitud de alta pendiente para este paciente');
+      return sendError(res, 400, 'Ya existe una solicitud de activación pendiente para este paciente');
     }
 
     // 4) Crear la solicitud en BD
@@ -402,32 +413,33 @@ async function requestActivationPatient(req, res) {
       professionalId,
       professionalName,                     // snapshot
       currentStatus: patient.status,
-      requestedStatus: 'alta',              // alta médica (cierre de tratamiento)
+      requestedStatus: 'active',            // activación del paciente
       reason,
       status: 'pending',
+      type: 'activation',                   // tipo de solicitud: activación
     });
 
     // 5) Crear actividad para el feed
     await createActivity(
       'PATIENT_ACTIVATION_REQUEST',
-      'Solicitud de alta de paciente',
-      `El profesional ${professionalName} ha solicitado dar de alta al paciente ${patient.name}`,
+      'Solicitud de activación de paciente',
+      `El profesional ${professionalName} ha solicitado activar al paciente ${patient.name}`,
       {
         patientId: String(patient.id),
         patientName: patient.name,
         professionalId: String(professionalId),
         professionalName,
         currentStatus: patient.status,
-        requestedStatus: 'alta',
+        requestedStatus: 'active',
         reason,
         status: 'pending',
       }
     );
 
-    return sendSuccess(res, null, 'Solicitud de alta enviada correctamente', 201);
+    return sendSuccess(res, null, 'Solicitud de activación enviada correctamente', 201);
   } catch (error) {
     logger.error('Error requesting patient activation:', error);
-    return sendError(res, 500, 'Error al solicitar el alta del paciente');
+    return sendError(res, 500, 'Error al solicitar la activación del paciente');
   }
 }
 

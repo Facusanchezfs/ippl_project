@@ -212,7 +212,7 @@ const StatusRequestsManagement = () => {
                         {request.currentStatus === 'active' ? 'Activo' :
                          request.currentStatus === 'pending' ? 'Pendiente' :
                          request.currentStatus === 'inactive' ? 'Inactivo' :
-                         'Ausente'}
+                         'Inactivo'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -225,7 +225,7 @@ const StatusRequestsManagement = () => {
                         {request.requestedStatus === 'active' ? 'Activo' :
                          request.requestedStatus === 'pending' ? 'Pendiente' :
                          request.requestedStatus === 'inactive' ? 'Inactivo' :
-                         'Ausente'}
+                         'Inactivo'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -239,7 +239,7 @@ const StatusRequestsManagement = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${request.type === 'activation' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{request.type === 'activation' ? 'Alta' : 'Cambio de estado'}</span>
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${request.type === 'activation' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{request.type === 'activation' ? 'Activación' : 'Cambio de estado'}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">

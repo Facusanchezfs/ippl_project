@@ -3,7 +3,7 @@ export interface Patient {
   name: string;
   email?: string;
   description?: string;
-  status: 'active' | 'pending' | 'inactive' | 'absent' | 'alta';
+  status: 'active' | 'pending' | 'inactive';
   professionalId?: string;
   professionalName?: string;
   createdAt: string;

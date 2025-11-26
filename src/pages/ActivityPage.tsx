@@ -200,7 +200,7 @@ const ActivityPage: React.FC = () => {
         const requests = await statusRequestService.getPendingRequests();
         const pendingRequest = requests.find((r) => 
           String(r.patientId) === String(patientId) && 
-          r.requestedStatus === 'alta'
+          r.type === 'activation' && r.requestedStatus === 'active'
         );
 
         if (!pendingRequest) {
@@ -263,7 +263,7 @@ const ActivityPage: React.FC = () => {
         
         const pendingActivationPatientIds = new Set(
           pendingStatusRequests
-            .filter(r => r.requestedStatus === 'alta')
+            .filter(r => r.type === 'activation' && r.requestedStatus === 'active')
             .map(r => String(r.patientId))
         );
         
@@ -289,7 +289,7 @@ const ActivityPage: React.FC = () => {
               }
             }
             
-            // Verificar actividades de alta
+            // Verificar actividades de activación
             if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
               if (!pendingActivationPatientIds.has(patientId)) {
                 resolved[activity._id] = true;

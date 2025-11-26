@@ -389,7 +389,8 @@ const Dashboard = () => {
         const requests = await statusRequestService.getPendingRequests();
         const pendingRequest = requests.find((r) => 
           String(r.patientId) === String(patientId) && 
-          r.requestedStatus === 'alta'
+          r.type === 'activation' &&
+          r.requestedStatus === 'active'
         );
 
         if (!pendingRequest) {

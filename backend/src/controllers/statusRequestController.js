@@ -5,7 +5,7 @@ const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-const VALID_STATUSES = ['active', 'pending', 'inactive', 'absent', 'alta'];
+const VALID_STATUSES = ['active', 'pending', 'inactive'];
 
 const createRequest = async (req, res) => {
   try {
@@ -25,7 +25,7 @@ const createRequest = async (req, res) => {
       return sendError(res, 400, 'Falta patientId');
     }
     if (!VALID_STATUSES.includes(currentStatus) || !VALID_STATUSES.includes(requestedStatus)) {
-      return sendError(res, 400, 'Estado no válido. Permitidos: active, pending, inactive, absent, alta');
+      return sendError(res, 400, 'Estado no válido. Permitidos: active, pending, inactive');
     }
     // Regla original: este endpoint permite únicamente active -> inactive
     if (currentStatus === 'active' && requestedStatus !== 'inactive') {
@@ -160,11 +160,10 @@ const approveRequest = async (req, res) => {
       const oldStatus = patient.status;
       const newStatus = request.requestedStatus;
 
-      // Nota: no bloqueamos cambios desde/hacia "alta" (por tu decisión de negocio)
       patient.status = newStatus;
       
-      // Si es alta, setear activatedAt con la fecha actual
-      if (newStatus === 'alta') {
+      // Si es solicitud de activación (type === 'activation'), setear activatedAt con la fecha actual
+      if (request.type === 'activation' && newStatus === 'active') {
         patient.activatedAt = new Date();
       }
       
@@ -195,18 +194,18 @@ const approveRequest = async (req, res) => {
     // 5) Crear actividad (fuera de la tx; si falla el log, no rompemos la aprobación)
     try {
       const activityType =
-        request.requestedStatus === 'alta'
+        request.type === 'activation'
           ? 'PATIENT_ACTIVATION_APPROVED'
           : 'STATUS_CHANGE_APPROVED';
 
       const title =
         activityType === 'PATIENT_ACTIVATION_APPROVED'
-          ? 'Alta de paciente aprobada'
+          ? 'Activación de paciente aprobada'
           : 'Cambio de estado aprobado';
 
       const description =
         activityType === 'PATIENT_ACTIVATION_APPROVED'
-          ? `Se ha aprobado el alta para el paciente ${request.patientName}`
+          ? `Se ha aprobado la activación para el paciente ${request.patientName}`
           : `Se ha aprobado el cambio de estado para el paciente ${request.patientName} de ${oldStatus} a ${newStatus}`;
 
       await createActivity(activityType, title, description, {
@@ -267,7 +266,7 @@ const rejectRequest = async (req, res) => {
       await sr.save({ transaction: t });
 
       // Registrar actividad (el cliente espera STATUS_CHANGE_* para status)
-      // Para "alta" (alta médica) también usamos STATUS_CHANGE_REJECTED para que el front la capte.
+      // Para solicitudes de activación también usamos STATUS_CHANGE_REJECTED para que el front la capte.
       await createActivity(
         'STATUS_CHANGE_REJECTED',
         'Cambio de estado rechazado',

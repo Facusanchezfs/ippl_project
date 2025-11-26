@@ -14,7 +14,7 @@ export interface AssignPatientDTO {
   patientId: string;
   professionalId: string;
   professionalName: string;
-  status?: 'active' | 'pending' | 'inactive' | 'absent' | 'alta';
+  status?: 'active' | 'pending' | 'inactive';
   assignedAt?: string;
   textNote?: string;
   audioNote?: string;

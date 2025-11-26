@@ -54,11 +54,11 @@ module.exports = (sequelize, DataTypes) => {
 
       // Estados del paciente (vigente y solicitado)
       currentStatus: {
-        type: DataTypes.ENUM('active', 'pending', 'inactive', 'absent', 'alta'),
+        type: DataTypes.ENUM('active', 'pending', 'inactive'),
         allowNull: false,
       },
       requestedStatus: {
-        type: DataTypes.ENUM('active', 'pending', 'inactive', 'absent', 'alta'),
+        type: DataTypes.ENUM('active', 'pending', 'inactive'),
         allowNull: false,
       },
 

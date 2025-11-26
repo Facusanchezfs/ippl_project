@@ -211,9 +211,9 @@ const AppointmentsPage = () => {
       // Buscar el appointment para obtener el patientId
       const appointment = appointments.find(a => a.id === appointmentId);
       if (appointment && finishData.attended === false) {
-        // Cambiar el estado del paciente a 'absent' si no asistió y mantener la asociación con el profesional
+        // Cambiar el estado del paciente a 'inactive' si no asistió y mantener la asociación con el profesional
         await patientsService.updatePatient(appointment.patientId, {
-          status: 'absent',
+          status: 'inactive',
           professionalId: appointment.professionalId,
           professionalName: appointment.professionalName
         });

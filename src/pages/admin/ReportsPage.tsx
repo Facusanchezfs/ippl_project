@@ -11,7 +11,7 @@ const ReportsPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [reportType, setReportType] = useState<'alta' | 'inactive'>('inactive');
+  const [reportType, setReportType] = useState<'activation' | 'inactive'>('inactive');
   const [selectedProfessional, setSelectedProfessional] = useState('');
   const [professionals, setProfessionals] = useState<any[]>([]);
   const navigate = useNavigate();
@@ -29,10 +29,10 @@ const ReportsPage: React.FC = () => {
       const allPatients = await patientsService.getAllPatients();
       
       let filtered: any[] = [];
-      if (reportType === 'alta') {
-        // Incluir pacientes con status='alta' que tengan activatedAt O activationRequest
+      if (reportType === 'activation') {
+        // Incluir pacientes con activationRequest aprobada (tienen activatedAt o activationRequest con requestDate)
         filtered = allPatients.filter(p => 
-          p.status === 'alta' && (p.activatedAt || p.activationRequest?.requestDate)
+          p.status === 'active' && (p.activatedAt || p.activationRequest?.requestDate)
         );
       } else {
         // Para bajas: incluir pacientes que tengan dischargeRequest aprobada, independientemente de su status actual
@@ -40,9 +40,9 @@ const ReportsPage: React.FC = () => {
         filtered = allPatients.filter(p => p.dischargeRequest?.requestDate);
       }
       filtered = filtered.filter(p => {
-        // Para altas: usar activatedAt si existe, sino usar activationRequest.requestDate
+        // Para activaciones: usar activatedAt si existe, sino usar activationRequest.requestDate
         let fechaAprobacion: Date | null = null;
-        if (reportType === 'alta') {
+        if (reportType === 'activation') {
           if (p.activatedAt) {
             fechaAprobacion = new Date(p.activatedAt);
           } else if (p.activationRequest?.requestDate) {
@@ -89,9 +89,9 @@ const ReportsPage: React.FC = () => {
       });
       const rows = filtered.map(p => {
         const professional = users.find(prof => prof.id === p.professionalId);
-        // Para altas: usar activatedAt si existe, sino usar activationRequest.requestDate
+        // Para activaciones: usar activatedAt si existe, sino usar activationRequest.requestDate
         let fechaAprobacion: Date | null = null;
-        if (reportType === 'alta') {
+        if (reportType === 'activation') {
           if (p.activatedAt) {
             fechaAprobacion = new Date(p.activatedAt);
           } else if (p.activationRequest?.requestDate) {
@@ -102,7 +102,7 @@ const ReportsPage: React.FC = () => {
             fechaAprobacion = new Date(p.dischargeRequest.requestDate);
           }
         }
-        const tipo = reportType === 'alta' ? 'Alta' : 'Inactivo';
+        const tipo = reportType === 'activation' ? 'Activación' : 'Inactivo';
         return [
           fechaAprobacion ? fechaAprobacion.toLocaleString('es-ES') : '',
           tipo,
@@ -114,7 +114,7 @@ const ReportsPage: React.FC = () => {
       doc.setFontSize(18);
       doc.text('Instituto Psicológico y Psicoanálisis del Litoral', 105, 15, { align: 'center' });
       doc.setFontSize(14);
-      doc.text('Reporte de Altas y Bajas de Pacientes', 105, 25, { align: 'center' });
+      doc.text('Reporte de Activaciones y Bajas de Pacientes', 105, 25, { align: 'center' });
       doc.setFontSize(10);
       const fechaGeneracion = new Date().toLocaleString('es-ES');
       doc.text(`Fecha de generación: ${fechaGeneracion}`, 10, 35);
@@ -225,13 +225,13 @@ const ReportsPage: React.FC = () => {
           <ArrowLeftIcon className="h-5 w-5 mr-2" />
           Volver al Dashboard
         </button>
-        <h1 className="text-2xl font-bold">Reportes de Altas y Bajas de Pacientes</h1>
+        <h1 className="text-2xl font-bold">Reportes de Activaciones y Bajas de Pacientes</h1>
       </div>
       <div className="flex gap-4 mb-6 items-end">
         <div>
           <label className="block text-sm font-medium text-gray-700">Tipo de reporte</label>
-          <select value={reportType} onChange={e => setReportType(e.target.value as 'alta' | 'inactive')} className="border rounded px-2 py-1">
-            <option value="alta">Altas</option>
+          <select value={reportType} onChange={e => setReportType(e.target.value as 'activation' | 'inactive')} className="border rounded px-2 py-1">
+            <option value="activation">Activaciones</option>
             <option value="inactive">Bajas (Inactivos)</option>
           </select>
         </div>
@@ -251,7 +251,7 @@ const ReportsPage: React.FC = () => {
           {loading ? 'Generando...' : 'Generar PDF'}
         </button>
       </div>
-      <p className="text-gray-500">El reporte incluirá la fecha de {reportType === 'alta' ? 'alta' : 'baja'}, el profesional asignado y el nombre del paciente, según el rango de fechas seleccionado.</p>
+      <p className="text-gray-500">El reporte incluirá la fecha de {reportType === 'activation' ? 'activación' : 'baja'}, el profesional asignado y el nombre del paciente, según el rango de fechas seleccionado.</p>
       <div className="mt-12">
         <h2 className="text-xl font-bold mb-4">Reporte por Profesional</h2>
         <div className="flex gap-4 mb-6 items-end">

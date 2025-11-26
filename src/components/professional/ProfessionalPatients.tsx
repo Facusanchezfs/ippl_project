@@ -42,8 +42,6 @@ const getStatusColor = (status: string) => {
       return 'bg-yellow-100 text-yellow-800';
     case 'inactive':
       return 'bg-red-100 text-red-800';
-    case 'absent':
-      return 'bg-gray-100 text-gray-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -57,8 +55,6 @@ const getStatusLabel = (status: string) => {
       return 'Pendiente';
     case 'inactive':
       return 'Inactivo';
-    case 'absent':
-      return 'Ausente';
     default:
       return status;
   }
@@ -282,7 +278,7 @@ const StatusActivationModal: React.FC<StatusChangeModalProps> = ({ isOpen, onClo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      toast.error('Por favor, ingresa una razón para el alta');
+      toast.error('Por favor, ingresa una razón para la activación');
       return;
     }
     setIsSubmitting(true);
@@ -303,10 +299,10 @@ const StatusActivationModal: React.FC<StatusChangeModalProps> = ({ isOpen, onClo
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6">
           <div>
             <h3 className="text-base sm:text-lg font-semibold text-green-900">
-              Solicitar Alta para el Paciente
+              Solicitar Activación para el Paciente
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              Esta solicitud será revisada por un administrador para dar de alta al paciente.
+              Esta solicitud será revisada por un administrador para activar al paciente.
             </p>
           </div>
           <button
@@ -339,14 +335,14 @@ const StatusActivationModal: React.FC<StatusChangeModalProps> = ({ isOpen, onClo
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Razón del alta
+              Razón de la activación
             </label>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"
               rows={4}
-              placeholder="Explica la razón para dar de alta al paciente..."
+              placeholder="Explica la razón para activar al paciente..."
               required
             />
           </div>
@@ -381,7 +377,7 @@ const ProfessionalPatients = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive' | 'absent' | 'alta'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('active');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
@@ -490,7 +486,7 @@ const ProfessionalPatients = () => {
           }
         }
       );
-      toast.success('Solicitud de alta enviada correctamente');
+      toast.success('Solicitud de activación enviada correctamente');
       setIsRequestActivationModalOpen(false);
       setSelectedPatientForActivation(null);
       await loadPatients();
@@ -582,7 +578,6 @@ const ProfessionalPatients = () => {
               <option value="active">Activos</option>
               <option value="pending">Pendientes</option>
               <option value="inactive">Inactivos</option>
-              <option value="absent">Ausentes</option>
             </select>
           </div>
         </div>
@@ -599,7 +594,7 @@ const ProfessionalPatients = () => {
           )}
           {statusFilter !== 'all' && (
             <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">
-              Estado: {statusFilter === 'active' ? 'Activo' : statusFilter === 'pending' ? 'Pendiente' : statusFilter === 'inactive' ? 'Inactivo' : 'Ausente'}
+              Estado: {statusFilter === 'active' ? 'Activo' : statusFilter === 'pending' ? 'Pendiente' : statusFilter === 'inactive' ? 'Inactivo' : 'Todos'}
             </span>
           )}
         </div>
@@ -710,20 +705,24 @@ const ProfessionalPatients = () => {
                 >
                   <ClockIcon className="h-5 w-5" />
                 </button>
-                <button
-                  onClick={() => openStatusModal(patient)}
-                  className="text-red-600 hover:text-red-900 inline-flex items-center"
-                  title="Solicitar baja"
-                >
-                  <UserMinusIcon className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => openRequestActivationModal(patient)}
-                  className="text-green-600 hover:text-green-900 inline-flex items-center"
-                  title="Solicitar alta"
-                >
-                  <UserPlusIcon className="h-5 w-5" />
-                </button>
+                {patient.status !== 'inactive' && (
+                  <button
+                    onClick={() => openStatusModal(patient)}
+                    className="text-red-600 hover:text-red-900 inline-flex items-center"
+                    title="Solicitar baja"
+                  >
+                    <UserMinusIcon className="h-5 w-5" />
+                  </button>
+                )}
+                {patient.status === 'inactive' && (
+                  <button
+                    onClick={() => openRequestActivationModal(patient)}
+                    className="text-green-600 hover:text-green-900 inline-flex items-center"
+                    title="Solicitar activación"
+                  >
+                    <UserPlusIcon className="h-5 w-5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -837,20 +836,24 @@ const ProfessionalPatients = () => {
                     >
                       <ClockIcon className="h-5 w-5" />
                     </button>
-                    <button
-                      onClick={() => openStatusModal(patient)}
-                      className="text-red-600 hover:text-red-900"
-                      title="Solicitar baja"
-                    >
-                      <UserMinusIcon className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => openRequestActivationModal(patient)}
-                      className="text-green-600 hover:text-green-900"
-                      title="Solicitar alta"
-                    >
-                      <UserPlusIcon className="h-5 w-5" />
-                    </button>
+                    {patient.status !== 'inactive' && (
+                      <button
+                        onClick={() => openStatusModal(patient)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Solicitar baja"
+                      >
+                        <UserMinusIcon className="h-5 w-5" />
+                      </button>
+                    )}
+                    {patient.status === 'inactive' && (
+                      <button
+                        onClick={() => openRequestActivationModal(patient)}
+                        className="text-green-600 hover:text-green-900"
+                        title="Solicitar activación"
+                      >
+                        <UserPlusIcon className="h-5 w-5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

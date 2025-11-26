@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const VALID_STATUSES = ['active', 'pending', 'inactive', 'absent', 'alta'];
+const VALID_STATUSES = ['active', 'pending', 'inactive'];
 
 const createRequestSchema = Joi.object({
   body: Joi.object({

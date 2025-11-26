@@ -25,7 +25,7 @@ interface AssignModalProps {
 
 const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, patient, professionals }) => {
   const [selectedProfessional, setSelectedProfessional] = useState('');
-  const [status, setStatus] = useState<'active' | 'pending' | 'inactive' | 'absent' | 'alta'>(patient?.status || 'active');
+  const [status, setStatus] = useState<'active' | 'pending' | 'inactive'>(patient?.status || 'active');
   const [sessionFrequency, setSessionFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
   const [noteType, setNoteType] = useState<'text' | 'audio'>('text');
   const [textNote, setTextNote] = useState('');
@@ -164,15 +164,13 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
             </label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as 'active' | 'pending' | 'inactive' | 'absent' | 'alta')}
+              onChange={(e) => setStatus(e.target.value as 'active' | 'pending' | 'inactive')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
             >
               <option value="active">Activo</option>
               <option value="pending">Pendiente</option>
               <option value="inactive">Inactivo</option>
-              <option value="absent">Ausente</option>
-              <option value="alta">Alta</option>
             </select>
           </div>
 
@@ -389,8 +387,8 @@ const StatusRequestModal: React.FC<StatusRequestModalProps> = ({
               Solicitud de Cambio de Estado
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              {selectedStatusRequest?.type === 'activation' && selectedStatusRequest?.requestedStatus === 'alta'
-                ? 'El profesional ha solicitado la alta del paciente'
+              {selectedStatusRequest?.type === 'activation'
+                ? 'El profesional ha solicitado la activación del paciente'
                 : patient.status === 'active' 
                   ? 'El profesional ha solicitado dar de baja a este paciente'
                   : 'El profesional ha solicitado reactivar a este paciente'}
@@ -422,14 +420,12 @@ const StatusRequestModal: React.FC<StatusRequestModalProps> = ({
                   patient.status === 'active' ? 'text-primary' :
                   patient.status === 'pending' ? 'text-yellow-700' :
                   patient.status === 'inactive' ? 'text-gray-700' :
-                  patient.status === 'alta' ? 'text-green-900' :
-                  'text-red-700'
+                  'text-gray-700'
                 }`}>
                   {patient.status === 'active' ? 'Activo' :
                    patient.status === 'pending' ? 'Pendiente' :
                    patient.status === 'inactive' ? 'Inactivo' :
-                   patient.status === 'alta' ? 'Alta' :
-                   'Ausente'}
+                   'Inactivo'}
                 </span>
               </p>
               <p className="text-sm text-gray-500 mt-2">
@@ -693,7 +689,7 @@ const getFrequencyLabel = (freq: string | undefined) => {
   }
 };
 
-type PatientManagementStatus = 'all' | 'active' | 'pending' | 'inactive' | 'absent';
+type PatientManagementStatus = 'all' | 'active' | 'pending' | 'inactive';
 
 const PatientManagement = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -775,8 +771,8 @@ const PatientManagement = () => {
         if (requestId) {
           return String(r.id) === String(requestId);
         }
-        // Buscar solicitud de alta
-        return r.patientId == patient.id && r.requestedStatus === 'alta';
+        // Buscar solicitud de activación
+        return r.patientId == patient.id && r.type === 'activation' && r.requestedStatus === 'active';
       });
 
       if (!targetRequest) {
@@ -959,8 +955,8 @@ const PatientManagement = () => {
     try {
       await statusRequestService.approveRequest(selectedStatusRequest.id, response);
       await loadData(); // Recargar datos
-      if (selectedStatusRequest.type === 'activation' && selectedStatusRequest.requestedStatus === 'alta') {
-        toast.success('El paciente fue dado de alta correctamente');
+      if (selectedStatusRequest.type === 'activation') {
+        toast.success('El paciente fue activado correctamente');
       } else {
         toast.success('Solicitud aprobada correctamente');
       }
@@ -1017,18 +1013,18 @@ const PatientManagement = () => {
   const handleViewActivationRequest = async (patient: Patient) => {
     try {
       const requests = await statusRequestService.getPendingRequests();
-      const request = requests.find(r => r.patientId == patient.id && r.requestedStatus == 'alta');
+      const request = requests.find(r => r.patientId == patient.id && r.type === 'activation' && r.requestedStatus === 'active');
       if (request) {
         setSelectedActivationRequest(request);
         setSelectedStatusRequest(request);
         setSelectedPatient(patient);
         setIsActivationRequestModalOpen(true);
       } else {
-        toast.error('No hay solicitudes de alta pendientes para este paciente');
+        toast.error('No hay solicitudes de activación pendientes para este paciente');
       }
     } catch (error) {
-      console.error('Error al obtener solicitud de alta:', error);
-      toast.error('Error al obtener la solicitud de alta');
+      console.error('Error al obtener solicitud de activación:', error);
+      toast.error('Error al obtener la solicitud de activación');
     }
   };
 
@@ -1104,7 +1100,6 @@ const PatientManagement = () => {
               <option value="active">Activos</option>
               <option value="pending">Pendientes</option>
               <option value="inactive">Inactivos</option>
-              <option value="absent">Ausentes</option>
             </select>
           </div>
 
@@ -1152,13 +1147,13 @@ const PatientManagement = () => {
                 statusFilter === 'active' ? 'Activo' :
                 statusFilter === 'pending' ? 'Pendiente' :
                 statusFilter === 'inactive' ? 'Inactivo' :
-                'Ausente'
+                'Todos'
               }
             </span>
           )}
           {professionalFilter !== 'all' && (
             <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-sm">
-              Profesional: {professionals.find(p => p.id === professionalFilter)?.name}
+              Profesional: {professionals.find(p => String(p.id) === String(professionalFilter))?.name || 'No encontrado'}
             </span>
           )}
           {frequencyFilter !== 'all' && (
@@ -1175,15 +1170,13 @@ const PatientManagement = () => {
                 patient.status === 'active'   ? 'bg-green-100 text-green-800' :
                 patient.status === 'pending'  ? 'bg-yellow-100 text-yellow-800' :
                 patient.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
-                patient.status === 'alta'     ? 'bg-green-200 text-green-900' :
-                                                'bg-red-100 text-red-800';
+                                                'bg-gray-100 text-gray-800';
 
               const statusLabel =
                 patient.status === 'active'   ? 'Activo' :
                 patient.status === 'pending'  ? 'Pendiente' :
                 patient.status === 'inactive' ? 'Inactivo' :
-                patient.status === 'alta'     ? 'Alta' :
-                                                'Ausente';
+                                                'Inactivo';
 
               return (
                 <div key={patient.id} className="rounded-lg border border-gray-200 p-4">
@@ -1253,7 +1246,7 @@ const PatientManagement = () => {
                     <button
                       onClick={() => handleViewActivationRequest(patient)}
                       className="text-green-600 hover:text-green-900"
-                      title="Ver Solicitud de Alta"
+                      title="Ver Solicitud de Activación"
                     >
                       <ArrowUpCircleIcon className="h-5 w-5" />
                     </button>
@@ -1307,14 +1300,12 @@ const PatientManagement = () => {
                               patient.status === 'active' ? 'bg-green-100 text-green-800' :
                               patient.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                               patient.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
-                              patient.status === 'alta' ? 'bg-green-200 text-green-900' :
-                              'bg-red-100 text-red-800'
+                              'bg-gray-100 text-gray-800'
                             }`}>
                               {patient.status === 'active' ? 'Activo' :
                                patient.status === 'pending' ? 'Pendiente' :
                                patient.status === 'inactive' ? 'Inactivo' :
-                               patient.status === 'alta' ? 'Alta' :
-                               'Ausente'}
+                               'Inactivo'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -1366,7 +1357,7 @@ const PatientManagement = () => {
                             <button
                               onClick={() => handleViewActivationRequest(patient)}
                               className="text-green-600 hover:text-green-900"
-                              title="Ver Solicitud de Alta"
+                              title="Ver Solicitud de Activación"
                             >
                               <ArrowUpCircleIcon className="h-5 w-5" />
                             </button>
