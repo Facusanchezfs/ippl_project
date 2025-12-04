@@ -6,6 +6,7 @@ export interface Post {
 	slug: string;
 	content: string;
 	excerpt: string;
+	description?: string;
 	section: string;
 	status: 'draft' | 'published';
 	thumbnail?: string;

@@ -16,6 +16,7 @@ class PostDTO {
     this.slug = p.slug;
     this.content = p.content;
     this.excerpt = p.excerpt;
+    this.description = p.description ?? undefined;
     this.section = p.section;
     this.status = p.status; // 'draft' | 'published'
     this.thumbnail = p.thumbnail

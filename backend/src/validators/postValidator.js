@@ -7,14 +7,12 @@ const createPostSchema = Joi.object({
       'string.max': 'El título no puede exceder 500 caracteres',
       'any.required': 'El título es requerido',
     }),
-    content: Joi.string().min(1).required().messages({
-      'string.min': 'El contenido no puede estar vacío',
-      'any.required': 'El contenido es requerido',
-    }),
+    content: Joi.string().allow('', null).empty('').optional(),
     section: Joi.string().min(1).required().messages({
       'any.required': 'La sección es requerida',
     }),
     excerpt: Joi.string().allow('').optional(),
+    description: Joi.string().allow('', null).optional(),
     tags: Joi.alternatives().try(
       Joi.string(),
       Joi.array().items(Joi.string())
@@ -36,9 +34,10 @@ const updatePostSchema = Joi.object({
   }),
   body: Joi.object({
     title: Joi.string().min(1).max(500).optional(),
-    content: Joi.string().min(1).optional(),
+    content: Joi.string().allow('', null).empty('').optional(),
     section: Joi.string().min(1).optional(),
     excerpt: Joi.string().allow('').optional(),
+    description: Joi.string().allow('', null).optional(),
     tags: Joi.alternatives().try(
       Joi.string(),
       Joi.array().items(Joi.string())

@@ -28,6 +28,7 @@ module.exports = (sequelize, DataTypes) => {
 
       content: { type: DataTypes.TEXT, allowNull: false },
       excerpt: { type: DataTypes.STRING(300), allowNull: false },
+      description: { type: DataTypes.TEXT, allowNull: true },
 
       section: { type: DataTypes.STRING(100), allowNull: false },
 

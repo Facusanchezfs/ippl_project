@@ -29,6 +29,7 @@ const ContentEditorModal = (props: PostEditorProps) => {
     title: '',
     content: '',
     excerpt: '',
+    description: '',
     section: 'bienestar', // valor por defecto; se sobreescribe si viene post
     status: 'draft',
     thumbnail: null as File | string | null,
@@ -50,6 +51,7 @@ const ContentEditorModal = (props: PostEditorProps) => {
         title: '',
         content: '',
         excerpt: '',
+        description: '',
         section: '',
         status: 'draft',
         thumbnail: null,
@@ -68,6 +70,7 @@ const ContentEditorModal = (props: PostEditorProps) => {
       title: p.title ?? '',
       content: p.content ?? '',
       excerpt: p.excerpt ?? '',
+      description: p.description ?? '',
       section: (p.section as any) ?? '',
       status: (p.status as any) ?? 'draft',
       thumbnail: p.thumbnail ?? null,
@@ -134,9 +137,9 @@ const ContentEditorModal = (props: PostEditorProps) => {
 
     try {
       const postData = new FormData();
-      const { seo, tags, thumbnail, ...basicData } = formData;
+      const { seo, tags, thumbnail, content, ...basicData } = formData;
 
-      // Campos básicos
+      // Campos básicos (excluyendo content que está deprecado)
       for (const [key, value] of Object.entries(basicData)) {
         if (value === null || value === undefined) continue;
         postData.append(
@@ -144,6 +147,9 @@ const ContentEditorModal = (props: PostEditorProps) => {
           typeof value === 'boolean' ? String(value) : String(value)
         );
       }
+
+      // Enviar content como string vacío ya que está deprecado pero el backend aún lo espera
+      postData.append('content', '');
 
       // Imagen
       if (thumbnail instanceof File) {
@@ -169,8 +175,8 @@ const ContentEditorModal = (props: PostEditorProps) => {
         postData.append('slug', slug);
       }
 
-      // Read time
-      const wordCount = formData.content.trim().split(/\s+/).filter(Boolean).length;
+      // Read time (calculado basado en description ya que content está deprecado)
+      const wordCount = formData.description.trim().split(/\s+/).filter(Boolean).length;
       const readTime = Math.max(1, Math.ceil(wordCount / 200)) + ' min';
       postData.append('readTime', readTime);
 
@@ -231,17 +237,17 @@ const ContentEditorModal = (props: PostEditorProps) => {
           </div>
 
           <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700">
-              Contenido
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+              Descripción
             </label>
             <textarea
-              id="content"
-              name="content"
-              value={formData.content}
+              id="description"
+              name="description"
+              value={formData.description}
               onChange={handleInputChange}
-              required
-              rows={10}
+              rows={4}
               className="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2 focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Descripción detallada del post"
             />
           </div>
 

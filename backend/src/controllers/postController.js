@@ -110,6 +110,7 @@ const createPost = async (req, res) => {
       content,
       section,
       excerpt = '',
+      description,
       tags,
       seo,
       status = 'draft',
@@ -121,8 +122,8 @@ const createPost = async (req, res) => {
     const authorId = req.user?.id;
     const authorName = req.user?.name;
 
-    if (!title || !content || !section) {
-      return sendError(res, 400, 'Faltan campos requeridos (título, contenido o sección)');
+    if (!title || !section) {
+      return sendError(res, 400, 'Faltan campos requeridos (título o sección)');
     }
 
     const tagsJson = tryParseJSON(tags, toArray(tags));
@@ -141,9 +142,10 @@ const createPost = async (req, res) => {
 
     const created = await Post.create({
       title,
-      content,
+      content: content || '', // Content deprecado, enviar vacío
       section,
       excerpt,
+      description: description || '',
       tags: tagsJson,
       seo: seoJson,
       authorId,
@@ -183,7 +185,7 @@ const updatePost = async (req, res) => {
     }
 
     const {
-      title, content, section, excerpt, tags, seo,
+      title, content, section, excerpt, description, tags, seo,
       status, slug, featured, readTime,
     } = req.body;
 
@@ -193,6 +195,10 @@ const updatePost = async (req, res) => {
     if (content != null) updates.content = content;
     if (section != null) updates.section = section;
     if (excerpt != null) updates.excerpt = excerpt;
+    if (description !== undefined) {
+      // Si viene como string vacío, convertir a null
+      updates.description = (description && description.trim()) ? description.trim() : null;
+    }
     if (tags !== undefined) updates.tags = tryParseJSON(tags, Array.isArray(tags) ? tags : []);
     if (seo !== undefined) updates.seo = tryParseJSON(seo, typeof seo === 'object' && seo ? seo : {});
 

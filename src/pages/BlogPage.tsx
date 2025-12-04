@@ -318,11 +318,11 @@ const BlogPage = () => {
           </div>
         </main>
 
-        {/* === Modal de Post (tu versión actual, sin cambios funcionales) === */}
+        {/* === Modal de Post === */}
           {selectedPost && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[95vh] overflow-y-auto relative shadow-2xl">
-              {/* Botón de cerrar */}
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto py-4">
+            <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[95vh] flex flex-col relative shadow-2xl my-auto">
+              {/* Botón de cerrar - fijo en la parte superior */}
               <button
                 onClick={() => setSelectedPost(null)}
                 className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-lg text-gray-600 hover:text-red-600 hover:bg-red-50 transform hover:scale-110 transition-all duration-200 z-50"
@@ -331,67 +331,80 @@ const BlogPage = () => {
                 <XMarkIcon className="h-6 w-6" />
               </button>
 
-              {/* Imagen hero ocupando altura */}
-              {selectedPost.thumbnail && (
-                <div className="relative w-full h-[70vh] flex items-center justify-center bg-black rounded-t-2xl">
-                  <img
-                    src={getImageUrl(selectedPost.thumbnail)}
-                    alt={selectedPost.title}
-                    className="max-w-full max-h-full object-contain rounded-t-2xl"
-                  />
-                  {/* overlay sutil para efecto magazine */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent rounded-t-2xl"></div>
-                  <div className="absolute bottom-6 left-6 text-white">
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {selectedPost.tags?.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-sm"
-                        >
-                          {tag}
-                        </span>
-                      ))}
+              {/* Contenedor scrolleable */}
+              <div className="overflow-y-auto flex-1">
+                {/* Imagen hero ocupando altura */}
+                {selectedPost.thumbnail && (
+                  <div className="relative w-full h-[70vh] flex items-center justify-center bg-black rounded-t-2xl flex-shrink-0">
+                    <img
+                      src={getImageUrl(selectedPost.thumbnail)}
+                      alt={selectedPost.title}
+                      className="max-w-full max-h-full object-contain rounded-t-2xl"
+                    />
+                    {/* overlay sutil para efecto magazine */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent rounded-t-2xl"></div>
+                    <div className="absolute bottom-6 left-6 text-white">
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {selectedPost.tags?.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-sm"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <h1 className="text-4xl font-extrabold drop-shadow-lg">{selectedPost.title}</h1>
                     </div>
-                    <h1 className="text-4xl font-extrabold drop-shadow-lg">{selectedPost.title}</h1>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Contenido */}
-              <article className="p-8 prose prose-lg max-w-none">
-                <div className="flex items-center justify-between text-sm text-gray-500 mb-8 border-b pb-4">
-                  <div className="flex items-center space-x-4">
-                    <span className="flex items-center">
-                      <CalendarIcon className="h-4 w-4 mr-1" />
-                      {new Date(selectedPost.createdAt).toLocaleDateString()}
-                    </span>
-                    <span className="flex items-center">
-                      <EyeIcon className="h-4 w-4 mr-1" />
-                      {selectedPost.views || 0} vistas
-                    </span>
-                    <button
-                      onClick={(e) => handleLike(selectedPost.id, e)}
-                      className={`flex items-center transition-colors ${
-                        likedPosts[selectedPost.id]
-                          ? 'text-teal-700 hover:text-teal-800'
-                          : 'text-gray-500 hover:text-teal-700'
-                      }`}
-                    >
-                      {likedPosts[selectedPost.id] ? (
-                        <HeartSolidIcon className="h-4 w-4 mr-1" />
-                      ) : (
-                        <HeartIcon className="h-4 w-4 mr-1" />
-                      )}
-                      {selectedPost.likes || 0} likes
-                    </button>
+                {/* Contenido */}
+                <article className="p-8 prose prose-lg max-w-none">
+                  <div className="flex items-center justify-between text-sm text-gray-500 mb-8 border-b pb-4">
+                    <div className="flex items-center space-x-4">
+                      <span className="flex items-center">
+                        <CalendarIcon className="h-4 w-4 mr-1" />
+                        {new Date(selectedPost.createdAt).toLocaleDateString()}
+                      </span>
+                      <span className="flex items-center">
+                        <EyeIcon className="h-4 w-4 mr-1" />
+                        {selectedPost.views || 0} vistas
+                      </span>
+                      <button
+                        onClick={(e) => handleLike(selectedPost.id, e)}
+                        className={`flex items-center transition-colors ${
+                          likedPosts[selectedPost.id]
+                            ? 'text-teal-700 hover:text-teal-800'
+                            : 'text-gray-500 hover:text-teal-700'
+                        }`}
+                      >
+                        {likedPosts[selectedPost.id] ? (
+                          <HeartSolidIcon className="h-4 w-4 mr-1" />
+                        ) : (
+                          <HeartIcon className="h-4 w-4 mr-1" />
+                        )}
+                        {selectedPost.likes || 0} likes
+                      </button>
+                    </div>
+                    {selectedPost.readTime && (
+                      <span className="text-teal-700 font-medium">{selectedPost.readTime}</span>
+                    )}
                   </div>
-                  {selectedPost.readTime && (
-                    <span className="text-teal-700 font-medium">{selectedPost.readTime}</span>
+
+                  {/* Descripción/Resumen */}
+                  {(selectedPost.description || selectedPost.excerpt) && (
+                    <div className="mb-6 pb-6 border-b border-gray-200">
+                      <p className="text-lg text-gray-700 leading-relaxed italic whitespace-pre-line">
+                        {selectedPost.description || selectedPost.excerpt}
+                      </p>
+                    </div>
                   )}
-                </div>
 
-                <div dangerouslySetInnerHTML={{ __html: selectedPost.content }} />
-              </article>
+                  {/* Contenido principal */}
+                  <div dangerouslySetInnerHTML={{ __html: selectedPost.content }} />
+                </article>
+              </div>
             </div>
           </div>
         )}
