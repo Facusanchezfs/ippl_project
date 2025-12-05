@@ -212,9 +212,13 @@ const createAppointment = async (req, res) => {
 
     // 2) Snapshots de nombres (si no existen, seguimos con texto por defecto)
     const [patient, professional] = await Promise.all([
-      Patient.findByPk(patientId, { attributes: ['id', 'name'] }),
+      Patient.findByPk(patientId, { attributes: ['id', 'name', 'active'] }),
       User.findByPk(professionalId, { attributes: ['id', 'name'] }),
     ]);
+
+    if (!patient || !patient.active) {
+      return sendError(res, 404, 'Paciente no encontrado o eliminado');
+    }
 
     // 3) Chequeo de solapamientos: misma fecha/profesional, activo y no cancelado
     // OPTIMIZACIÓN FASE 3 PARTE 2: createAppointment - Validación de solapamientos
@@ -361,8 +365,11 @@ const updateAppointment = async (req, res) => {
 
     // Refrescar snapshots si cambian IDs
     if (updates.patientId !== undefined) {
-      const patient = await Patient.findByPk(updates.patientId, { attributes: ['id', 'name'] });
-      updates.patientName = patient?.name || 'Paciente no encontrado';
+      const patient = await Patient.findByPk(updates.patientId, { attributes: ['id', 'name', 'active'] });
+      if (!patient || !patient.active) {
+        return sendError(res, 404, 'Paciente no encontrado o eliminado');
+      }
+      updates.patientName = patient.name;
     }
     if (updates.professionalId !== undefined) {
       const prof = await User.findByPk(updates.professionalId, { attributes: ['id', 'name'] });

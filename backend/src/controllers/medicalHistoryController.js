@@ -27,7 +27,14 @@ async function getMedicalHistories(req, res) {
     const professionalId = professionalIdParam ? parseInt(professionalIdParam, 10) : undefined;
 
     const where = {};
-    if (patientId) where.patientId = patientId;
+    if (patientId) {
+      // Verificar que el paciente existe y está activo
+      const patient = await Patient.findByPk(patientId, { attributes: ['id', 'active'] });
+      if (!patient || !patient.active) {
+        return sendError(res, 404, 'Paciente no encontrado');
+      }
+      where.patientId = patientId;
+    }
     if (professionalId) where.professionalId = professionalId;
 
     const histories = await MedicalHistory.findAll({
@@ -72,9 +79,9 @@ async function createMedicalHistory(req, res) {
     // Convertir patientId a número si es necesario
     const patientId = typeof patientIdParam === 'string' ? parseInt(patientIdParam, 10) : patientIdParam;
 
-    // Verificar que el paciente exista
-    const patient = await Patient.findByPk(patientId, { attributes: ['id'] });
-    if (!patient) {
+    // Verificar que el paciente exista y esté activo
+    const patient = await Patient.findByPk(patientId, { attributes: ['id', 'active'] });
+    if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 

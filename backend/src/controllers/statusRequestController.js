@@ -1,4 +1,5 @@
 'use strict';
+const { Op } = require('sequelize');
 const { sequelize, StatusRequest, Patient } = require('../../models');
 const { toStatusRequestDTO, toStatusRequestDTOList } = require('../../mappers/StatusRequestMapper');
 const { createActivity } = require('./activityController');
@@ -34,7 +35,7 @@ const createRequest = async (req, res) => {
 
     // Cargar paciente para snapshot y verificación
     const patient = await Patient.findByPk(patientId);
-    if (!patient) {
+    if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
@@ -78,8 +79,19 @@ const createRequest = async (req, res) => {
 // Obtener solicitudes pendientes
 const getPendingRequests = async (req, res) => {
   try {
+    // Obtener IDs de pacientes activos
+    const activePatients = await Patient.findAll({
+      where: { active: true },
+      attributes: ['id'],
+      raw: true,
+    });
+    const activePatientIds = activePatients.map(p => p.id);
+
     const pending = await StatusRequest.findAll({
-      where: { status: 'pending' },
+      where: { 
+        status: 'pending',
+        patientId: activePatientIds.length > 0 ? { [Op.in]: activePatientIds } : { [Op.in]: [] }
+      },
       order: [['createdAt', 'DESC']],
     });
 
@@ -98,8 +110,19 @@ const getProfessionalRequests = async (req, res) => {
       return sendError(res, 400, 'Falta professionalId');
     }
 
+    // Obtener IDs de pacientes activos
+    const activePatients = await Patient.findAll({
+      where: { active: true },
+      attributes: ['id'],
+      raw: true,
+    });
+    const activePatientIds = activePatients.map(p => p.id);
+
     const rows = await StatusRequest.findAll({
-      where: { professionalId },
+      where: { 
+        professionalId,
+        patientId: activePatientIds.length > 0 ? { [Op.in]: activePatientIds } : { [Op.in]: [] }
+      },
       order: [['createdAt', 'DESC']],
     });
 
@@ -116,6 +139,12 @@ const getPatientPendingRequests = async (req, res) => {
     const { patientId } = req.params;
     if (!patientId) {
       return sendError(res, 400, 'Falta patientId');
+    }
+
+    // Verificar que el paciente existe y está activo
+    const patient = await Patient.findByPk(patientId);
+    if (!patient || !patient.active) {
+      return sendError(res, 404, 'Paciente no encontrado');
     }
 
     const rows = await StatusRequest.findAll({
@@ -152,7 +181,7 @@ const approveRequest = async (req, res) => {
 
       // 2) Buscar paciente
       const patient = await Patient.findByPk(request.patientId, { transaction: t });
-      if (!patient) {
+      if (!patient || !patient.active) {
         return { kind: 'patient_not_found' };
       }
 
@@ -251,7 +280,7 @@ const rejectRequest = async (req, res) => {
 
     // (Opcional) Traer paciente para validar existencia/estado actual (no modificamos al paciente en un rechazo)
     const patient = await Patient.findByPk(sr.patientId);
-    if (!patient) {
+    if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 

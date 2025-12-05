@@ -167,7 +167,7 @@ async function getProfessionalPatients(req, res) {
     const { professionalId } = req.params;
 
     const patients = await Patient.findAll({
-      where: { professionalId },
+      where: { professionalId, active: true },
       order: [['createdAt', 'DESC']],
       include: [
         {
@@ -215,7 +215,7 @@ async function assignPatient(req, res) {
     } = req.body;
 
     const patient = await Patient.findByPk(patientId);
-    if (!patient) return sendError(res, 404, 'Paciente no encontrado');
+    if (!patient || !patient.active) return sendError(res, 404, 'Paciente no encontrado');
 
     // Guardar el professionalId original para comparar después
     const originalProfessionalId = patient.professionalId;
@@ -350,7 +350,7 @@ async function requestDischargePatient(req, res) {
     const { id: professionalId, name: professionalName } = req.user;
 
     const patient = await Patient.findByPk(patientId);
-    if (!patient) return sendError(res, 404, 'Paciente no encontrado');
+    if (!patient || !patient.active) return sendError(res, 404, 'Paciente no encontrado');
 
     // ¿Solicitud pendiente para este paciente?
     const pending = await StatusRequest.findOne({
@@ -401,7 +401,7 @@ async function requestActivationPatient(req, res) {
     const { id: professionalId, name: professionalName } = req.user;
 
     const patient = await Patient.findByPk(patientId);
-    if (!patient) {
+    if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
