@@ -11,7 +11,7 @@ const rateLimit = require('express-rate-limit');
  * 100 requests por minuto por IP
  */
 const globalLimiter = rateLimit({
-	windowMs: 60 * 1000, // 1 minuto
+	windowMs: 60 * 10000, // 1 minuto
 	max: 100, // 100 requests por ventana
 	message: {
 		error: 'Demasiadas solicitudes desde esta IP, por favor intenta nuevamente en un minuto.',
