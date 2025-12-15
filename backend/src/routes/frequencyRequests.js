@@ -214,6 +214,8 @@ router.post(
           patientName: snapshot.patientName,
           professionalId: snapshot.professionalId,
           professionalName: snapshot.professionalName,
+          currentFrequency: snapshot.currentFrequency,
+          requestedFrequency: snapshot.requestedFrequency,
           newFrequency: snapshot.requestedFrequency,
         }
       );
