@@ -8,13 +8,13 @@ const rateLimit = require('express-rate-limit');
 
 /**
  * Rate limiter global para todas las rutas
- * 100 requests por minuto por IP
+ * 1000 requests por 30 segundos por IP
  */
 const globalLimiter = rateLimit({
-	windowMs: 60 * 10000, // 1 minuto
-	max: 100, // 100 requests por ventana
+	windowMs: 30 * 1000, // 30 segundos
+	max: 1000, // 1000 requests por ventana
 	message: {
-		error: 'Demasiadas solicitudes desde esta IP, por favor intenta nuevamente en un minuto.',
+		error: 'Demasiadas solicitudes desde esta IP, por favor intenta nuevamente en 30 segundos.',
 		code: 'RATE_LIMIT_EXCEEDED'
 	},
 	standardHeaders: true, // Retorna información de rate limit en headers `RateLimit-*`
