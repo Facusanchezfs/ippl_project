@@ -99,7 +99,6 @@ function App() {
             <Route path="profesionales" element={<PsychologistDashboard />} />
             <Route path="pacientes" element={<PatientManagement />} />
             <Route path="medical-history/:patientId" element={<MedicalHistoryPage />} />
-            <Route path="calendario" element={<AppointmentsCalendar />} />
             <Route path="mensajes" element={<AdminMessages />} />
             <Route path="estadisticas" element={<StatsPage />} />
             <Route path="solicitudes" element={<StatusRequestsManagement />} />

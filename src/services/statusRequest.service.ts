@@ -1,11 +1,21 @@
 import api from '../config/api';
 import { StatusRequest } from '../types/StatusRequest';
 
+// Cache para getPendingRequests (TTL: 5 segundos)
+let pendingRequestsCache: {
+	data: StatusRequest[];
+	timestamp: number;
+} | null = null;
+
+const CACHE_TTL_MS = 5000; // 5 segundos
+
 const statusRequestService = {
 	createRequest: async (
 		data: Omit<StatusRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>
 	): Promise<StatusRequest> => {
 		const response = await api.post<{data: StatusRequest}>('/status-requests', data);
+		// Invalidar cache al crear una solicitud
+		pendingRequestsCache = null;
 		return response.data?.data || response.data || {
 			id: '',
 			patientId: data.patientId,
@@ -22,16 +32,30 @@ const statusRequestService = {
 	},
 
 	getPendingRequests: async (): Promise<StatusRequest[]> => {
+		// Verificar si hay cache válido
+		const now = Date.now();
+		if (pendingRequestsCache && (now - pendingRequestsCache.timestamp) < CACHE_TTL_MS) {
+			return pendingRequestsCache.data;
+		}
+
+		// Hacer fetch y actualizar cache
 		const response = await api.get('/status-requests/pending');
 		const data = response.data?.data || response.data || {};
 		
+		let result: StatusRequest[] = [];
 		if ('requests' in data && Array.isArray(data.requests)) {
-			return data.requests;
+			result = data.requests;
+		} else if (Array.isArray(data)) {
+			result = data;
 		}
-		if (Array.isArray(data)) {
-			return data;
-		}
-		return [];
+		
+		// Actualizar cache
+		pendingRequestsCache = {
+			data: result,
+			timestamp: now
+		};
+		
+		return result;
 	},
 
 	getProfessionalRequests: async (
@@ -72,6 +96,8 @@ const statusRequestService = {
 			`/status-requests/${requestId}/approve`,
 			{ adminResponse }
 		);
+		// Invalidar cache al aprobar una solicitud
+		pendingRequestsCache = null;
 		return response.data?.data || response.data || {
 			id: requestId,
 			patientId: '',
@@ -95,6 +121,8 @@ const statusRequestService = {
 			`/status-requests/${requestId}/reject`,
 			{ adminResponse: adminResponse || 'Rechazado por el administrador' }
 		);
+		// Invalidar cache al rechazar una solicitud
+		pendingRequestsCache = null;
 		return response.data?.data || response.data || {
 			id: requestId,
 			patientId: '',

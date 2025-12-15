@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -240,12 +241,14 @@ const FinancialDashboard: React.FC = () => {
 			dateStyle: 'long',
 			timeStyle: 'short',
 		});
-		const porcentajeIppl =
-			typeof prof.commission === 'number' ? prof.commission : 0;
+		
+		// Obtener abonos del profesional
+		const allAbonos = await userService.getAbonos();
+		const profAbonos = allAbonos.filter(a => String(a.professionalId) === String(prof.id));
+		
+		const porcentajeIppl = Number(prof.commission) || 0;
 		const saldoTotal = Number(prof.saldoTotal) || 0;
-		const abonos = Number(prof.saldoPendiente) || 0;
 		const saldoIppl = saldoTotal * (porcentajeIppl / 100);
-		const deudaComision = Math.max(saldoIppl - abonos, 0);
 		const saldoNeto = saldoTotal - saldoIppl;
 		doc.setFont('helvetica', 'bold');
 		doc.setFontSize(16);
@@ -269,6 +272,52 @@ const FinancialDashboard: React.FC = () => {
 		doc.setLineWidth(0.1);
 		doc.line(10, y + 4, 200, y + 4);
 		y += 10;
+		
+		// Agregar sección de pagos realizados
+		if (profAbonos.length > 0) {
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(14);
+			doc.text('Pagos Realizados:', 10, y);
+			y += 8;
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(12);
+			
+			// Encabezado de tabla de pagos
+			doc.setFillColor(230, 230, 230);
+			doc.rect(10, y - 5, 190, 8, 'F');
+			doc.setFont('helvetica', 'bold');
+			doc.text('Fecha', 15, y);
+			doc.text('Monto', 180, y, { align: 'right' });
+			y += 7;
+			doc.setFont('helvetica', 'normal');
+			
+			let totalPagos = 0;
+			profAbonos.forEach((abono: any) => {
+				const fechaAbono = new Date(abono.date).toLocaleDateString('es-ES');
+				doc.text(fechaAbono, 15, y);
+				doc.text(`$${Number(abono.amount).toFixed(2)}`, 180, y, { align: 'right' });
+				totalPagos += Number(abono.amount);
+				y += 7;
+				if (y > 270) {
+					doc.addPage();
+					y = 20;
+				}
+			});
+			
+			// Total de pagos
+			doc.setFont('helvetica', 'bold');
+			doc.line(10, y + 2, 200, y + 2);
+			y += 5;
+			doc.text('Total Pagos:', 15, y);
+			doc.text(`$${totalPagos.toFixed(2)}`, 180, y, { align: 'right' });
+			y += 10;
+		}
+		
+		// Línea separadora antes de pacientes con deuda
+		doc.setLineWidth(0.1);
+		doc.line(10, y + 4, 200, y + 4);
+		y += 10;
+		
 		// Obtener pacientes con deuda
 		const patients = await patientsService.getProfessionalPatients(prof.id);
 		const appointments = await appointmentsService.getProfessionalAppointments(

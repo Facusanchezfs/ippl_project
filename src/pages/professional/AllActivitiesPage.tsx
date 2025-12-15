@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect } from 'react';
 import { 
   ClockIcon, 
@@ -8,7 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import activityService from '../../services/activity.service';
 import { useAuth } from '../../context/AuthContext';
-import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
+import { getFriendlyErrorMessage } from '../../utils/errorMessages';
 import type { Activity } from '../../types/Activity';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -30,11 +31,13 @@ const AllActivitiesPage = () => {
       // Filtrar actividades relevantes para el profesional
       const filteredActivities = data.filter(activity => {
         // Solo mostrar actividades relacionadas con el profesional actual
-        if (activity.metadata?.professionalId && activity.metadata.professionalId !== user?.id) {
+        if (activity.metadata?.professionalId && String(activity.metadata.professionalId) !== String(user?.id)) {
           return false;
         }
         // Tipos de actividades a mostrar
         return [
+          'PATIENT_ASSIGNED',
+          'PATIENT_ACTIVATION_APPROVED',
           'FREQUENCY_CHANGE_APPROVED',
           'FREQUENCY_CHANGE_REJECTED',
           'STATUS_CHANGE_APPROVED',
@@ -53,6 +56,10 @@ const AllActivitiesPage = () => {
 
   const getActivityIcon = (type: string) => {
     switch (type) {
+      case 'PATIENT_ASSIGNED':
+        return <BellIcon className="h-6 w-6 text-blue-500" />;
+      case 'PATIENT_ACTIVATION_APPROVED':
+        return <CheckCircleIcon className="h-6 w-6 text-green-500" />;
       case 'FREQUENCY_CHANGE_APPROVED':
         return <CheckCircleIcon className="h-6 w-6 text-green-500" />;
       case 'FREQUENCY_CHANGE_REJECTED':
@@ -68,6 +75,9 @@ const AllActivitiesPage = () => {
 
   const getActivityColor = (type: string) => {
     switch (type) {
+      case 'PATIENT_ASSIGNED':
+        return 'bg-blue-100';
+      case 'PATIENT_ACTIVATION_APPROVED':
       case 'FREQUENCY_CHANGE_APPROVED':
       case 'STATUS_CHANGE_APPROVED':
         return 'bg-green-100';

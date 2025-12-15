@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import statsService, { SystemStats, ProfessionalStats } from '../../services/stats.service';
 import { messageService, Message } from '../../services/messageService';
@@ -18,11 +18,9 @@ import {
   CalendarIcon,
   ClipboardDocumentListIcon,
   ChatBubbleLeftRightIcon,
-  ArrowTrendingUpIcon,
   ArrowPathIcon,
   BriefcaseIcon,
   NewspaperIcon,
-  Cog6ToothIcon,
   PresentationChartLineIcon,
   BookOpenIcon,
   AdjustmentsHorizontalIcon,
@@ -32,31 +30,9 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import frequencyRequestService from '../../services/frequencyRequest.service';
 import statusRequestService from '../../services/statusRequest.service';
+import patientsService from '../../services/patients.service';
 
 // Interfaces
-interface StatCardProps {
-  title: string;
-  value: number;
-  icon: React.ElementType;
-  color: string;
-  detail: string;
-}
-
-interface ManagementCardProps {
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  route: string;
-  stats: string[];
-}
-
-interface ActionCardProps {
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  onClick: () => void;
-}
-
 interface ActivityItemProps {
   color: string;
   text: string;
@@ -151,12 +127,18 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [userLoaded, setUserLoaded] = useState<User>();
   const [resolvedActivities, setResolvedActivities] = useState<Set<string>>(new Set());
+  const [financialMetrics, setFinancialMetrics] = useState({
+    ingresosDelMes: 0,
+    cantidadSolicitudes: 0,
+    pagosPendientes: 0,
+  });
 
   useEffect(() => {
     loadStats();
     loadRecentMessages();
     loadRecentPosts();
     loadActivities();
+    loadFinancialMetrics();
     if (user) {
       loadUser();
     }
@@ -243,24 +225,56 @@ const Dashboard = () => {
         .map(translateActivity);
       setActivities(filteredActivities);
 
-      // Verificar qué actividades de frecuencia ya están resueltas
+      // Verificar qué actividades de frecuencia y status ya están resueltas
       try {
-        const pendingRequests = await frequencyRequestService.getPendingRequests();
-        const pendingPatientIds = new Set(
-          pendingRequests.map(r => String(r.patientId))
+        const [pendingFrequencyRequests, pendingStatusRequests] = await Promise.all([
+          frequencyRequestService.getPendingRequests(),
+          statusRequestService.getPendingRequests()
+        ]);
+        
+        const pendingFrequencyPatientIds = new Set(
+          pendingFrequencyRequests.map(r => String(r.patientId))
+        );
+        
+        const pendingDischargePatientIds = new Set(
+          pendingStatusRequests
+            .filter(r => r.requestedStatus === 'inactive' && r.type !== 'activation')
+            .map(r => String(r.patientId))
+        );
+        
+        const pendingActivationPatientIds = new Set(
+          pendingStatusRequests
+            .filter(r => r.type === 'activation' && r.requestedStatus === 'active')
+            .map(r => String(r.patientId))
         );
         
         const resolved = new Set<string>();
         filteredActivities.forEach(activity => {
-          if (
-            (activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
-             activity.type === 'FREQUENCY_CHANGE_REQUESTED') &&
-            activity.metadata?.patientId
-          ) {
+          if (activity.metadata?.patientId) {
             const patientId = String(activity.metadata.patientId);
-            // Si el patientId NO está en las solicitudes pendientes, está resuelto
-            if (!pendingPatientIds.has(patientId)) {
-              resolved.add(activity._id);
+            
+            // Verificar actividades de frecuencia
+            if (
+              activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
+              activity.type === 'FREQUENCY_CHANGE_REQUESTED'
+            ) {
+              if (!pendingFrequencyPatientIds.has(patientId)) {
+                resolved.add(activity._id);
+              }
+            }
+            
+            // Verificar actividades de baja
+            if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
+              if (!pendingDischargePatientIds.has(patientId)) {
+                resolved.add(activity._id);
+              }
+            }
+            
+            // Verificar actividades de activación
+            if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
+              if (!pendingActivationPatientIds.has(patientId)) {
+                resolved.add(activity._id);
+              }
             }
           }
         });
@@ -275,9 +289,58 @@ const Dashboard = () => {
     }
   };
 
+  const loadFinancialMetrics = async () => {
+    try {
+      // Cargar todas las métricas en paralelo
+      const [allAbonos, allPatients, allProfessionals] = await Promise.all([
+        userService.getAbonos(),
+        patientsService.getAllPatients(),
+        userService.getProfessionals(),
+      ]);
+
+      // 1. Ingresos del Mes: Filtrar abonos del mes actual y sumar amount
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      firstDayOfMonth.setHours(0, 0, 0, 0);
+      const today = new Date(now);
+      today.setHours(23, 59, 59, 999);
+
+      const ingresosDelMes = allAbonos
+        .filter((abono) => {
+          const abonoDate = new Date(abono.date);
+          return abonoDate >= firstDayOfMonth && abonoDate <= today;
+        })
+        .reduce((sum, abono) => sum + (Number(abono.amount) || 0), 0);
+
+      // 2. Solicitudes: Cantidad total de pacientes
+      const cantidadSolicitudes = Array.isArray(allPatients) ? allPatients.length : 0;
+
+      // 3. Pagos Pendientes: Suma de saldoPendiente de todos los profesionales
+      const pagosPendientes = allProfessionals.reduce(
+        (sum, prof) => sum + (Number(prof.saldoPendiente) || 0),
+        0
+      );
+
+      setFinancialMetrics({
+        ingresosDelMes,
+        cantidadSolicitudes,
+        pagosPendientes,
+      });
+    } catch (error) {
+      console.error('Error al cargar métricas financieras:', error);
+      // En caso de error, mantener valores en 0 (fallback)
+      setFinancialMetrics({
+        ingresosDelMes: 0,
+        cantidadSolicitudes: 0,
+        pagosPendientes: 0,
+      });
+    }
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadStats();
+    await loadFinancialMetrics();
     setIsRefreshing(false);
     toast.success('Datos actualizados');
   };
@@ -508,7 +571,7 @@ const Dashboard = () => {
                   detail: `${systemStats.appointments.completed} completadas`,
                   icon: CalendarIcon,
                   color: "yellow",
-                  onClick: () => navigate(user?.role === 'admin' ? '/admin/calendario' : '/professional/calendario')
+                  onClick: () => navigate('/professional/calendario')
                 }
               ].map((stat, index) => (
               <div 
@@ -574,9 +637,9 @@ const Dashboard = () => {
                   color: "emerald",
                   route: "/financial",
                   stats: [
-                    { label: "Pagos Pendientes", value: 0 },
-                    { label: "Solicitudes", value: 0 },
-                    { label: "Ingresos del Mes", value: 0 }
+                    { label: "Pagos Pendientes", value: financialMetrics.pagosPendientes },
+                    { label: "Solicitudes", value: financialMetrics.cantidadSolicitudes },
+                    { label: "Ingresos del Mes", value: financialMetrics.ingresosDelMes }
                   ]
                 }
               ].map((section, index) => (
@@ -606,14 +669,8 @@ const Dashboard = () => {
             </div>
 
             {/* Accesos Rápidos */}
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                {
-                  title: "Calendario",
-                  description: "Gestión de citas",
-                  icon: CalendarIcon,
-                  route: '/admin/calendario'
-                },
                 {
                   title: "Reportes",
                   description: "Estadísticas y análisis",

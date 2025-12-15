@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect } from 'react';
 import { 
   ClockIcon,
@@ -31,10 +32,12 @@ const RecentActivityProfessional = () => {
       const data = await activityService.getActivities();
       const normalizedActivities = data
         .filter(activity => {
-          if (activity.metadata?.professionalId && activity.metadata.professionalId !== user?.id) {
+          if (activity.metadata?.professionalId && String(activity.metadata.professionalId) !== String(user?.id)) {
             return false;
           }
           return [
+            'PATIENT_ASSIGNED',
+            'PATIENT_ACTIVATION_APPROVED',
             'FREQUENCY_CHANGE_APPROVED',
             'FREQUENCY_CHANGE_REJECTED',
             'STATUS_CHANGE_APPROVED',
@@ -56,6 +59,10 @@ const RecentActivityProfessional = () => {
 
   const getActivityIcon = (type: string) => {
     switch (type) {
+      case 'PATIENT_ASSIGNED':
+        return <BellIcon className="h-6 w-6 text-blue-500" />;
+      case 'PATIENT_ACTIVATION_APPROVED':
+        return <CheckCircleIcon className="h-6 w-6 text-green-500" />;
       case 'FREQUENCY_CHANGE_APPROVED':
         return <CheckCircleIcon className="h-6 w-6 text-green-500" />;
       case 'FREQUENCY_CHANGE_REJECTED':
@@ -71,6 +78,9 @@ const RecentActivityProfessional = () => {
 
   const getActivityColor = (type: string) => {
     switch (type) {
+      case 'PATIENT_ASSIGNED':
+        return 'bg-blue-100';
+      case 'PATIENT_ACTIVATION_APPROVED':
       case 'FREQUENCY_CHANGE_APPROVED':
       case 'STATUS_CHANGE_APPROVED':
         return 'bg-green-100';

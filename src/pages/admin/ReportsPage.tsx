@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 import patientsService from '../../services/patients.service';
 import userService from '../../services/user.service';
 import appointmentsService from '../../services/appointments.service';
+import derivationService from '../../services/derivation.service';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -11,8 +12,10 @@ const ReportsPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [reportType, setReportType] = useState<'activation' | 'inactive'>('inactive');
+  const [reportType, setReportType] = useState<'activation' | 'inactive' | 'derivations'>('inactive');
   const [selectedProfessional, setSelectedProfessional] = useState('');
+  const [selectedProfessionalForActivations, setSelectedProfessionalForActivations] = useState('');
+  const [selectedProfessionalForDerivations, setSelectedProfessionalForDerivations] = useState('');
   const [professionals, setProfessionals] = useState<any[]>([]);
   const navigate = useNavigate();
 
@@ -22,7 +25,96 @@ const ReportsPage: React.FC = () => {
     });
   }, []);
 
+  const generateDerivationsPDF = async () => {
+    setLoading(true);
+    try {
+      const users = await userService.getUsers();
+      const allDerivations = await derivationService.getDerivations(
+        selectedProfessionalForDerivations || undefined
+      );
+      
+      // Filtrar por rango de fechas usando createdAt
+      const filtered = allDerivations.filter(d => {
+        if (!d.createdAt) return false;
+
+        const fechaDerivacion = new Date(d.createdAt);
+
+        let start: Date | null = null;
+        let end: Date | null = null;
+
+        if (startDate) {
+          start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+        }
+
+        if (endDate) {
+          // Parsear la fecha sin hora para evitar problemas de timezone
+          const [year, month, day] = endDate.split('-').map(Number);
+          end = new Date(year, month - 1, day); // month es 0-indexed
+          end.setHours(23, 59, 59, 999);
+        }
+
+        if (!start && !end) return true;
+        if (start && fechaDerivacion < start) return false;
+        if (end && fechaDerivacion > end) return false;
+
+        return true;
+      });
+
+      const rows = filtered.map(d => {
+        const fechaDerivacion = d.createdAt
+          ? new Date(d.createdAt).toLocaleString('es-ES')
+          : '';
+
+        return [
+          fechaDerivacion,
+          d.professionalName || 'No asignado',
+          d.patientName || 'Sin nombre',
+        ];
+      });
+
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text('Instituto Psicológico y Psicoanálisis del Litoral', 105, 15, { align: 'center' });
+      doc.setFontSize(14);
+      doc.text('Reporte de Derivaciones', 105, 25, { align: 'center' });
+      doc.setFontSize(10);
+      const fechaGeneracion = new Date().toLocaleString('es-ES');
+      const fechaArchivo = new Date().toISOString().split('T')[0];
+      doc.text(`Fecha de generación: ${fechaGeneracion}`, 10, 35);
+      doc.text(`Rango de reporte: ${startDate || '...'} a ${endDate || '...'}`, 10, 41);
+      if (selectedProfessionalForDerivations) {
+        const prof = users.find(p => p.id === selectedProfessionalForDerivations);
+        doc.text(`Profesional: ${prof?.name || 'Todos'}`, 10, 47);
+      }
+      doc.setLineWidth(0.5);
+      doc.line(10, 50, 200, 50);
+      autoTable(doc, {
+        head: [['Fecha de Derivación', 'Profesional', 'Paciente']],
+        body: rows,
+        startY: 55,
+        styles: { fontSize: 11, cellPadding: 3, valign: 'middle' },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', halign: 'center' },
+        bodyStyles: { halign: 'center' },
+        alternateRowStyles: { fillColor: [240, 245, 255] },
+        tableLineColor: [41, 128, 185],
+        tableLineWidth: 0.1,
+        margin: { left: 10, right: 10 },
+      });
+      doc.setFontSize(10);
+      doc.text('Instituto Psicológico y Psicoanálisis del Litoral - Reporte confidencial', 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      doc.save(`reporte_derivaciones_${fechaArchivo}.pdf`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const generatePDF = async () => {
+    if (reportType === 'derivations') {
+      await generateDerivationsPDF();
+      return;
+    }
+
     setLoading(true);
     try {
       const users = await userService.getUsers();
@@ -40,6 +132,11 @@ const ReportsPage: React.FC = () => {
         filtered = allPatients.filter(p => p.dischargeRequest?.requestDate);
       }
       filtered = filtered.filter(p => {
+        // Filtro por profesional
+        if (selectedProfessionalForActivations && p.professionalId !== selectedProfessionalForActivations) {
+          return false;
+        }
+        
         // Para activaciones: usar activatedAt si existe, sino usar activationRequest.requestDate
         let fechaAprobacion: Date | null = null;
         if (reportType === 'activation') {
@@ -67,7 +164,9 @@ const ReportsPage: React.FC = () => {
         }
         
         if (endDate) {
-          end = new Date(endDate);
+          // Parsear la fecha sin hora para evitar problemas de timezone
+          const [year, month, day] = endDate.split('-').map(Number);
+          end = new Date(year, month - 1, day); // month es 0-indexed
           end.setHours(23, 59, 59, 999);
         }
         
@@ -88,7 +187,7 @@ const ReportsPage: React.FC = () => {
         return true;
       });
       const rows = filtered.map(p => {
-        const professional = users.find(prof => prof.id === p.professionalId);
+        const professional = users.find(prof => String(prof.id) === String(p.professionalId));
         // Para activaciones: usar activatedAt si existe, sino usar activationRequest.requestDate
         let fechaAprobacion: Date | null = null;
         if (reportType === 'activation') {
@@ -230,11 +329,41 @@ const ReportsPage: React.FC = () => {
       <div className="flex gap-4 mb-6 items-end">
         <div>
           <label className="block text-sm font-medium text-gray-700">Tipo de reporte</label>
-          <select value={reportType} onChange={e => setReportType(e.target.value as 'activation' | 'inactive')} className="border rounded px-2 py-1">
+          <select value={reportType} onChange={e => setReportType(e.target.value as 'activation' | 'inactive' | 'derivations')} className="border rounded px-2 py-1">
             <option value="activation">Activaciones</option>
             <option value="inactive">Bajas (Inactivos)</option>
+            <option value="derivations">Derivaciones</option>
           </select>
         </div>
+        {reportType === 'derivations' ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Profesional (opcional)</label>
+            <select
+              value={selectedProfessionalForDerivations}
+              onChange={e => setSelectedProfessionalForDerivations(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="">Todos los profesionales</option>
+              {professionals.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Profesional (opcional)</label>
+            <select
+              value={selectedProfessionalForActivations}
+              onChange={e => setSelectedProfessionalForActivations(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="">Todos los profesionales</option>
+              {professionals.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700">Fecha inicio</label>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border rounded px-2 py-1" />
@@ -251,7 +380,11 @@ const ReportsPage: React.FC = () => {
           {loading ? 'Generando...' : 'Generar PDF'}
         </button>
       </div>
-      <p className="text-gray-500">El reporte incluirá la fecha de {reportType === 'activation' ? 'activación' : 'baja'}, el profesional asignado y el nombre del paciente, según el rango de fechas seleccionado.</p>
+      <p className="text-gray-500">
+        {reportType === 'derivations' 
+          ? 'El reporte incluirá la fecha de derivación, el profesional y el nombre del paciente, según el rango de fechas seleccionado.'
+          : `El reporte incluirá la fecha de ${reportType === 'activation' ? 'activación' : 'baja'}, el profesional asignado y el nombre del paciente, según el rango de fechas seleccionado.`}
+      </p>
       <div className="mt-12">
         <h2 className="text-xl font-bold mb-4">Reporte por Profesional</h2>
         <div className="flex gap-4 mb-6 items-end">

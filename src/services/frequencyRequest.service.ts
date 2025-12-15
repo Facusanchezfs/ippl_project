@@ -1,5 +1,13 @@
 import api from '../config/api';
 
+// Cache para getPendingRequests (TTL: 5 segundos)
+let pendingRequestsCache: {
+	data: FrequencyRequest[];
+	timestamp: number;
+} | null = null;
+
+const CACHE_TTL_MS = 5000; // 5 segundos
+
 export interface FrequencyRequest {
 	id: string;
 	patientId: string;
@@ -30,6 +38,8 @@ const frequencyRequestService = {
 				'/frequency-requests',
 				data
 			);
+			// Invalidar cache al crear una solicitud
+			pendingRequestsCache = null;
 			return response.data?.data || response.data || {
 				id: '',
 				patientId: data.patientId,
@@ -44,13 +54,28 @@ const frequencyRequestService = {
 			};
 	},
 
-	// Obtener todas las solicitudes pendientes
+	// Obtener todas las solicitudes pendientes (con cache)
 	getPendingRequests: async (): Promise<FrequencyRequest[]> => {
-			const response = await api.get<{data: FrequencyRequest[]}>(
-				'/frequency-requests/pending'
-			);
-			const requests = response.data?.data || response.data || [];
-			return Array.isArray(requests) ? requests : [];
+		// Verificar si hay cache válido
+		const now = Date.now();
+		if (pendingRequestsCache && (now - pendingRequestsCache.timestamp) < CACHE_TTL_MS) {
+			return pendingRequestsCache.data;
+		}
+
+		// Hacer fetch y actualizar cache
+		const response = await api.get<{data: FrequencyRequest[]}>(
+			'/frequency-requests/pending'
+		);
+		const requests = response.data?.data || response.data || [];
+		const result = Array.isArray(requests) ? requests : [];
+		
+		// Actualizar cache
+		pendingRequestsCache = {
+			data: result,
+			timestamp: now
+		};
+		
+		return result;
 	},
 
 	// Obtener solicitudes de un paciente específico
@@ -75,6 +100,8 @@ const frequencyRequestService = {
 					adminResponse,
 				}
 			);
+			// Invalidar cache al aprobar una solicitud
+			pendingRequestsCache = null;
 			return response.data?.data || response.data || {
 				id: requestId,
 				patientId: '',
@@ -101,6 +128,8 @@ const frequencyRequestService = {
 					adminResponse,
 				}
 			);
+			// Invalidar cache al rechazar una solicitud
+			pendingRequestsCache = null;
 			return response.data?.data || response.data || {
 				id: requestId,
 				patientId: '',
