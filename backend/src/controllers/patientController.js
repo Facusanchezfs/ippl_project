@@ -260,19 +260,27 @@ async function assignPatient(req, res) {
       statusChangeReason: statusChangeReason ?? null,
     });
 
-    // Actividad
-    await createActivity(
-      'PATIENT_ASSIGNED',
-      'Paciente asignado',
-      `Paciente ${patient.name} derivado al profesional ${patient.professionalName ?? professionalId}`,
-      {
-        patientId: String(patient.id),
-        patientName: patient.name,
-        professionalId: professionalId ? String(professionalId) : undefined,
-        professionalName: patient.professionalName ?? undefined,
-        sessionFrequency: patient.sessionFrequency ?? undefined,
-      }
-    );
+    // Crear actividad PATIENT_ASSIGNED solo si:
+    // 1. Se asignó un professionalId válido (no null/undefined)
+    // 2. El professionalId realmente cambió (no es la misma asignación)
+    const newProfessionalId = professionalId ?? patient.professionalId;
+    const professionalIdChanged = newProfessionalId && 
+                                  String(newProfessionalId) !== String(originalProfessionalId);
+    
+    if (professionalIdChanged && newProfessionalId) {
+      await createActivity(
+        'PATIENT_ASSIGNED',
+        'Paciente asignado',
+        `Paciente ${patient.name} derivado al profesional ${patient.professionalName || newProfessionalId}`,
+        {
+          patientId: String(patient.id),
+          patientName: patient.name,
+          professionalId: String(newProfessionalId),
+          professionalName: patient.professionalName || undefined,
+          sessionFrequency: patient.sessionFrequency || undefined,
+        }
+      );
+    }
 
     // Respuesta → DTO enriquecido con la última derivación
     const plain = patient.get({ plain: true });

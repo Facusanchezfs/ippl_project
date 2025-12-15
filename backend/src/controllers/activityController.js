@@ -67,6 +67,7 @@ async function getActivities(req, res) {
     const relevantTypes = [
       'PATIENT_DISCHARGE_REQUEST',
       'PATIENT_ACTIVATION_REQUEST',
+      'PATIENT_ASSIGNED',
       'STATUS_CHANGE_APPROVED',
       'STATUS_CHANGE_REJECTED',
       'FREQUENCY_CHANGE_REQUEST',
