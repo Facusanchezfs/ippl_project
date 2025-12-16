@@ -235,8 +235,9 @@ const deleteUser = async (req, res) => {
 const permanentDeleteUser = async (req, res) => {
   try {
     const { id } = req.params;
-
+    console.log('DELETE USER PERMANENT', req.params.id);
     const user = await User.findByPk(id);
+    console.log('USER', user);
     if (!user) return sendError(res, 404, 'Usuario no encontrado');
 
     // Solo permitir eliminar usuarios inactivos
@@ -245,7 +246,7 @@ const permanentDeleteUser = async (req, res) => {
     }
 
     await user.destroy();
-
+    console.log('USER DESTROYED');
     return sendSuccess(res, null, 'Usuario eliminado permanentemente', 204);
   } catch (error) {
     logger.error('Error permanently deleting user:', error);
