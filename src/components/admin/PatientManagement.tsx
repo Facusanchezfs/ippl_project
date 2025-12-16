@@ -157,62 +157,43 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
         assignData.sessionFrequency = sessionFrequency;
       }
 
-      // Solo enviar nota de texto si:
-      // 1. El usuario escribió algo nuevo, O
-      // 2. Había una nota previa y el usuario la borró (enviar string vacío)
+      // Manejar notas: solo enviar lo que el usuario está creando/editing en el tipo seleccionado
+      // Si cambia de tipo, se reemplaza la nota anterior (no se preserva)
+      
       const trimmedTextNote = textNote.trim();
+      
       if (noteType === 'text') {
-        if (trimmedTextNote !== (patient.textNote || '')) {
-          assignData.textNote = trimmedTextNote || undefined;
+        // Modo texto: solo enviar texto si hay contenido
+        if (trimmedTextNote) {
+          assignData.textNote = trimmedTextNote;
         }
-      }
-
-      // Manejar audio: preservar el existente si no se graba uno nuevo
-      if (noteType === 'audio' && audioBlob) {
-        // Se está grabando un audio nuevo
-        try {
-          // Validar que el blob tenga datos
-          if (audioBlob.size === 0) {
-            toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
+        // No enviar audio cuando se está en modo texto (se borra el audio existente)
+      } else if (noteType === 'audio') {
+        // Modo audio: solo enviar audio si se grabó uno nuevo
+        if (audioBlob) {
+          try {
+            // Validar que el blob tenga datos
+            if (audioBlob.size === 0) {
+              toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
+              return;
+            }
+            
+            const audioFile = new File([audioBlob], 'note.webm', { 
+              type: 'audio/webm'
+            });
+            
+            console.log('Subiendo audio:', { size: audioFile.size, type: audioFile.type });
+            const audioNoteUrl = await patientsService.uploadAudio(audioFile);
+            console.log('Audio subido exitosamente:', audioNoteUrl);
+            assignData.audioNote = audioNoteUrl;
+          } catch (error: any) {
+            console.error('Error al subir el audio:', error);
+            const errorMessage = error?.message || 'Error al subir el audio';
+            toast.error(errorMessage);
             return;
           }
-          
-          const audioFile = new File([audioBlob], 'note.webm', { 
-            type: 'audio/webm'
-          });
-          
-          console.log('Subiendo audio:', { size: audioFile.size, type: audioFile.type });
-          const audioNoteUrl = await patientsService.uploadAudio(audioFile);
-          console.log('Audio subido exitosamente:', audioNoteUrl);
-          assignData.audioNote = audioNoteUrl;
-        } catch (error: any) {
-          console.error('Error al subir el audio:', error);
-          const errorMessage = error?.message || 'Error al subir el audio';
-          toast.error(errorMessage);
-          return;
         }
-      } else if (patient.audioNote && !audioBlob) {
-        // Hay un audio existente y no se está grabando uno nuevo: preservarlo siempre
-        // Extraer la ruta relativa de la URL completa
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        let existingAudioPath = patient.audioNote;
-        
-        // Si la URL incluye el dominio, extraer solo la ruta
-        if (existingAudioPath.startsWith(API_URL)) {
-          existingAudioPath = existingAudioPath.replace(API_URL, '');
-        } else if (existingAudioPath.startsWith('http://') || existingAudioPath.startsWith('https://')) {
-          // Si tiene otro dominio, extraer la ruta después del dominio
-          try {
-            const url = new URL(existingAudioPath);
-            existingAudioPath = url.pathname;
-          } catch (e) {
-            // Si falla el parsing, usar el valor tal cual
-            console.warn('No se pudo parsear la URL del audio:', existingAudioPath);
-          }
-        }
-        
-        // Preservar el audio existente siempre que no se haya grabado uno nuevo
-        assignData.audioNote = existingAudioPath;
+        // No enviar texto cuando se está en modo audio (se borra el texto existente)
       }
 
       // Solo actualizar assignedAt si es una nueva asignación (no tenía profesional antes)
