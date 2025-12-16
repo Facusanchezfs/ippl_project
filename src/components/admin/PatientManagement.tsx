@@ -31,8 +31,65 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
   const [textNote, setTextNote] = useState('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [hasExistingAudioNote, setHasExistingAudioNote] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+
+  // Precargar datos del paciente cuando se abre el modal
+  useEffect(() => {
+    if (isOpen && patient) {
+      // Precargar profesional si existe
+      if (patient.professionalId) {
+        setSelectedProfessional(patient.professionalId);
+      } else {
+        setSelectedProfessional('');
+      }
+
+      // Precargar estado
+      if (patient.status) {
+        setStatus(patient.status);
+      }
+
+      // Precargar frecuencia
+      if (patient.sessionFrequency) {
+        setSessionFrequency(patient.sessionFrequency);
+      } else {
+        setSessionFrequency('weekly');
+      }
+
+      // Precargar nota de texto si existe
+      if (patient.textNote) {
+        setTextNote(patient.textNote);
+        setNoteType('text');
+      } else {
+        setTextNote('');
+      }
+
+      // Verificar si existe nota de voz
+      if (patient.audioNote) {
+        setHasExistingAudioNote(true);
+        // Si hay audio pero no hay texto, mostrar audio como tipo seleccionado
+        if (!patient.textNote) {
+          setNoteType('audio');
+        }
+      } else {
+        setHasExistingAudioNote(false);
+      }
+
+      // Resetear audio grabado (no precargamos el blob, solo indicamos existencia)
+      setAudioBlob(null);
+    } else if (!isOpen) {
+      // Resetear estados cuando se cierra el modal
+      setSelectedProfessional('');
+      setStatus('active');
+      setSessionFrequency('weekly');
+      setNoteType('text');
+      setTextNote('');
+      setAudioBlob(null);
+      setHasExistingAudioNote(false);
+      chunksRef.current = [];
+    }
+  }, [isOpen, patient]);
 
   const startRecording = async () => {
     try {
@@ -72,14 +129,47 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
     e.preventDefault();
     
     try {
+      if (!patient) {
+        toast.error('No se encontró el paciente');
+        return;
+      }
+
       const selectedProf = professionals.find(p => p.id == selectedProfessional);
-      if (!selectedProf || !patient) {
+      if (!selectedProf) {
         toast.error('Por favor selecciona un profesional');
         return;
       }
 
-      let audioNoteUrl = '';
+      // Construir payload dinámicamente, solo con campos que cambiaron
+      const assignData: any = {
+        patientId: patient.id,
+        professionalId: selectedProfessional,
+        professionalName: selectedProf.name,
+      };
+
+      // Solo enviar status si cambió
+      if (status !== patient.status) {
+        assignData.status = status;
+      }
+
+      // Solo enviar frecuencia si cambió
+      if (sessionFrequency !== patient.sessionFrequency) {
+        assignData.sessionFrequency = sessionFrequency;
+      }
+
+      // Solo enviar nota de texto si:
+      // 1. El usuario escribió algo nuevo, O
+      // 2. Había una nota previa y el usuario la borró (enviar string vacío)
+      const trimmedTextNote = textNote.trim();
+      if (noteType === 'text') {
+        if (trimmedTextNote !== (patient.textNote || '')) {
+          assignData.textNote = trimmedTextNote || undefined;
+        }
+      }
+
+      // Manejar audio: preservar el existente si no se graba uno nuevo
       if (noteType === 'audio' && audioBlob) {
+        // Se está grabando un audio nuevo
         try {
           // Validar que el blob tenga datos
           if (audioBlob.size === 0) {
@@ -92,30 +182,47 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
           });
           
           console.log('Subiendo audio:', { size: audioFile.size, type: audioFile.type });
-          audioNoteUrl = await patientsService.uploadAudio(audioFile);
+          const audioNoteUrl = await patientsService.uploadAudio(audioFile);
           console.log('Audio subido exitosamente:', audioNoteUrl);
+          assignData.audioNote = audioNoteUrl;
         } catch (error: any) {
           console.error('Error al subir el audio:', error);
           const errorMessage = error?.message || 'Error al subir el audio';
           toast.error(errorMessage);
           return;
         }
+      } else if (patient.audioNote && !audioBlob) {
+        // Hay un audio existente y no se está grabando uno nuevo: preservarlo siempre
+        // Extraer la ruta relativa de la URL completa
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        let existingAudioPath = patient.audioNote;
+        
+        // Si la URL incluye el dominio, extraer solo la ruta
+        if (existingAudioPath.startsWith(API_URL)) {
+          existingAudioPath = existingAudioPath.replace(API_URL, '');
+        } else if (existingAudioPath.startsWith('http://') || existingAudioPath.startsWith('https://')) {
+          // Si tiene otro dominio, extraer la ruta después del dominio
+          try {
+            const url = new URL(existingAudioPath);
+            existingAudioPath = url.pathname;
+          } catch (e) {
+            // Si falla el parsing, usar el valor tal cual
+            console.warn('No se pudo parsear la URL del audio:', existingAudioPath);
+          }
+        }
+        
+        // Preservar el audio existente siempre que no se haya grabado uno nuevo
+        assignData.audioNote = existingAudioPath;
       }
 
-      const assignData: AssignPatientDTO = {
-        patientId: patient.id,
-        professionalId: selectedProfessional,
-        professionalName: selectedProf.name,
-        status,
-        assignedAt: new Date().toISOString(),
-        textNote: textNote.trim() || undefined,
-        audioNote: audioNoteUrl || undefined,
-        sessionFrequency
-      };
+      // Solo actualizar assignedAt si es una nueva asignación (no tenía profesional antes)
+      if (!patient.professionalId && selectedProfessional) {
+        assignData.assignedAt = new Date().toISOString();
+      }
 
-      await onAssign(assignData);
+      await onAssign(assignData as AssignPatientDTO);
       onClose();
-      toast.success('Paciente asignado exitosamente');
+      toast.success(patient.professionalId ? 'Asignación actualizada exitosamente' : 'Paciente asignado exitosamente');
     } catch (error) {
       console.error('Error al asignar paciente:', error);
       toast.error('Error al asignar el paciente');
@@ -124,12 +231,17 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
 
   if (!isOpen) return null;
 
+  const hasProfessional = patient?.professionalId ? true : false;
+  const modalTitle = hasProfessional 
+    ? `Editar asignación de ${patient?.name}`
+    : `Asignar profesional a ${patient?.name}`;
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">
-            Asignar Profesional a {patient?.name}
+            {modalTitle}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
             <span className="sr-only">Cerrar</span>
@@ -239,6 +351,13 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
               <label className="block text-sm font-medium text-gray-700">
                 Nota de Audio
               </label>
+              {hasExistingAudioNote && !audioBlob && (
+                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    ℹ️ Este paciente ya tiene una nota de voz cargada. Solo se reemplazará si grabas una nueva.
+                  </p>
+                </div>
+              )}
               {!audioBlob ? (
                 <button
                   type="button"
@@ -294,7 +413,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
-              Asignar
+              {hasProfessional ? 'Guardar Cambios' : 'Asignar'}
             </button>
           </div>
         </form>
