@@ -1,6 +1,6 @@
 'use strict';
 const bcrypt = require('bcryptjs');
-const { User, Abono, sequelize } = require('../../models');
+const { User, Abono, Patient, Appointment, FrequencyRequest, StatusRequest, sequelize } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
 const logger = require('../utils/logger');
@@ -233,23 +233,151 @@ const deleteUser = async (req, res) => {
 
 // Permanent delete a user (eliminación física)
 const permanentDeleteUser = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
-    console.log('DELETE USER PERMANENT', req.params.id);
-    const user = await User.findByPk(id);
-    console.log('USER', user);
-    if (!user) return sendError(res, 404, 'Usuario no encontrado');
+    logger.info(`[permanentDeleteUser] Iniciando eliminación permanente del usuario ${id}`);
 
-    // Solo permitir eliminar usuarios inactivos
+    // Buscar usuario dentro de la transacción
+    const user = await User.findByPk(id, { transaction: t });
+    if (!user) {
+      await t.rollback();
+      logger.warn(`[permanentDeleteUser] Usuario ${id} no encontrado`);
+      return sendError(res, 404, 'Usuario no encontrado');
+    }
+
+    // Validar que el usuario esté inactivo
     if (user.status === 'active') {
+      await t.rollback();
+      logger.warn(`[permanentDeleteUser] Intento de eliminar usuario activo ${id}`);
       return sendError(res, 400, 'No se puede eliminar permanentemente un usuario activo. Primero debe desactivarlo.');
     }
 
-    await user.destroy();
-    console.log('USER DESTROYED');
-    return sendSuccess(res, null, 'Usuario eliminado permanentemente', 204);
+    logger.info(`[permanentDeleteUser] Usuario ${id} validado como inactivo, iniciando limpieza de referencias`);
+
+    // ===== LIMPIEZA DE REFERENCIAS =====
+
+    // a) Pacientes asignados
+    const patients = await Patient.findAll({
+      where: {
+        professionalId: user.id,
+        active: true
+      },
+      transaction: t
+    });
+
+    if (patients.length > 0) {
+      logger.info(`[permanentDeleteUser] Limpiando ${patients.length} pacientes asignados`);
+      await Promise.all(
+        patients.map(patient =>
+          patient.update({
+            professionalId: null,
+            professionalName: null,
+            status: 'pending',
+            assignedAt: null
+          }, { transaction: t })
+        )
+      );
+    }
+
+    // b) Appointments activos o futuros
+    const appointments = await Appointment.findAll({
+      where: {
+        professionalId: user.id,
+        active: true,
+        status: 'scheduled'
+      },
+      transaction: t
+    });
+
+    if (appointments.length > 0) {
+      logger.info(`[permanentDeleteUser] Cancelando ${appointments.length} citas programadas`);
+      await Promise.all(
+        appointments.map(appointment =>
+          appointment.update({
+            professionalId: null,
+            professionalName: null,
+            status: 'cancelled',
+            active: false
+          }, { transaction: t })
+        )
+      );
+    }
+
+    // c) FrequencyRequests pendientes
+    const frequencyRequests = await FrequencyRequest.findAll({
+      where: {
+        professionalId: user.id,
+        status: 'pending'
+      },
+      transaction: t
+    });
+
+    if (frequencyRequests.length > 0) {
+      logger.info(`[permanentDeleteUser] Rechazando ${frequencyRequests.length} solicitudes de frecuencia pendientes`);
+      await Promise.all(
+        frequencyRequests.map(request =>
+          request.update({
+            professionalId: null,
+            professionalName: '[usuario eliminado]',
+            status: 'rejected',
+            adminResponse: 'Profesional eliminado del sistema'
+          }, { transaction: t })
+        )
+      );
+    }
+
+    // d) StatusRequests pendientes
+    const statusRequests = await StatusRequest.findAll({
+      where: {
+        professionalId: user.id,
+        status: 'pending'
+      },
+      transaction: t
+    });
+
+    if (statusRequests.length > 0) {
+      logger.info(`[permanentDeleteUser] Rechazando ${statusRequests.length} solicitudes de estado pendientes`);
+      await Promise.all(
+        statusRequests.map(request =>
+          request.update({
+            professionalId: null,
+            professionalName: '[usuario eliminado]',
+            status: 'rejected',
+            adminResponse: 'Profesional eliminado del sistema'
+          }, { transaction: t })
+        )
+      );
+    }
+
+    // e) Derivations asociadas al profesional
+    // Nota: La columna professionalId tiene NOT NULL constraint en la base de datos,
+    // por lo que no podemos ponerla en NULL. Eliminamos las derivaciones para resolver
+    // el foreign key constraint.
+    const [derivationResults] = await sequelize.query(
+      `DELETE FROM Derivations WHERE professionalId = :userId`,
+      {
+        replacements: { userId: user.id },
+        transaction: t
+      }
+    );
+
+    if (derivationResults > 0) {
+      logger.info(`[permanentDeleteUser] Eliminando ${derivationResults} derivaciones asociadas`);
+    }
+
+    // ===== ELIMINACIÓN FINAL =====
+    logger.info(`[permanentDeleteUser] Eliminando usuario ${id} permanentemente`);
+    await user.destroy({ transaction: t });
+
+    // Confirmar transacción
+    await t.commit();
+    logger.info(`[permanentDeleteUser] Usuario ${id} eliminado permanentemente con éxito`);
+
+    return sendSuccess(res, null, undefined, 204);
   } catch (error) {
-    logger.error('Error permanently deleting user:', error);
+    await t.rollback();
+    logger.error('[permanentDeleteUser] Error al eliminar usuario permanentemente:', error);
     return sendError(res, 500, 'Error al eliminar usuario permanentemente');
   }
 };
