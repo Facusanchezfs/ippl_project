@@ -28,7 +28,7 @@ const globalLimiter = rateLimit({
  */
 const loginLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutos
-	max: 5, // 5 intentos por ventana
+	max: 30, // 5 intentos por ventana
 	message: {
 		error: 'Demasiados intentos de inicio de sesión. Por favor intenta nuevamente en 15 minutos.',
 		code: 'LOGIN_RATE_LIMIT_EXCEEDED'
@@ -46,7 +46,7 @@ const loginLimiter = rateLimit({
  */
 const writeLimiter = rateLimit({
 	windowMs: 60 * 1000, // 1 minuto
-	max: 20, // 20 requests por ventana
+	max: 100, // 20 requests por ventana
 	message: {
 		error: 'Demasiadas solicitudes de escritura desde esta IP. Por favor intenta nuevamente en un minuto.',
 		code: 'WRITE_RATE_LIMIT_EXCEEDED'
