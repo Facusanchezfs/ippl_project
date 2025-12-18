@@ -250,12 +250,27 @@ async function assignPatient(req, res) {
 
     await patient.save();
 
+    // Obtener la última derivación para preservar notas si no se envían
+    const lastDerivation = await Derivation.findOne({
+      where: { patientId: patient.id },
+      order: [['createdAt', 'DESC']],
+      attributes: ['textNote', 'audioNote'],
+    });
+
+    // Preservar notas existentes si no se envían nuevas
+    // REGLA: Solo actualizar notas si vienen explícitamente en el body (no undefined)
+    // Si textNote/audioNote es undefined → preservar de la última derivación
+    // Si textNote/audioNote es null → explícitamente borrar (aunque esto no debería pasar desde el frontend)
+    // Si textNote/audioNote tiene valor → usar el nuevo valor
+    const finalTextNote = textNote !== undefined ? textNote : (lastDerivation?.textNote ?? null);
+    const finalAudioNote = audioNote !== undefined ? audioNote : (lastDerivation?.audioNote ?? null);
+
     // Registrar derivación
     const derivation = await Derivation.create({
       patientId: patient.id,
       professionalId: professionalId ?? patient.professionalId ?? null,
-      textNote: textNote ?? null,
-      audioNote: audioNote ?? null,
+      textNote: finalTextNote,
+      audioNote: finalAudioNote,
       sessionFrequency: sessionFrequency ?? patient.sessionFrequency ?? null,
       statusChangeReason: statusChangeReason ?? null,
     });
