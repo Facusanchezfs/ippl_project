@@ -127,6 +127,7 @@ const ActivityPage: React.FC = () => {
 
         navigate('/admin/pacientes', {
           state: {
+            from: 'activities',
             openFrequencyRequest: {
               patientId: String(patientId),
               requestId: pendingRequest.id,
@@ -173,6 +174,7 @@ const ActivityPage: React.FC = () => {
 
         navigate('/admin/pacientes', {
           state: {
+            from: 'activities',
             openStatusRequest: {
               patientId: String(patientId),
               requestId: pendingRequest.id,
@@ -218,6 +220,7 @@ const ActivityPage: React.FC = () => {
 
         navigate('/admin/pacientes', {
           state: {
+            from: 'activities',
             openActivationRequest: {
               patientId: String(patientId),
               requestId: pendingRequest.id,

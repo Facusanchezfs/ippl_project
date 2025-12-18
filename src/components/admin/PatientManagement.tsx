@@ -814,10 +814,23 @@ const PatientManagement = () => {
   const [selectedActivationRequest, setSelectedActivationRequest] = useState<StatusRequest | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  console.log({
+    navigate,
+    location
+  })
+  // Preservar el origen de navegación en estado local para que no se pierda
+  const [navigationFrom, setNavigationFrom] = useState<string | undefined>(
+    (location.state as { from?: string } | null)?.from
+  );
 
   useEffect(() => {
     loadData();
-  }, []);
+    // Preservar el origen de navegación cuando cambia location.state
+    const from = (location.state as { from?: string } | null)?.from;
+    if (from) {
+      setNavigationFrom(from);
+    }
+  }, [location.state]);
 
   const openFrequencyRequestModal = useCallback(async (patient: Patient, requestId?: string) => {
     try {
@@ -894,13 +907,19 @@ const PatientManagement = () => {
   useEffect(() => {
     if (isLoading) return;
 
-    const state = location.state as { openFrequencyRequest?: { patientId: string; requestId?: string } } | null;
+    const state = location.state as { openFrequencyRequest?: { patientId: string; requestId?: string }; from?: string } | null;
     if (!state?.openFrequencyRequest) return;
 
     const { patientId, requestId } = state.openFrequencyRequest;
     const patient = patients.find((p) => String(p.id) === String(patientId));
 
-    const finalize = () => navigate('.', { replace: true, state: {} });
+    const finalize = () => {
+      const from = state?.from || navigationFrom;
+      if (from) {
+        setNavigationFrom(from);
+      }
+      navigate('.', { replace: true, state: { from: from } });
+    };
 
     if (!patient) {
       toast.error('Paciente no encontrado para la solicitud.');
@@ -909,18 +928,24 @@ const PatientManagement = () => {
     }
 
     void openFrequencyRequestModal(patient, requestId).finally(finalize);
-  }, [patients, location.state, isLoading, navigate, openFrequencyRequestModal]);
+  }, [patients, location.state, isLoading, navigate, openFrequencyRequestModal, navigationFrom]);
 
   useEffect(() => {
     if (isLoading) return;
 
-    const state = location.state as { openStatusRequest?: { patientId: string; requestId?: string } } | null;
+    const state = location.state as { openStatusRequest?: { patientId: string; requestId?: string }; from?: string } | null;
     if (!state?.openStatusRequest) return;
 
     const { patientId, requestId } = state.openStatusRequest;
     const patient = patients.find((p) => String(p.id) === String(patientId));
 
-    const finalize = () => navigate('.', { replace: true, state: {} });
+    const finalize = () => {
+      const from = state?.from || navigationFrom;
+      if (from) {
+        setNavigationFrom(from);
+      }
+      navigate('.', { replace: true, state: { from: from } });
+    };
 
     if (!patient) {
       toast.error('Paciente no encontrado para la solicitud.');
@@ -929,18 +954,24 @@ const PatientManagement = () => {
     }
 
     void openStatusRequestModal(patient, requestId).finally(finalize);
-  }, [patients, location.state, isLoading, navigate, openStatusRequestModal]);
+  }, [patients, location.state, isLoading, navigate, openStatusRequestModal, navigationFrom]);
 
   useEffect(() => {
     if (isLoading) return;
 
-    const state = location.state as { openActivationRequest?: { patientId: string; requestId?: string } } | null;
+    const state = location.state as { openActivationRequest?: { patientId: string; requestId?: string }; from?: string } | null;
     if (!state?.openActivationRequest) return;
 
     const { patientId, requestId } = state.openActivationRequest;
     const patient = patients.find((p) => String(p.id) === String(patientId));
 
-    const finalize = () => navigate('.', { replace: true, state: {} });
+    const finalize = () => {
+      const from = state?.from || navigationFrom;
+      if (from) {
+        setNavigationFrom(from);
+      }
+      navigate('.', { replace: true, state: { from: from } });
+    };
 
     if (!patient) {
       toast.error('Paciente no encontrado para la solicitud.');
@@ -949,7 +980,7 @@ const PatientManagement = () => {
     }
 
     void openActivationRequestModal(patient, requestId).finally(finalize);
-  }, [patients, location.state, isLoading, navigate, openActivationRequestModal]);
+  }, [patients, location.state, isLoading, navigate, openActivationRequestModal, navigationFrom]);
 
   const loadData = async () => {
     try {
@@ -1152,11 +1183,17 @@ const PatientManagement = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="md:flex md:items-center md:justify-between mb-6">
           <button
-              onClick={() => navigate('/admin')}
+              onClick={() => {
+                if (navigationFrom === 'activities') {
+                  navigate('/admin/actividad');
+                } else {
+                  navigate('/admin');
+                }
+              }}
               className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
             >
               <ArrowLeftIcon className="h-5 w-5 mr-2" />
-              Volver al Dashboard
+              {navigationFrom === 'activities' ? 'Volver' : 'Volver al Dashboard'}
             </button>
           <div className="flex-1 min-w-0">
             <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
