@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Activity } = require('../../models');
+const { Activity, User } = require('../../models');
 const { toActivityDTO, toActivityDTOList } = require('../../mappers/ActivityMapper');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
@@ -54,9 +54,40 @@ async function createActivity(type, title, description, metadata = {}) {
   }
 }
 
+// Función helper para normalizar metadata (puede estar serializado como string)
+function normalizeMetadata(metadata) {
+  if (!metadata) return null;
+  
+  // Si ya es un objeto, retornarlo
+  if (typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return metadata;
+  }
+  
+  // Si es string, intentar parsearlo
+  if (typeof metadata === 'string') {
+    try {
+      const parsed = JSON.parse(metadata);
+      return typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+      logger.warn('Error parsing metadata as JSON:', e);
+      return null;
+    }
+  }
+  
+  return null;
+}
+
 // Obtener todas las actividades
 async function getActivities(req, res) {
   try {
+    // Obtener información del usuario autenticado
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    
+    if (!userId || !userRole) {
+      return sendError(res, 401, 'Usuario no autenticado');
+    }
+
     // OPTIMIZACIÓN FASE 3 PARTE 2: getActivities
     // PROBLEMA: Sin paginación, trae miles de registros innecesarios.
     // IMPACTO: Con muchas actividades = transferencia masiva, lento, alto uso de memoria.
@@ -85,11 +116,48 @@ async function getActivities(req, res) {
     
     const offset = (page - 1) * limit;
 
+    // Construir condiciones WHERE
+    const whereConditions = {
+      type: relevantTypes,
+    };
+
+    // REGLA DE NEGOCIO: Filtrar por professionalId según el rol
+    if (userRole === 'professional') {
+      // Un profesional solo puede ver SUS PROPIAS activities
+      whereConditions.professionalId = userId;
+    } else {
+      // Admin: solo mostrar activities con professionalId (no null)
+      // El INNER JOIN asegurará que el profesional existe
+      whereConditions.professionalId = {
+        [Op.ne]: null
+      };
+    }
+
+    // REGLA DE NEGOCIO: No mostrar activities de profesionales eliminados
+    // Usamos un INNER JOIN con User para asegurar que el profesional existe
+    const includeConditions = [{
+      model: User,
+      as: 'professional',
+      required: true, // INNER JOIN: solo activities donde el profesional existe
+      attributes: ['id'], // Solo necesitamos verificar existencia
+    }];
+
     const { count, rows: activities } = await Activity.findAndCountAll({
-      where: { type: relevantTypes },
+      where: whereConditions,
+      include: includeConditions,
       order: [['occurredAt', 'DESC']],
       limit,
       offset,
+      distinct: true, // Importante para count correcto con includes
+    });
+
+    // Normalizar metadata de cada activity (puede estar serializado como string)
+    const normalizedActivities = activities.map(activity => {
+      const plain = activity.get({ plain: true });
+      if (plain.metadata) {
+        plain.metadata = normalizeMetadata(plain.metadata);
+      }
+      return plain;
     });
 
     const totalPages = Math.ceil(count / limit);
@@ -100,7 +168,7 @@ async function getActivities(req, res) {
     
     if (hasPagination) {
       return sendSuccess(res, {
-        activities: toActivityDTOList(activities),
+        activities: toActivityDTOList(normalizedActivities),
         pagination: {
           page,
           limit,
@@ -110,7 +178,7 @@ async function getActivities(req, res) {
       });
     } else {
       // Formato antiguo para compatibilidad con frontend actual
-      return sendSuccess(res, toActivityDTOList(activities));
+      return sendSuccess(res, toActivityDTOList(normalizedActivities));
     }
   } catch (error) {
     logger.error('Error getting activities:', error);
@@ -121,9 +189,32 @@ async function getActivities(req, res) {
 // Marcar una actividad como leída
 async function markAsRead(req, res) {
   try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    
+    if (!userId || !userRole) {
+      return sendError(res, 401, 'Usuario no autenticado');
+    }
+
     const { id } = req.params; // el cliente envía _id como string; acá usamos la PK "id"
-    const activity = await Activity.findByPk(id);
+    const activity = await Activity.findByPk(id, {
+      include: [{
+        model: User,
+        as: 'professional',
+        required: true, // Asegurar que el profesional existe
+        attributes: ['id'],
+      }],
+    });
+    
     if (!activity) return sendError(res, 404, 'Actividad no encontrada');
+
+    // REGLA DE NEGOCIO: Un profesional solo puede marcar como leídas SUS PROPIAS activities
+    if (userRole === 'professional') {
+      if (String(activity.professionalId) !== String(userId)) {
+        return sendError(res, 403, 'No tienes permiso para marcar esta actividad como leída');
+      }
+    }
+    // Si es admin, puede marcar cualquier activity como leída
 
     if (!activity.read) await activity.update({ read: true });
     return sendSuccess(res, null, 'Actividad marcada como leída', 204);
@@ -136,7 +227,27 @@ async function markAsRead(req, res) {
 // Marcar todas las actividades como leídas
 async function markAllAsRead(req, res) {
   try {
-    await Activity.update({ read: true }, { where: { read: false } });
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    
+    if (!userId || !userRole) {
+      return sendError(res, 401, 'Usuario no autenticado');
+    }
+
+    // Construir condiciones WHERE
+    const whereConditions = { read: false };
+    
+    // REGLA DE NEGOCIO: Un profesional solo puede marcar como leídas SUS PROPIAS activities
+    if (userRole === 'professional') {
+      whereConditions.professionalId = userId;
+    } else {
+      // Admin: solo marcar activities con professionalId (no null)
+      whereConditions.professionalId = {
+        [Op.ne]: null
+      };
+    }
+
+    await Activity.update({ read: true }, { where: whereConditions });
     return sendSuccess(res, null, 'Todas las actividades marcadas como leídas', 204);
   } catch (error) {
     logger.error('Error marking all activities as read:', error);
@@ -147,9 +258,41 @@ async function markAllAsRead(req, res) {
 // Obtener el conteo de actividades no leídas
 async function getUnreadCount(req, res) {
   try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    
+    if (!userId || !userRole) {
+      return sendError(res, 401, 'Usuario no autenticado');
+    }
+
+    // Construir condiciones WHERE
+    const whereConditions = { read: false };
+    
+    // REGLA DE NEGOCIO: Un profesional solo cuenta SUS PROPIAS activities no leídas
+    if (userRole === 'professional') {
+      whereConditions.professionalId = userId;
+    } else {
+      // Admin: solo contar activities con professionalId (no null)
+      whereConditions.professionalId = {
+        [Op.ne]: null
+      };
+    }
+
+    // REGLA DE NEGOCIO: No contar activities de profesionales eliminados
+    // Usamos un INNER JOIN con User para asegurar que el profesional existe
+    const includeConditions = [{
+      model: User,
+      as: 'professional',
+      required: true, // INNER JOIN: solo activities donde el profesional existe
+      attributes: ['id'],
+    }];
+
     const count = await Activity.count({
-      where: { read: false },
+      where: whereConditions,
+      include: includeConditions,
+      distinct: true,
     });
+    
     return sendSuccess(res, { count });
   } catch (error) {
     logger.error('Error getting unread count:', error);

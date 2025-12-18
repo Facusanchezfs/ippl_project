@@ -1,6 +1,6 @@
 'use strict';
 const bcrypt = require('bcryptjs');
-const { User, Abono, Patient, Appointment, FrequencyRequest, StatusRequest, sequelize } = require('../../models');
+const { User, Abono, Patient, Appointment, FrequencyRequest, StatusRequest, Activity, sequelize } = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
 const logger = require('../utils/logger');
@@ -364,6 +364,20 @@ const permanentDeleteUser = async (req, res) => {
 
     if (derivationResults > 0) {
       logger.info(`[permanentDeleteUser] Eliminando ${derivationResults} derivaciones asociadas`);
+    }
+
+    // f) Activities asociadas al profesional
+    // REGLA DE NEGOCIO: Las activities NO deben sobrevivir a la eliminación del profesional
+    // Eliminación física (DELETE) de todas las activities del profesional
+    const deletedActivitiesCount = await Activity.destroy({
+      where: {
+        professionalId: user.id
+      },
+      transaction: t
+    });
+
+    if (deletedActivitiesCount > 0) {
+      logger.info(`[permanentDeleteUser] Eliminando ${deletedActivitiesCount} activities asociadas al profesional`);
     }
 
     // ===== ELIMINACIÓN FINAL =====
