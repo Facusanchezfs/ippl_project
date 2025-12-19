@@ -1,8 +1,31 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "ippl-web",
   "private": true,
   "version": "2.0.0",
   "type": "module",
+  "license": "MIT",
+  "description": "Web platform for managing patients, professionals, appointments and clinical activity for IPPL institute.",
+  "author": "Sebastián G. Cerutti <https://github.com/Scerutti>",
+  "keywords": [
+    "healthcare",
+    "patient-management",
+    "appointments",
+    "react",
+    "vite",
+    "typescript",
+    "dashboard",
+    "admin-panel",
+    "mvp",
+    "saas"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Facusanchezfs/ippl_project.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Facusanchezfs/ippl_project/issues"
+  },
+  "homepage": "https://www.ippl.com.ar/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
