@@ -12,7 +12,8 @@
 		"db:seed:all": "sequelize-cli --config config/config.js db:seed:all",
 		"dev": "nodemon src/index.js",
 		"setup": "node src/setup.js",
-		"db:reset": "sequelize-cli --config config/config.js db:drop && npm run db:create && npm run db:migrate && npm run db:seed:all"
+		"db:reset": "sequelize-cli --config config/config.js db:drop && npm run db:create && npm run db:migrate && npm run db:seed:all",
+		"cleanup:prod": "node scripts/cleanupProdData.js"
 	},
 	"keywords": [],
 	"author": "",
