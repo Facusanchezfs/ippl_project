@@ -21,7 +21,6 @@ import {
   XMarkIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClipboardIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -93,6 +92,17 @@ const AppointmentsPage = () => {
   // Date(...) sin zona -> crea un Date en TU zona local
   return new Date(y, (m - 1), d, hh, mm);
 }
+
+  // Función helper para formatear fecha en formato dd/MM/yyyy HH:mm
+  const formatDateTime = (dateStr: string, timeStr?: string) => {
+    const date = combineLocalDateTime(dateStr, timeStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -235,21 +245,23 @@ const AppointmentsPage = () => {
   const filteredAppointments = appointments
     .filter(appointment => appointment.status != 'completed')
     .filter(appointment => {
-    const appointmentDate = new Date(appointment.date);
+    // Usar combineLocalDateTime para obtener fecha+hora completa en zona local
+    const appointmentDateTime = combineLocalDateTime(appointment.date, appointment.startTime);
     const now = new Date();
 
     switch (filterStatus) {
       case 'upcoming':
-        return appointmentDate >= now;
+        return appointmentDateTime >= now;
       case 'past':
-        return appointmentDate < now;
+        return appointmentDateTime < now;
       default:
         return true;
     }
     })
     .sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
+    // Ordenar por fecha+hora completa
+    const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
+    const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
     return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
   });
 
@@ -260,22 +272,6 @@ const AppointmentsPage = () => {
       </div>
     );
   }
-
-  const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('es-ES', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-const badge = (ok: boolean) =>
-  `px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-    ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-  }`;
-
 
   return (
     <div className="p-6 space-y-8">
@@ -379,16 +375,7 @@ const badge = (ok: boolean) =>
                     <div className="mt-2 flex items-center text-sm text-gray-700">
                       <ClockIcon className="h-4 w-4 mr-1 shrink-0 text-gray-400" />
                       <span className="truncate">
-                        {combineLocalDateTime(appointment.date, appointment.startTime).toLocaleString(
-                          'es-ES',
-                          {
-                            weekday: 'long',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }
-                        )}
+                        {formatDateTime(appointment.date, appointment.startTime)}
                       </span>
                     </div>
 
@@ -515,17 +502,7 @@ const badge = (ok: boolean) =>
                             <div className="flex items-center">
                               <ClockIcon className="h-5 w-5 text-gray-400 mr-2" />
                               <span className="text-sm text-gray-900">
-                                {combineLocalDateTime(appointment.date, appointment.startTime).toLocaleString(
-                                  'es-ES',
-                                  {
-                                    weekday: 'long',
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  }
-                                )}
+                                {formatDateTime(appointment.date, appointment.startTime)}
                               </span>
                             </div>
                           </td>
