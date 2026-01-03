@@ -51,7 +51,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB max
+    fileSize: 30 * 1024 * 1024 // 30MB max o mas de 15 minutos
   }
 });
 
