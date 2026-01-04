@@ -786,12 +786,12 @@ const ProfessionalPatients = () => {
                       {getFrequencyLabel(patient.sessionFrequency)}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 min-w-[300px]">
                     {patient.audioNote ? (
                       <div className="flex items-center space-x-2">
                         <audio
                           controls
-                          className="w-48 h-10"
+                          className="min-w-[300px] max-w-full h-10"
                           controlsList="nodownload"
                           preload="metadata"
                         >

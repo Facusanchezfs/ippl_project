@@ -280,12 +280,12 @@ const PsychologistDashboard = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {patient.assignedAt ? new Date(patient.assignedAt).toLocaleDateString() : '-'}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-500 min-w-[300px]">
                       {patient.audioNote ? (
                         <div className="flex items-center">
                           <audio
                             controls
-                            className="w-48 h-10"
+                            className="min-w-[300px] max-w-full h-10"
                             controlsList="nodownload"
                           >
                             <source src={patient.audioNote} type="audio/webm" />
