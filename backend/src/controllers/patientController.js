@@ -257,13 +257,24 @@ async function assignPatient(req, res) {
       attributes: ['textNote', 'audioNote'],
     });
 
-    // Preservar notas existentes si no se envían nuevas
-    // REGLA: Solo actualizar notas si vienen explícitamente en el body (no undefined)
-    // Si textNote/audioNote es undefined → preservar de la última derivación
-    // Si textNote/audioNote es null → explícitamente borrar (aunque esto no debería pasar desde el frontend)
-    // Si textNote/audioNote tiene valor → usar el nuevo valor
-    const finalTextNote = textNote !== undefined ? textNote : (lastDerivation?.textNote ?? null);
-    const finalAudioNote = audioNote !== undefined ? audioNote : (lastDerivation?.audioNote ?? null);
+    // Aplicar exclusión mutua: solo uno puede tener valor
+    // REGLA DE NEGOCIO: Si viene texto, audio debe ser null; si viene audio, texto debe ser null
+    // Si ninguno viene, preservar de la última derivación (update parcial sin cambiar notas)
+    let finalTextNote, finalAudioNote;
+
+    if (textNote !== undefined) {
+      // Si viene texto (aunque sea string vacío), el audio debe ser null
+      finalTextNote = textNote;
+      finalAudioNote = null;
+    } else if (audioNote !== undefined) {
+      // Si viene audio, el texto debe ser null
+      finalTextNote = null;
+      finalAudioNote = audioNote;
+    } else {
+      // Si no viene ninguno, preservar de la última derivación (update parcial sin cambiar notas)
+      finalTextNote = lastDerivation?.textNote ?? null;
+      finalAudioNote = lastDerivation?.audioNote ?? null;
+    }
 
     // Registrar derivación
     const derivation = await Derivation.create({
