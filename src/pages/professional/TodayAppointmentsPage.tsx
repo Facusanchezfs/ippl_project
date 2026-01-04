@@ -218,17 +218,6 @@ const AppointmentsPage = () => {
         completedAt: new Date().toISOString()
       });
       
-      // Buscar el appointment para obtener el patientId
-      const appointment = appointments.find(a => a.id === appointmentId);
-      if (appointment && finishData.attended === false) {
-        // Cambiar el estado del paciente a 'inactive' si no asistió y mantener la asociación con el profesional
-        await patientsService.updatePatient(appointment.patientId, {
-          status: 'inactive',
-          professionalId: appointment.professionalId,
-          professionalName: appointment.professionalName
-        });
-      }
-      
       await loadAppointments();
       setShowFinishAppointmentModal(false);
       setSelectedAppointmentForFinish(null);
