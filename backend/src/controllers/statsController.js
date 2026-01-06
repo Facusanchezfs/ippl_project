@@ -6,15 +6,8 @@ const { sendSuccess, sendError } = require('../utils/response');
 
 const getSystemStats = async (req, res) => {
   try {
-    // OPTIMIZACIÓN FASE 3 PARTE 2: getSystemStats
-    // PROBLEMA: Múltiples COUNTs separados (5 para Users, 2 para Patients, etc.) = muchas queries.
-    // IMPACTO: Con muchas tablas = 10+ queries, lento, alto uso de recursos.
-    // SOLUCIÓN: Consolidar COUNTs en queries con SUM/CASE WHEN. Optimizar queries de citas próximas con índices.
-    // COMPATIBILIDAD: Mismo formato de respuesta, solo optimización interna.
-    
     const now = new Date();
     
-    // ---- Users: Consolidar todos los COUNTs en una única query con SUM/CASE ----
     const usersAgg = await User.findAll({
       attributes: [
         [fn('COUNT', col('id')), 'total'],
@@ -33,7 +26,6 @@ const getSystemStats = async (req, res) => {
     const pros = parseInt(usersData.professional || 0, 10);
     const cms = parseInt(usersData.content_manager || 0, 10);
 
-    // ---- Patients: Consolidar COUNTs ----
     const patientsAgg = await Patient.findAll({
       attributes: [
         [fn('COUNT', col('id')), 'total'],
@@ -47,22 +39,18 @@ const getSystemStats = async (req, res) => {
     const totalPatients = parseInt(patientsData.total || 0, 10);
     const activePatients = parseInt(patientsData.active || 0, 10);
 
-    // Pacientes con cita próxima (scheduled y en el futuro)
-    // OPTIMIZACIÓN: Query optimizada para usar índices (active, status, date, startTime)
     const patientsWithUpcoming = await Appointment.findAll({
       attributes: [[fn('DISTINCT', col('patientId')), 'patientId']],
       where: {
         active: true,
         status: 'scheduled',
         [Op.and]: [
-          // MySQL/MariaDB: fecha+hora > now - optimizado para usar índice
           sequelize.where(fn('TIMESTAMP', col('date'), col('startTime')), { [Op.gt]: now }),
         ],
       },
       raw: true,
     });
 
-    // Pacientes por profesional (mapa { [professionalId]: count })
     const byProfessionalRows = await Patient.findAll({
       attributes: ['professionalId', [fn('COUNT', col('id')), 'count']],
       where: { active: true, professionalId: { [Op.ne]: null } },
@@ -74,7 +62,6 @@ const getSystemStats = async (req, res) => {
       byProfessional[String(r.professionalId)] = parseInt(r.count, 10);
     }
 
-    // ---- Posts: Consolidar COUNTs y SUMs ----
     const postsAgg = await Post.findAll({
       attributes: [
         [fn('COUNT', col('id')), 'total'],
@@ -92,7 +79,6 @@ const getSystemStats = async (req, res) => {
     const totalViews = parseInt(postsData.totalViews || 0, 10);
     const totalLikes = parseInt(postsData.totalLikes || 0, 10);
     
-    // Posts por sección (necesita GROUP BY, no se puede consolidar)
     const bySectionRows = await Post.findAll({
       attributes: ['section', [fn('COUNT', col('id')), 'count']],
       where: { active: true },
@@ -104,16 +90,12 @@ const getSystemStats = async (req, res) => {
       bySection[r.section] = parseInt(r.count, 10);
     }
 
-    // ---- Appointments: Optimizar COUNTs ----
-    // OPTIMIZACIÓN: Consolidar completed en una query, upcoming necesita TIMESTAMP (query separada optimizada)
-    // Nota: upcoming requiere TIMESTAMP que no se puede consolidar fácilmente, mantener query separada pero optimizada
     const [upcomingAppointments, completedAppointments] = await Promise.all([
       Appointment.count({
         where: {
           active: true,
           status: 'scheduled',
           [Op.and]: [
-            // Query optimizada para usar índices (active, status, date, startTime)
             sequelize.where(fn('TIMESTAMP', col('date'), col('startTime')), { [Op.gt]: now }),
           ],
         },
@@ -123,7 +105,6 @@ const getSystemStats = async (req, res) => {
       }),
     ]);
 
-    // ---- Respuesta ----
     return sendSuccess(res, {
       users: {
         total: totalUsers,
@@ -159,13 +140,11 @@ const getProfessionalStats = async (req, res) => {
     const { professionalId } = req.params;
     const now = new Date();
 
-    // Pacientes del profesional
     const [total, activeCount] = await Promise.all([
       Patient.count({ where: { active: true, professionalId } }),
       Patient.count({ where: { active: true, professionalId, status: 'active' } }),
     ]);
 
-    // Pacientes con próximas citas (distinct patientId)
     const withUpcomingRows = await Appointment.findAll({
       attributes: [[fn('DISTINCT', col('patientId')), 'patientId']],
       where: {
@@ -179,7 +158,6 @@ const getProfessionalStats = async (req, res) => {
       raw: true,
     });
 
-    // Citas del profesional (completadas y próximas)
     const [completed, upcoming] = await Promise.all([
       Appointment.count({
         where: { active: true, professionalId, status: 'completed' },
@@ -196,7 +174,6 @@ const getProfessionalStats = async (req, res) => {
       }),
     ]);
 
-    // "Notas": derivadas de citas (texto y audio)
     const [notesTotal, notesAudio] = await Promise.all([
       Appointment.count({
         where: {

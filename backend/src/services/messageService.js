@@ -5,17 +5,13 @@ const logger = require('../utils/logger');
 const dataDir = path.join(__dirname, '../data');
 const messagesFilePath = path.join(dataDir, 'messages.json');
 
-// Función para inicializar el archivo de mensajes
 async function initializeMessagesFile() {
   try {
-    // Crear el directorio data si no existe
     await fs.mkdir(dataDir, { recursive: true });
     
-    // Verificar si el archivo existe
     try {
       await fs.access(messagesFilePath);
     } catch {
-      // Si el archivo no existe, crearlo con un array vacío
       await fs.writeFile(
         messagesFilePath,
         JSON.stringify({ messages: [] }, null, 2),
@@ -27,16 +23,14 @@ async function initializeMessagesFile() {
   }
 }
 
-// Inicializar el archivo al cargar el servicio
 initializeMessagesFile();
 
 const messageService = {
   async getAllMessages() {
     try {
-      await initializeMessagesFile(); // Asegurarse de que el archivo existe
+      await initializeMessagesFile();
       const data = await fs.readFile(messagesFilePath, 'utf8');
       const { messages } = JSON.parse(data);
-      // Sort messages by date in descending order (newest first)
       return messages.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     } catch (error) {
       logger.error('Error reading messages:', error);
@@ -46,7 +40,7 @@ const messageService = {
 
   async saveMessage(message) {
     try {
-      await initializeMessagesFile(); // Asegurarse de que el archivo existe
+      await initializeMessagesFile();
       let messages = [];
       try {
         const data = await fs.readFile(messagesFilePath, 'utf8');
@@ -79,7 +73,7 @@ const messageService = {
 
   async markAsRead(messageId) {
     try {
-      await initializeMessagesFile(); // Asegurarse de que el archivo existe
+      await initializeMessagesFile();
       const data = await fs.readFile(messagesFilePath, 'utf8');
       const { messages } = JSON.parse(data);
       

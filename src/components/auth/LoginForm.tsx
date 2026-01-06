@@ -16,28 +16,28 @@ const LoginForm: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user types
     if (error) setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
-    try {
-      const success = await login(formData.email, formData.password);
-      if (success) {
+    login({
+      username: formData.email,
+      password: formData.password
+    })
+      .then(() => {
         navigate('/admin');
-      } else {
-        setError('Credenciales inválidas. Por favor intente nuevamente.');
-      }
-    } catch (err) {
-      setError('Ocurrió un error al iniciar sesión. Por favor intente más tarde.');
-      console.error('Login error:', err);
-    } finally {
-      setIsLoading(false);
-    }
+      })
+      .catch((err) => {
+        setError('Ocurrió un error al iniciar sesión. Por favor intente más tarde.');
+        console.error('Login error:', err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   return (

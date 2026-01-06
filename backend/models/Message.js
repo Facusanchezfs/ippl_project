@@ -4,7 +4,6 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Message extends Model {
     static associate(models) {
-      // (sin asociaciones por ahora)
     }
   }
 
@@ -48,7 +47,7 @@ module.exports = (sequelize, DataTypes) => {
       sequelize,
       modelName: 'Message',
       tableName: 'Messages',
-      timestamps: true,       // createdAt / updatedAt
+      timestamps: true,
       createdAt: 'createdAt',
       updatedAt: 'updatedAt',
     }

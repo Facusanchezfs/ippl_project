@@ -23,7 +23,6 @@ const sendSuccess = (res, data, message = null, statusCode = 200) => {
     response.message = message;
   }
 
-  // Para 204 No Content, no enviamos body
   if (statusCode === 204) {
     return res.status(204).send();
   }

@@ -5,7 +5,6 @@ const multer = require('multer');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// Cambiado: ahora guarda en uploads/carousel en lugar de public/images/carousel
 const carouselDir = path.join(__dirname, '../../uploads/carousel');
 
 async function ensureCarouselDir() {
@@ -17,7 +16,6 @@ async function ensureCarouselDir() {
 }
 ensureCarouselDir();
 
-// Multer config: guarda directamente en /public/images/carousel
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, carouselDir),
   filename: (req, file, cb) => {
@@ -39,10 +37,9 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB c/u
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// === GET: listar imágenes del carrusel ===
 const getCarouselImages = (req, res) => {
   fs.readdir(carouselDir, (err, files) => {
     if (err) {
@@ -54,7 +51,6 @@ const getCarouselImages = (req, res) => {
   });
 };
 
-// === DELETE: eliminar imagen del carrusel ===
 const deleteCarouselImage = (req, res) => {
   const { filename } = req.params;
 
@@ -76,8 +72,6 @@ const deleteCarouselImage = (req, res) => {
   });
 };
 
-// === POST: subir imágenes del carrusel ===
-// Usar con upload.array('images', 10)
 const uploadCarouselImages = (req, res) => {
   if (!req.files || req.files.length === 0) {
     return sendError(res, 400, 'No se recibieron imágenes del carrusel.');
@@ -88,7 +82,7 @@ const uploadCarouselImages = (req, res) => {
 };
 
 module.exports = {
-  upload,                 // << exporto el middleware de multer
+  upload,
   getCarouselImages,
   deleteCarouselImage,
   uploadCarouselImages,

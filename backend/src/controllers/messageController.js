@@ -5,12 +5,10 @@ const { toMessageDTOList } = require('../../mappers/MessageMapper');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// Create a new message
 async function createMessage(req, res) {
   try {
     const { nombre, apellido, correoElectronico, mensaje, fecha } = req.body;
 
-    // Validaciones básicas
     if (!nombre || !apellido || !correoElectronico || !mensaje) {
       return sendError(res, 400, 'Faltan campos requeridos');
     }
@@ -20,7 +18,6 @@ async function createMessage(req, res) {
       apellido,
       correoElectronico,
       mensaje,
-      // `fecha` es opcional; si no viene, el default del modelo es NOW
       ...(fecha ? { fecha: new Date(fecha) } : {}),
       leido: false,
     });
@@ -32,15 +29,8 @@ async function createMessage(req, res) {
   }
 }
 
-// Get all messages (array plano)
 async function getAllMessages(req, res) {
   try {
-    // OPTIMIZACIÓN FASE 3 PARTE 2: getAllMessages
-    // PROBLEMA: Sin paginación, trae todos los mensajes. Sin filtro opcional por leído.
-    // IMPACTO: Con muchos mensajes = transferencia masiva, lento.
-    // SOLUCIÓN: Paginación obligatoria + filtro opcional por leído + índice compuesto.
-    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
-    
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const leido = req.query.leido !== undefined ? req.query.leido === 'true' : undefined;
@@ -69,8 +59,6 @@ async function getAllMessages(req, res) {
     
     const totalPages = Math.ceil(count / limit);
     
-    // COMPATIBILIDAD: Si no se pasa paginación, devolver formato antiguo (array directo)
-    // Si se pasa paginación, devolver formato nuevo con paginación
     const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
     
     if (hasPagination) {
@@ -84,7 +72,6 @@ async function getAllMessages(req, res) {
         },
       });
     } else {
-      // Formato antiguo para compatibilidad con frontend actual
       return sendSuccess(res, toMessageDTOList(rows));
     }
   } catch (error) {
@@ -93,7 +80,6 @@ async function getAllMessages(req, res) {
   }
 }
 
-// Mark message as read
 async function markAsRead(req, res) {
   try {
     const { id } = req.params;

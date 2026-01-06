@@ -54,7 +54,6 @@ const FinancialDashboard: React.FC = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [userLoaded, setUserLoaded] = useState<User>();
-	// Eliminar: const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('month');
 	const [professionals, setProfessionals] = useState<User[]>([]);
 	const [selectedProfessional, setSelectedProfessional] = useState<User | null>(
 		null
@@ -82,7 +81,7 @@ const FinancialDashboard: React.FC = () => {
 		loadFinancialStats();
 		loadProfessionals();
 		loadRecentAbonos();
-	}, []); // Eliminar dependencia de dateRange
+	}, []);
 
 	const loadUser = async () => {
 		const userToLoad = await userService.getUserById(parseNumber(user?.id))
@@ -93,8 +92,6 @@ const FinancialDashboard: React.FC = () => {
 		try {
 			setIsLoading(true);
 			const appointments = await appointmentsService.getAllAppointments();
-			// En loadFinancialStats, eliminar el filtrado por rango de fechas y usar todas las citas
-			// Calcular estadísticas
 			const completedAppointments = appointments.filter(
 				(a) => a.status === 'completed'
 			);
@@ -111,7 +108,6 @@ const FinancialDashboard: React.FC = () => {
 					? totalRevenue / completedAppointments.length
 					: 0;
 
-			// Agrupar pagos por profesional
 			const professionalPayments = completedAppointments.reduce(
 				(acc, appointment) => {
 					const professional = acc.find(
@@ -136,7 +132,6 @@ const FinancialDashboard: React.FC = () => {
 				}>
 			);
 
-			// Obtener transacciones recientes
 			const recentTransactions = completedAppointments
 				.filter((a) => a.paymentAmount && a.paymentAmount > 0)
 				.map((a) => ({
@@ -233,7 +228,6 @@ const FinancialDashboard: React.FC = () => {
 		toast.success('Datos actualizados');
 	};
 
-	// Función para generar el PDF de un profesional
 	const generateProfessionalPDF = async (prof: User) => {
 		const doc = new jsPDF();
 		const now = new Date();
@@ -242,7 +236,6 @@ const FinancialDashboard: React.FC = () => {
 			timeStyle: 'short',
 		});
 		
-		// Obtener abonos del profesional
 		const allAbonos = await userService.getAbonos();
 		const profAbonos = allAbonos.filter(a => String(a.professionalId) === String(prof.id));
 		
@@ -273,7 +266,6 @@ const FinancialDashboard: React.FC = () => {
 		doc.line(10, y + 4, 200, y + 4);
 		y += 10;
 		
-		// Agregar sección de pagos realizados
 		if (profAbonos.length > 0) {
 			doc.setFont('helvetica', 'bold');
 			doc.setFontSize(14);
@@ -282,7 +274,6 @@ const FinancialDashboard: React.FC = () => {
 			doc.setFont('helvetica', 'normal');
 			doc.setFontSize(12);
 			
-			// Encabezado de tabla de pagos
 			doc.setFillColor(230, 230, 230);
 			doc.rect(10, y - 5, 190, 8, 'F');
 			doc.setFont('helvetica', 'bold');
@@ -304,7 +295,6 @@ const FinancialDashboard: React.FC = () => {
 				}
 			});
 			
-			// Total de pagos
 			doc.setFont('helvetica', 'bold');
 			doc.line(10, y + 2, 200, y + 2);
 			y += 5;
@@ -313,12 +303,10 @@ const FinancialDashboard: React.FC = () => {
 			y += 10;
 		}
 		
-		// Línea separadora antes de pacientes con deuda
 		doc.setLineWidth(0.1);
 		doc.line(10, y + 4, 200, y + 4);
 		y += 10;
 		
-		// Obtener pacientes con deuda
 		const patients = await patientsService.getProfessionalPatients(prof.id);
 		const appointments = await appointmentsService.getProfessionalAppointments(
 			prof.id
@@ -348,7 +336,6 @@ const FinancialDashboard: React.FC = () => {
 		if (patientsWithDebt.length === 0) {
 			doc.text('Ningún paciente tiene deuda pendiente.', 10, y);
 		} else {
-			// Encabezado de tabla
 			doc.setFillColor(230, 230, 230);
 			doc.rect(10, y - 5, 190, 8, 'F');
 			doc.setFont('helvetica', 'bold');
@@ -382,18 +369,15 @@ const FinancialDashboard: React.FC = () => {
 	const filteredAndSortedProfessionals = React.useMemo(() => {
 		let list = [...professionals];
 
-		// Aplicar filtro de búsqueda
 		if (professionalSearch.trim()) {
 			const searchLower = professionalSearch.trim().toLowerCase();
 			list = list.filter((prof) => {
 				const nameLower = prof.name.toLowerCase();
-				// Dividir el nombre en palabras y verificar si alguna palabra comienza con el término de búsqueda
 				const words = nameLower.split(/\s+/);
 				return words.some((word) => word.startsWith(searchLower));
 			});
 		}
 
-		// Aplicar ordenamiento
 		list.sort((a, b) => {
 			const multiplier = professionalSort.direction === 'asc' ? 1 : -1;
 
@@ -475,7 +459,6 @@ const FinancialDashboard: React.FC = () => {
 						</div>
 					</div>
           <div className="flex items-center gap-4">
-            {/* Eliminar el select de rango de fechas */}
             {user?.role === 'financial' && (
               <button
                 onClick={() => setShowModal(true)}

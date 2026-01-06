@@ -19,9 +19,9 @@ const Header = () => {
   useEffect(() => {
     const controlNavbar = () => {
       if (typeof window !== 'undefined') {
-        if (window.scrollY > lastScrollY && window.scrollY > 80) { // si se baja el scroll y se ha pasado la altura del header
+        if (window.scrollY > lastScrollY && window.scrollY > 80) {
           setVisible(false);
-        } else { // si se sube el scroll
+        } else {
           setVisible(true);
         }
         setLastScrollY(window.scrollY);

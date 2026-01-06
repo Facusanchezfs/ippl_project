@@ -54,7 +54,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         loadProfessionals();
       }
       
-      // Si hay una cita seleccionada, cargar sus datos
       if (selectedAppointment) {
         setFormData({
           patientId: selectedAppointment.patientId,
@@ -64,7 +63,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           audioNote: selectedAppointment.audioNote || ''
         });
       } else {
-        // Reset form for new appointment
         setFormData({
           patientId: '',
           professionalId: user?.role === 'professional' ? user.id : '',

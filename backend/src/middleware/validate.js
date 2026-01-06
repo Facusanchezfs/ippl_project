@@ -13,8 +13,8 @@ const validate = (schema) => {
         query: req.query,
       },
       {
-        abortEarly: false, // Mostrar todos los errores, no solo el primero
-        stripUnknown: true, // Eliminar campos no definidos en el schema
+        abortEarly: false,
+        stripUnknown: true,
       }
     );
 
@@ -27,7 +27,6 @@ const validate = (schema) => {
       return sendError(res, 400, 'Validation error', { details });
     }
 
-    // Reemplazar los valores validados
     req.body = value.body || req.body;
     req.params = value.params || req.params;
     req.query = value.query || req.query;

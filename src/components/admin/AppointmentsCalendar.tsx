@@ -11,7 +11,6 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 
-// Configurar moment en español de forma robusta
 moment.locale('es', {
   weekdays: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
   weekdaysShort: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
@@ -20,10 +19,8 @@ moment.locale('es', {
   monthsShort: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 });
 
-// Crear localizador con configuración específica para español
 const localizer = momentLocalizer(moment);
 
-// Función para obtener el color según el tipo de cita
 const getAppointmentColor = (type: string) => {
   switch (type) {
     case 'regular':
@@ -37,7 +34,6 @@ const getAppointmentColor = (type: string) => {
   }
 };
 
-// Componente personalizado para el evento en el calendario
 const EventComponent = ({ event }: any) => {
   const appointment = event.resource;
   const colorClass = getAppointmentColor(appointment.type);
@@ -77,14 +73,12 @@ const AppointmentsCalendar = () => {
       setIsLoading(true);
       const data = await appointmentsService.getProfessionalAppointments(user.id);
       
-      // Convertir las citas al formato que espera el calendario
       const formattedAppointments = data.map(appointment => {
         const start = toLocalDate(appointment.date, appointment.startTime);
         let end   = toLocalDate(appointment.date, appointment.endTime);
 
-        // Garantizar end > start (y evitar "doble día" por igualdades)
         if (end <= start) {
-          end = new Date(start.getTime() + 30 * 60 * 1000); // +30 min de respaldo
+          end = new Date(start.getTime() + 30 * 60 * 1000);
         }
         
         return {
@@ -112,14 +106,13 @@ const AppointmentsCalendar = () => {
   const toLocalDate = (dateStr: string, timeStr: string) => {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hh, mm]   = timeStr.split(':').map(Number);
-  return new Date(y, m - 1, d, hh, mm, 0, 0); // <-- local time
+  return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
 
   const handleSelectEvent = (event: any) => {
     setSelectedAppointment(event.resource);
   };
 
-  // Personalizar la barra de herramientas del calendario (responsive)
   const CustomToolbar = (toolbar: any) => {
     const goToBack = () => toolbar.onNavigate('PREV');
     const goToNext = () => toolbar.onNavigate('NEXT');

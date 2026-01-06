@@ -38,7 +38,6 @@ const CompletedAppointmentsPage = () => {
     try {
       setIsLoading(true);
       const data = await appointmentsService.getProfessionalAppointments(user.id);
-      // Filtrar solo las citas completadas
       const completedAppointments = data.filter(appointment => appointment.status === 'completed');
       setAppointments(completedAppointments);
     } catch (error) {
@@ -57,7 +56,6 @@ const CompletedAppointmentsPage = () => {
     toast.success('Datos actualizados');
   };
 
-  // Calcular el saldo pendiente acumulado de un paciente
   const getPatientTotalDebt = (patientId: string) => {
     return appointments
       .filter(a => a.patientId === patientId && a.attended)

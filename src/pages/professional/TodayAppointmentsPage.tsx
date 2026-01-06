@@ -90,11 +90,9 @@ const AppointmentsPage = () => {
   if (timeStr) {
     [hh, mm] = timeStr.split(':').map(Number);
   }
-  // Date(...) sin zona -> crea un Date en TU zona local
   return new Date(y, (m - 1), d, hh, mm);
 }
 
-  // Función helper para formatear fecha en formato dd/MM/yyyy HH:mm
   const formatDateTime = (dateStr: string, timeStr?: string) => {
     const date = combineLocalDateTime(dateStr, timeStr);
     const day = String(date.getDate()).padStart(2, '0');
@@ -218,7 +216,6 @@ const AppointmentsPage = () => {
         completedAt: new Date().toISOString()
       };
 
-      // Exclusión mutua: attended=true → paymentAmount, attended=false → noShowPaymentAmount
       if (finishData.attended) {
         updateData.paymentAmount = finishData.paymentAmount || 0;
         updateData.remainingBalance = finishData.remainingBalance || 0;
@@ -245,7 +242,6 @@ const AppointmentsPage = () => {
   const filteredAppointments = appointments
     .filter(appointment => appointment.status != 'completed')
     .filter(appointment => {
-    // Usar combineLocalDateTime para obtener fecha+hora completa en zona local
     const appointmentDateTime = combineLocalDateTime(appointment.date, appointment.startTime);
     const now = new Date();
 
@@ -259,7 +255,6 @@ const AppointmentsPage = () => {
     }
     })
     .sort((a, b) => {
-    // Ordenar por fecha+hora completa
     const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
     const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
     return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
@@ -578,7 +573,6 @@ const AppointmentsPage = () => {
             </div>
           </>
         ) : (
-          // ===== EMPTY STATE (sirve para mobile y desktop) =====
           <div className="text-center py-12">
             <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No hay citas</h3>

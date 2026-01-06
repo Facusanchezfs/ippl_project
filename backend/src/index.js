@@ -8,16 +8,12 @@ const { sequelize } = require('../models');
 const logger = require('./utils/logger');
 require('dotenv').config();
 
-// Validar configuración crítica al inicio (el servidor fallará si falta JWT_SECRET)
 require('./config/jwt');
 
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-// CORS ya está configurado en app.js
 app.use(express.json());
 
-// Asegurarse de que los directorios existan
 async function ensureDirectories() {
 	const directories = [
 		path.join(__dirname, 'data'),
@@ -25,8 +21,8 @@ async function ensureDirectories() {
 		path.join(__dirname, '..', 'uploads', 'audios'),
 		path.join(__dirname, '..', 'uploads', 'documents'),
 		path.join(__dirname, '..', 'uploads', 'images'),
-		path.join(__dirname, '..', 'uploads', 'carousel'), // Carpeta para imágenes del carousel
-		path.join(__dirname, '..', 'uploads', 'posts'), // Carpeta para imágenes de posts
+		path.join(__dirname, '..', 'uploads', 'carousel'),
+		path.join(__dirname, '..', 'uploads', 'posts'),
 	];
 
 	for (const dir of directories) {
@@ -39,12 +35,10 @@ async function ensureDirectories() {
 	}
 }
 
-// Configuración para almacenar archivos
 const storage = multer.diskStorage({
 	destination: function (req, file, cb) {
 		let uploadPath = path.join(__dirname, '..', 'uploads');
 
-		// Determinar la subcarpeta según el tipo de archivo
 		if (file.mimetype.startsWith('audio/')) {
 			uploadPath = path.join(uploadPath, 'audios');
 		} else if (file.mimetype === 'application/pdf') {
@@ -64,11 +58,10 @@ const storage = multer.diskStorage({
 const upload = multer({
 	storage: storage,
 	limits: {
-		fileSize: 10 * 1024 * 1024, // 10MB límite
+		fileSize: 10 * 1024 * 1024,
 	},
 });
 
-// Rutas
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/posts');
@@ -93,7 +86,6 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/payments', paymentsRoutes);
 
-// Ruta específica para subir archivos de audio
 app.post('/api/upload/audio', upload.single('audio'), (req, res) => {
 	if (!req.file) {
 		return res
@@ -108,7 +100,6 @@ app.post('/api/upload/audio', upload.single('audio'), (req, res) => {
 	});
 });
 
-// Ruta general para subir archivos
 app.post('/api/upload', upload.single('file'), (req, res) => {
 	if (!req.file) {
 		return res.status(400).json({ message: 'No se subió ningún archivo' });
@@ -121,24 +112,20 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 	});
 });
 
-// Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-// Solo servir dist y SPA fallback en PRODUCCIÓN
 if (process.env.NODE_ENV === 'production') {
 	const FRONTEND_DIST = path.resolve(__dirname, '../../dist');
 	app.use(express.static(FRONTEND_DIST, {
-		index: false // importante: el index lo servimos en el fallback
+		index: false
 	}));
 
-	// Fallback SPA: cualquier ruta NO-API devuelve index.html
 	app.get('*', (req, res, next) => {
 		if (req.path.startsWith('/api')) return next();
 		res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
 	});
 }
 
-// Middleware de manejo de errores (errorLogger ya está en app.js)
 app.use((err, req, res, next) => {
 	res.status(500).json({
 		message: 'Error en el servidor',
@@ -146,7 +133,6 @@ app.use((err, req, res, next) => {
 	});
 });
 
-// Iniciar servidor
 async function startServer() {
 	try {
 		await ensureDirectories();

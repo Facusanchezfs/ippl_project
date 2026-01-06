@@ -1,4 +1,3 @@
-// src/models/medicalhistory.js
 'use strict';
 const { Model } = require('sequelize');
 

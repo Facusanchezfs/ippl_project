@@ -6,7 +6,6 @@ const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// helper numérico para DECIMAL
 function toAmount(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -16,7 +15,6 @@ function round2(v) {
   return Math.round((Number(v) || 0) * 100) / 100;
 }
 
-// Get user by id
 
 const getUserById = async (req, res) => {
   const { id } = req.params;
@@ -43,24 +41,14 @@ const getProfessionals = async (req, res) => {
     return sendError(res, 500, 'Error al obtener profesionales');
   }
 };
-// Get all users
 const getUsers = async (req, res) => {
   try {
-    // OPTIMIZACIÓN FASE 3 PARTE 2: getUsers
-    // PROBLEMA: Sin paginación, trae todos los usuarios. Password incluido (aunque DTO lo excluye, mejor excluirlo a nivel query).
-    // IMPACTO: Con muchos usuarios = transferencia masiva, riesgo de exponer passwords.
-    // SOLUCIÓN: Paginación obligatoria + excluir password a nivel query + filtro opcional por status.
-    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
-    
     const hasLimit = req.query.limit !== undefined;
     const hasPage = req.query.page !== undefined;
     
-    // Si solo se pasa limit (sin page), devolver los primeros 'limit' usuarios (truncar array)
-    // Si se pasa page y limit, usar paginación normal
-    // Si no se pasa nada, devolver todos
     const limit = hasLimit ? parseInt(req.query.limit, 10) : (hasPage ? 20 : null);
     const page = hasPage ? parseInt(req.query.page, 10) : (hasLimit ? 1 : null);
-    const status = req.query.status; // Filtro opcional: 'active', 'inactive', 'pending'
+    const status = req.query.status;
     
     if (page !== null && page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
     if (limit !== null && (limit < 1 || limit > 100)) return sendError(res, 400, 'limit debe estar entre 1 y 100');
@@ -70,13 +58,12 @@ const getUsers = async (req, res) => {
       where.status = status;
     }
     
-    // Si hay limit, aplicar paginación/truncado
     if (limit !== null) {
       const offset = page !== null ? (page - 1) * limit : 0;
       
       const { count, rows: users } = await User.findAndCountAll({
         where,
-        attributes: { exclude: ['password'] }, // Excluir password a nivel query (refuerzo de seguridad)
+        attributes: { exclude: ['password'] },
         order: [['id', 'ASC']],
         limit,
         offset,
@@ -84,7 +71,6 @@ const getUsers = async (req, res) => {
       
       const dtos = users.map((u) => toUserDTO(u));
       
-      // Si se pasó page, devolver formato con paginación completa
       if (hasPage) {
         const totalPages = Math.ceil(count / limit);
         return sendSuccess(res, {
@@ -97,11 +83,9 @@ const getUsers = async (req, res) => {
           },
         });
       } else {
-        // Si solo se pasó limit, devolver formato simple (truncado)
         return sendSuccess(res, { users: dtos });
       }
     } else {
-      // Sin limit, devolver todos los usuarios (formato antiguo)
       const users = await User.findAll({
         where,
         attributes: { exclude: ['password'] },
@@ -117,7 +101,6 @@ const getUsers = async (req, res) => {
   }
 };
 
-// Create a new user
 const createUser = async (req, res) => {
   try {
     const { name, email, password, role, status, commission, saldoTotal, saldoPendiente } = req.body;
@@ -132,7 +115,6 @@ const createUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHashed = await bcrypt.hash(password, salt);
 
-    // Asegurar que commission sea un número válido
     const commissionValue = (typeof commission === 'number' && !isNaN(commission)) ? commission : 0;
     
     const created = await User.create({
@@ -156,7 +138,6 @@ const createUser = async (req, res) => {
   }
 };
 
-// Update a user
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -209,7 +190,6 @@ const updateUser = async (req, res) => {
   }
 };
 
-// Delete a user (soft delete - desactivar)
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -231,14 +211,12 @@ const deleteUser = async (req, res) => {
   }
 };
 
-// Permanent delete a user (eliminación física)
 const permanentDeleteUser = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     logger.info(`[permanentDeleteUser] Iniciando eliminación permanente del usuario ${id}`);
 
-    // Buscar usuario dentro de la transacción
     const user = await User.findByPk(id, { transaction: t });
     if (!user) {
       await t.rollback();
@@ -246,7 +224,6 @@ const permanentDeleteUser = async (req, res) => {
       return sendError(res, 404, 'Usuario no encontrado');
     }
 
-    // Validar que el usuario esté inactivo
     if (user.status === 'active') {
       await t.rollback();
       logger.warn(`[permanentDeleteUser] Intento de eliminar usuario activo ${id}`);
@@ -255,9 +232,6 @@ const permanentDeleteUser = async (req, res) => {
 
     logger.info(`[permanentDeleteUser] Usuario ${id} validado como inactivo, iniciando limpieza de referencias`);
 
-    // ===== LIMPIEZA DE REFERENCIAS =====
-
-    // a) Pacientes asignados
     const patients = await Patient.findAll({
       where: {
         professionalId: user.id,
@@ -280,7 +254,6 @@ const permanentDeleteUser = async (req, res) => {
       );
     }
 
-    // b) Appointments activos o futuros
     const appointments = await Appointment.findAll({
       where: {
         professionalId: user.id,
@@ -304,7 +277,6 @@ const permanentDeleteUser = async (req, res) => {
       );
     }
 
-    // c) FrequencyRequests pendientes
     const frequencyRequests = await FrequencyRequest.findAll({
       where: {
         professionalId: user.id,
@@ -327,7 +299,6 @@ const permanentDeleteUser = async (req, res) => {
       );
     }
 
-    // d) StatusRequests pendientes
     const statusRequests = await StatusRequest.findAll({
       where: {
         professionalId: user.id,
@@ -350,10 +321,6 @@ const permanentDeleteUser = async (req, res) => {
       );
     }
 
-    // e) Derivations asociadas al profesional
-    // Nota: La columna professionalId tiene NOT NULL constraint en la base de datos,
-    // por lo que no podemos ponerla en NULL. Eliminamos las derivaciones para resolver
-    // el foreign key constraint.
     const [derivationResults] = await sequelize.query(
       `DELETE FROM Derivations WHERE professionalId = :userId`,
       {
@@ -366,9 +333,6 @@ const permanentDeleteUser = async (req, res) => {
       logger.info(`[permanentDeleteUser] Eliminando ${derivationResults} derivaciones asociadas`);
     }
 
-    // f) Activities asociadas al profesional
-    // REGLA DE NEGOCIO: Las activities NO deben sobrevivir a la eliminación del profesional
-    // Eliminación física (DELETE) de todas las activities del profesional
     const deletedActivitiesCount = await Activity.destroy({
       where: {
         professionalId: user.id
@@ -380,11 +344,9 @@ const permanentDeleteUser = async (req, res) => {
       logger.info(`[permanentDeleteUser] Eliminando ${deletedActivitiesCount} activities asociadas al profesional`);
     }
 
-    // ===== ELIMINACIÓN FINAL =====
     logger.info(`[permanentDeleteUser] Eliminando usuario ${id} permanentemente`);
     await user.destroy({ transaction: t });
 
-    // Confirmar transacción
     await t.commit();
     logger.info(`[permanentDeleteUser] Usuario ${id} eliminado permanentemente con éxito`);
 
@@ -396,7 +358,6 @@ const permanentDeleteUser = async (req, res) => {
   }
 };
 
-// Abonar comisión a un profesional
 const abonarComision = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -409,7 +370,6 @@ const abonarComision = async (req, res) => {
       return sendError(res, 400, 'Abono inválido');
     }
 
-    // lock para evitar race conditions en saldo
     const professional = await User.findOne({
       where: { id, role: 'professional' },
       transaction: t,
@@ -424,11 +384,9 @@ const abonarComision = async (req, res) => {
     const prevSaldo = toAmount(professional.saldoPendiente);
     const rawNext = prevSaldo - amount;
 
-    // clamp a 0
     const nextSaldo = rawNext <= 0 ? 0 : +rawNext.toFixed(2);
     const paidInFull = nextSaldo === 0 && prevSaldo > 0;
 
-    // Actualiza saldoPendiente y, si corresponde, saldoTotal
     await professional.update(
       {
         saldoPendiente: nextSaldo,
@@ -438,11 +396,10 @@ const abonarComision = async (req, res) => {
       { transaction: t }
     );
 
-    // Registrar el abono
     await Abono.create(
       {
         professionalId: professional.id,
-        professionalName: professional.name, // snapshot
+        professionalName: professional.name,
         amount: +amount.toFixed(2),
         date: new Date(),
       },
@@ -452,7 +409,7 @@ const abonarComision = async (req, res) => {
     await t.commit();
     return sendSuccess(res, {
       saldoPendiente: nextSaldo,
-      paidInFull, // booleano para que el cliente muestre alerta
+      paidInFull,
     }, 'Comisión abonada correctamente');
   } catch (error) {
     await t.rollback();
@@ -461,7 +418,6 @@ const abonarComision = async (req, res) => {
   }
 };
 
-// Obtener todos los abonos individuales
 const getAbonos = async (req, res) => {
   try {
     const abonos = await Abono.findAll({

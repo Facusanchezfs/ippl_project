@@ -1,8 +1,7 @@
 import React from 'react';
 
 const WhatsAppButton = () => {
-  const phoneNumber = '5493442345555'; // Reemplaza con el número real
-  const message = '¡Hola! Me gustaría recibir más información sobre sus servicios.';
+  const phoneNumber = '5493442345555';
 
   const handleClick = () => {
     const whatsappUrl = `https://wa.me/${phoneNumber}`;

@@ -5,10 +5,8 @@ const { getAllPatients, getProfessionalPatients, assignPatient, addPatient, dele
 const validate = require('../middleware/validate');
 const patientValidators = require('../validators/patientValidator');
 
-// Todas las rutas requieren autenticación
 router.use(authenticateToken);
 
-// Rutas
 router.get('/', getAllPatients);
 router.get('/professional/:professionalId', validate(patientValidators.getProfessionalPatients), getProfessionalPatients);
 router.put('/:patientId/assign', validate(patientValidators.assign), assignPatient);

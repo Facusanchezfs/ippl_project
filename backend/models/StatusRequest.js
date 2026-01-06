@@ -28,7 +28,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
-      // Identificación (FKs + snapshots para auditoría)
       patientId: {
         type: DataTypes.BIGINT,
         allowNull: false,
@@ -52,7 +51,6 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: 'status_change',
       },
 
-      // Estados del paciente (vigente y solicitado)
       currentStatus: {
         type: DataTypes.ENUM('active', 'pending', 'inactive'),
         allowNull: false,
@@ -62,20 +60,17 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
-      // Motivo de la solicitud
       reason: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
 
-      // Estado del trámite de solicitud
       status: {
         type: DataTypes.ENUM('pending', 'approved', 'rejected'),
         allowNull: false,
         defaultValue: 'pending',
       },
 
-      // Respuesta/comentario del admin (cuando se aprueba/rechaza)
       adminResponse: {
         type: DataTypes.TEXT,
         allowNull: true,

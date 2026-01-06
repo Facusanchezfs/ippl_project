@@ -26,7 +26,7 @@ module.exports = {
 		host: process.env.DB_HOST || '127.0.0.1',
 		port: process.env.DB_PORT || 3306,
 		dialect: 'mysql',
-		logging: false, // Desactivar logging de Sequelize
+		logging: false,
 	},
 	test: {
 		username: process.env.DB_USER || 'root',
@@ -35,11 +35,9 @@ module.exports = {
 		host: process.env.DB_HOST || '127.0.0.1',
 		port: process.env.DB_PORT || 3306,
 		dialect: 'mysql',
-		logging: false, // Desactivar logging de Sequelize
+		logging: false,
 	},
 	production: {
-		// En producción, todas las variables son OBLIGATORIAS
-		// Solo validar si realmente estamos en producción
 		username: process.env.NODE_ENV === 'production' 
 			? requireEnv('DB_USER_PROD', 'production')
 			: (process.env.DB_USER_PROD || 'root'),
@@ -54,6 +52,6 @@ module.exports = {
 			: (process.env.DB_HOST_PROD || '127.0.0.1'),
 		port: process.env.DB_PORT_PROD || 3306,
 		dialect: 'mysql',
-		logging: false, // Desactivar logging de Sequelize
+		logging: false,
 	},
 };

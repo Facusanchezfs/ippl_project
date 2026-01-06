@@ -5,47 +5,27 @@ const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// Obtener todos los pacientes con su última derivación
 async function getAllPatients(req, res) {
   try {
-    // OPTIMIZACIÓN CRÍTICA #2: getAllPatients - N+1 Queries
-    // PROBLEMA: separate: true genera 1 query adicional por cada paciente (N+1)
-    // IMPACTO: Con 100 pacientes = 101 queries (1 principal + 100 derivaciones), 200-500ms
-    // SOLUCIÓN: Obtener todas las derivaciones en una sola query y agrupar en memoria
-    // COMPATIBILIDAD: Mismo formato de respuesta, mismo DTO, solo optimización interna
-    
     const { Op } = require('sequelize');
     
-    // Estrategia: Obtener pacientes y luego hacer una sola query para todas las últimas derivaciones
-    // usando subquery con ROW_NUMBER o simplemente agrupando por patientId
     const patients = await Patient.findAll({
       where: { active: true },
       order: [['createdAt', 'DESC']],
-      // Removemos separate: true para evitar N+1
-      // En su lugar, haremos una query separada pero única para todas las derivaciones
     });
 
-    // Obtener IDs de pacientes
     const patientIds = patients.map(p => p.id);
     
-    // Una sola query para obtener la última derivación de cada paciente
-    // Usamos subquery con ROW_NUMBER o simplemente agrupamos por patientId
     let lastDerivationsMap = {};
     if (patientIds.length > 0) {
-      // Query optimizada: obtener la última derivación por patientId en una sola query
       const lastDerivations = await Derivation.findAll({
         where: {
           patientId: { [Op.in]: patientIds },
         },
         attributes: ['patientId', 'textNote', 'audioNote', 'createdAt'],
-        // Usar subquery para obtener solo la última por paciente
-        // Sequelize no soporta ROW_NUMBER directamente, así que usamos una estrategia alternativa:
-        // Agrupar por patientId y tomar MAX(createdAt), luego hacer otra query
-        // O mejor: usar raw query con ROW_NUMBER
         raw: true,
       });
 
-      // Agrupar por patientId y tomar la más reciente
       for (const der of lastDerivations) {
         const pid = String(der.patientId);
         if (!lastDerivationsMap[pid] || 
@@ -55,7 +35,6 @@ async function getAllPatients(req, res) {
       }
     }
 
-    // Obtener StatusRequests aprobadas de baja para construir dischargeRequest
     let dischargeMap = {};
     if (patientIds.length > 0) {
       const dischargeRequests = await StatusRequest.findAll({
@@ -69,12 +48,10 @@ async function getAllPatients(req, res) {
         raw: true
       });
 
-      // Crear mapa: patientId -> dischargeRequest más reciente
       for (const sr of dischargeRequests) {
         const pid = String(sr.patientId);
         const srDate = new Date(sr.createdAt).getTime();
         
-        // Convertir createdAt a ISO string para el DTO
         let requestDate;
         if (sr.createdAt instanceof Date) {
           requestDate = sr.createdAt.toISOString();
@@ -84,7 +61,6 @@ async function getAllPatients(req, res) {
           requestDate = new Date(sr.createdAt).toISOString();
         }
         
-        // Si no existe o esta es más reciente, actualizar
         const existingDate = dischargeMap[pid] ? new Date(dischargeMap[pid].requestDate).getTime() : 0;
         if (!dischargeMap[pid] || srDate > existingDate) {
           dischargeMap[pid] = {
@@ -97,7 +73,6 @@ async function getAllPatients(req, res) {
       }
     }
 
-    // Obtener StatusRequests aprobadas de activación para construir activationRequest
     let activationMap = {};
     if (patientIds.length > 0) {
       const activationRequests = await StatusRequest.findAll({
@@ -111,12 +86,10 @@ async function getAllPatients(req, res) {
         raw: true
       });
 
-      // Crear mapa: patientId -> activationRequest más reciente
       for (const sr of activationRequests) {
         const pid = String(sr.patientId);
         const srDate = new Date(sr.createdAt).getTime();
         
-        // Convertir createdAt a ISO string para el DTO
         let requestDate;
         if (sr.createdAt instanceof Date) {
           requestDate = sr.createdAt.toISOString();
@@ -126,7 +99,6 @@ async function getAllPatients(req, res) {
           requestDate = new Date(sr.createdAt).toISOString();
         }
         
-        // Si no existe o esta es más reciente, actualizar
         const existingDate = activationMap[pid] ? new Date(activationMap[pid].requestDate).getTime() : 0;
         if (!activationMap[pid] || srDate > existingDate) {
           activationMap[pid] = {
@@ -139,7 +111,6 @@ async function getAllPatients(req, res) {
       }
     }
 
-    // Enriquecer pacientes con última derivación, dischargeRequest y activationRequest
     const dtos = patients.map((p) => {
       const plain = p.get({ plain: true });
       const lastDer = lastDerivationsMap[String(p.id)] || {};
@@ -161,7 +132,6 @@ async function getAllPatients(req, res) {
   }
 }
 
-// GET /patients/professional/:professionalId
 async function getProfessionalPatients(req, res) {
   try {
     const { professionalId } = req.params;
@@ -217,10 +187,8 @@ async function assignPatient(req, res) {
     const patient = await Patient.findByPk(patientId);
     if (!patient || !patient.active) return sendError(res, 404, 'Paciente no encontrado');
 
-    // Guardar el professionalId original para comparar después
     const originalProfessionalId = patient.professionalId;
 
-    // Actualiza campos del paciente
     if (professionalId !== undefined) patient.professionalId = professionalId;
 
     if (professionalName !== undefined) {
@@ -232,16 +200,12 @@ async function assignPatient(req, res) {
 
     if (status !== undefined) patient.status = status;
     
-    // Setear assignedAt: si viene en el body, usarlo; si no, setearlo automáticamente cuando se asigna un profesional
     if (assignedAt !== undefined) {
       patient.assignedAt = new Date(assignedAt);
     } else if (professionalId !== undefined && professionalId !== null) {
-      // Si se está asignando un profesional
       if (!patient.assignedAt) {
-        // Si el paciente no tiene assignedAt, setearlo ahora
         patient.assignedAt = new Date();
       } else if (originalProfessionalId !== professionalId) {
-        // Si se está cambiando de profesional, actualizar la fecha de asignación
         patient.assignedAt = new Date();
       }
     }
@@ -250,33 +214,25 @@ async function assignPatient(req, res) {
 
     await patient.save();
 
-    // Obtener la última derivación para preservar notas si no se envían
     const lastDerivation = await Derivation.findOne({
       where: { patientId: patient.id },
       order: [['createdAt', 'DESC']],
       attributes: ['textNote', 'audioNote'],
     });
 
-    // Aplicar exclusión mutua: solo uno puede tener valor
-    // REGLA DE NEGOCIO: Si viene texto, audio debe ser null; si viene audio, texto debe ser null
-    // Si ninguno viene, preservar de la última derivación (update parcial sin cambiar notas)
     let finalTextNote, finalAudioNote;
 
     if (textNote !== undefined) {
-      // Si viene texto (aunque sea string vacío), el audio debe ser null
       finalTextNote = textNote;
       finalAudioNote = null;
     } else if (audioNote !== undefined) {
-      // Si viene audio, el texto debe ser null
       finalTextNote = null;
       finalAudioNote = audioNote;
     } else {
-      // Si no viene ninguno, preservar de la última derivación (update parcial sin cambiar notas)
       finalTextNote = lastDerivation?.textNote ?? null;
       finalAudioNote = lastDerivation?.audioNote ?? null;
     }
 
-    // Registrar derivación
     const derivation = await Derivation.create({
       patientId: patient.id,
       professionalId: professionalId ?? patient.professionalId ?? null,
@@ -286,9 +242,6 @@ async function assignPatient(req, res) {
       statusChangeReason: statusChangeReason ?? null,
     });
 
-    // Crear actividad PATIENT_ASSIGNED solo si:
-    // 1. Se asignó un professionalId válido (no null/undefined)
-    // 2. El professionalId realmente cambió (no es la misma asignación)
     const newProfessionalId = professionalId ?? patient.professionalId;
     const professionalIdChanged = newProfessionalId && 
                                   String(newProfessionalId) !== String(originalProfessionalId);
@@ -308,7 +261,6 @@ async function assignPatient(req, res) {
       );
     }
 
-    // Respuesta → DTO enriquecido con la última derivación
     const plain = patient.get({ plain: true });
     const enriched = {
       ...plain,
@@ -322,7 +274,6 @@ async function assignPatient(req, res) {
   }
 }
 
-// POST /patients
 async function addPatient(req, res) {
   try {
     const { name, description, email, phone, status, assignedAt, sessionFrequency } = req.body;
@@ -348,7 +299,6 @@ async function addPatient(req, res) {
 }
 
 
-// DELETE /patients/:id
 async function deletePatient(req, res) {
   try {
     const { id } = req.params;
@@ -375,8 +325,6 @@ async function deletePatient(req, res) {
 }
 
 
-// Solicitar dar de baja a un paciente
-// POST /patients/:patientId/request-discharge
 async function requestDischargePatient(req, res) {
   try {
     const { patientId } = req.params;
@@ -386,7 +334,6 @@ async function requestDischargePatient(req, res) {
     const patient = await Patient.findByPk(patientId);
     if (!patient || !patient.active) return sendError(res, 404, 'Paciente no encontrado');
 
-    // ¿Solicitud pendiente para este paciente?
     const pending = await StatusRequest.findOne({
       where: { patientId, status: 'pending' },
     });
@@ -427,7 +374,6 @@ async function requestDischargePatient(req, res) {
 
 
 
-// Solicitar activación de un paciente
 async function requestActivationPatient(req, res) {
   try {
     const { patientId } = req.params;
@@ -439,12 +385,10 @@ async function requestActivationPatient(req, res) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    // Validar que el paciente esté inactive
     if (patient.status !== 'inactive') {
       return sendError(res, 400, 'Solo se puede solicitar la activación de pacientes inactivos');
     }
 
-    // 1) Ya existe solicitud de activación pendiente para este paciente
     const existingActivation = await StatusRequest.findOne({
       where: { 
         patientId, 
@@ -457,20 +401,18 @@ async function requestActivationPatient(req, res) {
       return sendError(res, 400, 'Ya existe una solicitud de activación pendiente para este paciente');
     }
 
-    // 4) Crear la solicitud en BD
     await StatusRequest.create({
       patientId,
-      patientName: patient.name,            // snapshot
+      patientName: patient.name,
       professionalId,
-      professionalName,                     // snapshot
+      professionalName,
       currentStatus: patient.status,
-      requestedStatus: 'active',            // activación del paciente
+      requestedStatus: 'active',
       reason,
       status: 'pending',
-      type: 'activation',                   // tipo de solicitud: activación
+      type: 'activation',
     });
 
-    // 5) Crear actividad para el feed
     await createActivity(
       'PATIENT_ACTIVATION_REQUEST',
       'Solicitud de activación de paciente',

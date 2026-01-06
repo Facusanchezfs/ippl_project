@@ -28,7 +28,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
-      // FKs + snapshots (para auditoría / rendimiento en listados)
       patientId: {
         type: DataTypes.BIGINT,
         allowNull: true,
@@ -46,21 +45,19 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
-      // Fecha y horario
       date: {
-        type: DataTypes.DATEONLY, // 'YYYY-MM-DD'
+        type: DataTypes.DATEONLY,
         allowNull: false,
       },
       startTime: {
-        type: DataTypes.STRING(5), // 'HH:mm'
+        type: DataTypes.STRING(5),
         allowNull: false,
       },
       endTime: {
-        type: DataTypes.STRING(5), // 'HH:mm'
+        type: DataTypes.STRING(5),
         allowNull: false,
       },
 
-      // Tipo y estado
       type: {
         type: DataTypes.ENUM('regular', 'first_time', 'emergency'),
         allowNull: false,
@@ -72,7 +69,6 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: 'scheduled',
       },
 
-      // Notas
       notes: {
         type: DataTypes.TEXT,
         allowNull: true,
@@ -82,7 +78,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
-      // Campos opcionales (finanzas/seguimiento) — solo almacenamos, sin lógica financiera
       sessionCost: {
         type: DataTypes.DECIMAL(12, 2),
         allowNull: true,
@@ -123,7 +118,6 @@ module.exports = (sequelize, DataTypes) => {
       createdAt: 'createdAt',
       updatedAt: 'updatedAt',
       hooks: {
-        // Setear completedAt automáticamente según status
         beforeCreate(appt) {
           if (appt.status === 'completed') {
             appt.completedAt = new Date();
@@ -143,7 +137,6 @@ module.exports = (sequelize, DataTypes) => {
       },
       validate: {
         timeOrder() {
-          // Validación simple HH:mm -> minutos
           const toMinutes = (hhmm) => {
             const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
             return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);

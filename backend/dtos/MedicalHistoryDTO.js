@@ -8,7 +8,7 @@ class MedicalHistoryDTO {
     this.id = String(mh.id);
     this.patientId = String(mh.patientId);
     this.professionalId = mh.professionalId != null ? String(mh.professionalId) : '';
-    this.date = mh.date; // DATEONLY -> 'YYYY-MM-DD'
+    this.date = mh.date;
     this.diagnosis = mh.diagnosis;
     this.treatment = mh.treatment;
     this.notes = mh.notes;

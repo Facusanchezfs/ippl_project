@@ -32,7 +32,6 @@ import frequencyRequestService from '../../services/frequencyRequest.service';
 import statusRequestService from '../../services/statusRequest.service';
 import patientsService from '../../services/patients.service';
 
-// Interfaces
 interface ActivityItemProps {
   color: string;
   text: string;
@@ -40,8 +39,8 @@ interface ActivityItemProps {
   onClick?: () => Promise<void> | void;
 }
 
-const MAX_MESSAGES = 2; // Número máximo de mensajes a mostrar
-const MAX_ACTIVITIES = 3; // Número máximo de actividades a mostrar
+const MAX_MESSAGES = 2;
+const MAX_ACTIVITIES = 3;
 
 const DASHBOARD_ACTIVITY_TYPES: Activity['type'][] = [
   'PATIENT_DISCHARGE_REQUEST',
@@ -71,7 +70,6 @@ const translateActivity = (activity: Activity): Activity => {
     const requestedFrequency = translateFrequency((activity.metadata?.requestedFrequency as string) || (activity.metadata?.newFrequency as string));
 
     if (activity.type === 'FREQUENCY_CHANGE_REQUEST' || activity.type === 'FREQUENCY_CHANGE_REQUESTED') {
-      // Si falta información de frecuencia, mostrar un mensaje más claro
       if (!currentFrequency && !requestedFrequency) {
         return {
           ...activity,
@@ -167,7 +165,6 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error al cargar estadísticas:', error);
       setStatsError('Error al cargar las estadísticas del sistema');
-      // Establecer valores por defecto para evitar que la UI se rompa
       if (user?.role === 'admin') {
         setSystemStats({
           users: { total: 0, active: 0, byRole: { admin: 0, professional: 0, content_manager: 0 } },
@@ -185,7 +182,6 @@ const Dashboard = () => {
     try {
       setMessageError(null);
       const response = await messageService.getMessages();
-      // Ordenar mensajes por fecha y tomar solo los más recientes
       const sortedMessages = response
         .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
         .slice(0, MAX_MESSAGES);
@@ -203,7 +199,6 @@ const Dashboard = () => {
   const loadRecentPosts = async () => {
     try {
       const response = await postsService.getAllPosts();
-      // Ordenar los posts por fecha de publicación y tomar los 4 más recientes
       const sortedPosts = response.posts
         .filter(post => post.status === 'published')
         .sort((a, b) => new Date(b.publishedAt || b.createdAt).getTime() - new Date(a.publishedAt || a.createdAt).getTime())
@@ -225,7 +220,6 @@ const Dashboard = () => {
         .map(translateActivity);
       setActivities(filteredActivities);
 
-      // Verificar qué actividades de frecuencia y status ya están resueltas
       try {
         const [pendingFrequencyRequests, pendingStatusRequests] = await Promise.all([
           frequencyRequestService.getPendingRequests(),
@@ -253,7 +247,6 @@ const Dashboard = () => {
           if (activity.metadata?.patientId) {
             const patientId = String(activity.metadata.patientId);
             
-            // Verificar actividades de frecuencia
             if (
               activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
               activity.type === 'FREQUENCY_CHANGE_REQUESTED'
@@ -263,14 +256,12 @@ const Dashboard = () => {
               }
             }
             
-            // Verificar actividades de baja
             if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
               if (!pendingDischargePatientIds.has(patientId)) {
                 resolved.add(activity._id);
               }
             }
             
-            // Verificar actividades de activación
             if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
               if (!pendingActivationPatientIds.has(patientId)) {
                 resolved.add(activity._id);
@@ -281,7 +272,6 @@ const Dashboard = () => {
         setResolvedActivities(resolved);
       } catch (error) {
         console.error('Error al verificar solicitudes pendientes:', error);
-        // Si falla, no marcamos nada como resuelto para mantener el comportamiento actual
       }
     } catch (error) {
       console.error('Error loading activities:', error);
@@ -291,14 +281,12 @@ const Dashboard = () => {
 
   const loadFinancialMetrics = async () => {
     try {
-      // Cargar todas las métricas en paralelo
       const [allAbonos, allPatients, allProfessionals] = await Promise.all([
         userService.getAbonos(),
         patientsService.getAllPatients(),
         userService.getProfessionals(),
       ]);
 
-      // 1. Ingresos del Mes: Filtrar abonos del mes actual y sumar amount
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       firstDayOfMonth.setHours(0, 0, 0, 0);
@@ -312,10 +300,8 @@ const Dashboard = () => {
         })
         .reduce((sum, abono) => sum + (Number(abono.amount) || 0), 0);
 
-      // 2. Solicitudes: Cantidad total de pacientes
       const cantidadSolicitudes = Array.isArray(allPatients) ? allPatients.length : 0;
 
-      // 3. Pagos Pendientes: Suma de saldoPendiente de todos los profesionales
       const pagosPendientes = allProfessionals.reduce(
         (sum, prof) => sum + (Number(prof.saldoPendiente) || 0),
         0
@@ -328,7 +314,6 @@ const Dashboard = () => {
       });
     } catch (error) {
       console.error('Error al cargar métricas financieras:', error);
-      // En caso de error, mantener valores en 0 (fallback)
       setFinancialMetrics({
         ingresosDelMes: 0,
         cantidadSolicitudes: 0,
@@ -377,7 +362,6 @@ const Dashboard = () => {
 
         if (!pendingRequest) {
           toast.error('La solicitud ya fue resuelta');
-          // Actualizar el estado para marcar esta actividad como resuelta
           setResolvedActivities(prev => new Set(prev).add(activity._id));
           return;
         }

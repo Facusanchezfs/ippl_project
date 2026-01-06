@@ -1,7 +1,7 @@
 import React from 'react';
 
 const InstagramButton = () => {
-  const instagramUrl = 'https://www.instagram.com/ipplcdelu'; // URL del Instagram
+  const instagramUrl = 'https://www.instagram.com/ipplcdelu';
 
   const handleClick = () => {
     window.open(instagramUrl, '_blank');

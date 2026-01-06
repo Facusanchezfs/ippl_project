@@ -17,12 +17,12 @@ function tryParseJSON(value, fallback) {
 
 function slugify(text) {
   return String(text)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')    // quita símbolos
+    .replace(/[^a-z0-9\s-]/g, '')
     .trim()
-    .replace(/\s+/g, '-')            // espacios -> guiones
-    .replace(/-+/g, '-');            // colapsa guiones
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
 function calculateWeeklyVisits(posts) {
@@ -35,18 +35,15 @@ function calculateWeeklyVisits(posts) {
     const vb = Array.isArray(post.viewedBy) ? post.viewedBy : [];
 
     for (const v of vb) {
-      // Soporte para { date: string } (formato esperado por el helper original)
       if (v && typeof v === 'object' && v.date) {
         const viewDate = new Date(v.date);
         if (isNaN(viewDate.getTime())) continue;
-        // normalizamos a medianoche
         viewDate.setHours(0, 0, 0, 0);
         const diffDays = Math.floor((today - viewDate) / dayMs);
         if (diffDays >= 0 && diffDays < 7) {
           lastWeek[6 - diffDays] += 1;
         }
       }
-      // Si es string (id) no hay timestamp -> no podemos ubicarlo en la semana: lo ignoramos.
     }
   }
 
@@ -55,16 +52,9 @@ function calculateWeeklyVisits(posts) {
 
 const getAllPosts = async (req, res) => {
   try {
-    // OPTIMIZACIÓN CRÍTICA #3: getAllPosts - Overfetching de contenido TEXT
-    // PROBLEMA: Traía el campo 'content' (TEXT) completo en listados, generando MBs de datos innecesarios
-    // IMPACTO: Con 200 posts = varios MBs transferidos, 200-600ms, alto uso de memoria
-    // SOLUCIÓN: Excluir 'content' del listado (solo se necesita en detalle individual)
-    // COMPATIBILIDAD: El DTO ya maneja campos opcionales, frontend no espera content en listado
-    
     const posts = await Post.findAll({
-      where: { active: true },                 // ✅ solo activos
-      // Excluir 'content' (TEXT) del listado - solo se necesita en getPostById/getPostBySlug
-      attributes: { exclude: ['content'] },   // ⚠️ Optimización: no traer contenido completo
+      where: { active: true },
+      attributes: { exclude: ['content'] },
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
     return sendSuccess(res, { posts: toPostDTOList(posts) });
@@ -77,11 +67,9 @@ const getAllPosts = async (req, res) => {
 const getPostBySection = async (req, res) =>{
   const {section} = req.params;
   try{
-    // OPTIMIZACIÓN CRÍTICA #3 (consistencia): getPostBySection - Misma optimización
-    // Excluir 'content' del listado por sección para mantener consistencia
     const posts = await Post.findAll({
       where: {active: true, section},
-      attributes: { exclude: ['content'] },   // ⚠️ Optimización: no traer contenido completo
+      attributes: { exclude: ['content'] },
       order: [['publishedAt', 'DESC'], ['createdAt', 'DESC']],
     });
     return sendSuccess(res, { posts: toPostDTOList(posts) });
@@ -94,7 +82,7 @@ const getPostBySection = async (req, res) =>{
 const getPostBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
-    const post = await Post.findOne({ where: { slug, active: true } }); // ✅
+    const post = await Post.findOne({ where: { slug, active: true } });
     if (!post) return sendError(res, 404, 'Post no encontrado');
     return sendSuccess(res, { post: toPostDTO(post) });
   } catch (error) {
@@ -114,9 +102,9 @@ const createPost = async (req, res) => {
       tags,
       seo,
       status = 'draft',
-      slug,               // opcional
-      featured,           // opcional
-      readTime,           // opcional
+      slug,
+      featured,
+      readTime,
     } = req.body;
 
     const authorId = req.user?.id;
@@ -129,7 +117,6 @@ const createPost = async (req, res) => {
     const tagsJson = tryParseJSON(tags, toArray(tags));
     const seoJson = tryParseJSON(seo, typeof seo === 'object' && seo ? seo : {});
 
-    // Generar slug automáticamente, siempre debido a que el modelo NO ADMITE NULL en slug
       const base = slug ? slugify(slug) : slugify(title);
       let uniqueSlug = base;
       let suffix = 1;
@@ -142,7 +129,7 @@ const createPost = async (req, res) => {
 
     const created = await Post.create({
       title,
-      content: content || '', // Content deprecado, enviar vacío
+      content: content || '',
       section,
       excerpt,
       description: description || '',
@@ -177,7 +164,6 @@ const updatePost = async (req, res) => {
       return sendError(res, 404, 'Post no encontrado');
     }
 
-    // Autorización: autor o admin
     const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
     const isAdmin = req.user?.role === 'admin';
     if (!isAuthor && !isAdmin) {
@@ -196,7 +182,6 @@ const updatePost = async (req, res) => {
     if (section != null) updates.section = section;
     if (excerpt != null) updates.excerpt = excerpt;
     if (description !== undefined) {
-      // Si viene como string vacío, convertir a null
       updates.description = (description && description.trim()) ? description.trim() : null;
     }
     if (tags !== undefined) updates.tags = tryParseJSON(tags, Array.isArray(tags) ? tags : []);
@@ -231,7 +216,6 @@ const updatePost = async (req, res) => {
       if (status === 'published' && !post.publishedAt) {
         updates.publishedAt = new Date();
       }
-      // Si se vuelve a draft NO borro publishedAt, salvo que venga explícito:
       if (status === 'draft' && req.body.publishedAt === null) {
         updates.publishedAt = null;
       }
@@ -267,7 +251,6 @@ const deletePost = async (req, res) => {
   }
 };
 
-// GET /posts/:id  →  Post plano (compat con tu ruta actual)
 const getPostById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -277,7 +260,6 @@ const getPostById = async (req, res) => {
       return sendError(res, 404, 'Post no encontrado');
     }
 
-    // Ocultamos los soft-deleted a menos que sea admin o autor
     if (post.active === false) {
       const isAdmin = req.user?.role === 'admin';
       const isAuthor = String(post.authorId ?? '') === String(req.user?.id ?? '');
@@ -306,7 +288,6 @@ const checkPostViewed = async (req, res) => {
       return sendError(res, 404, 'Post no encontrado');
     }
 
-    // Ocultar soft-deleted para no admin/no autor
     if (post.active === false) {
       const isAdmin = req.user?.role === 'admin';
       const isAuthor = String(post.authorId ?? '') === userId;
@@ -333,7 +314,7 @@ const incrementPostView = async (req, res) => {
       const post = await Post.findByPk(id, {
         attributes: ['id', 'active', 'views'],
         transaction: t,
-        lock: t.LOCK.UPDATE, // evita condiciones de carrera
+        lock: t.LOCK.UPDATE,
       });
 
       if (!post || post.active === false) {
@@ -420,17 +401,9 @@ const checkPostLike = async (req, res) => {
 
 const getPostsStats = async (req, res) => {
   try {
-    // OPTIMIZACIÓN CRÍTICA #1: getPostsStats - Overfetching masivo
-    // PROBLEMA: Traía TODOS los posts solo para sumar views/likes en memoria
-    // IMPACTO: Con 500 posts = 500 registros innecesarios, 200-500ms
-    // SOLUCIÓN: Usar agregaciones SQL (SUM, COUNT) directamente en la BD
-    // COMPATIBILIDAD: Mismo formato de respuesta, solo cambia la implementación interna
-    
     const { fn, col } = require('sequelize');
     
-    // Agregaciones SQL directas - una sola query en lugar de traer todos los posts
     const [postsAgg, usersByRole, postsForWeekly] = await Promise.all([
-      // Suma total de views y likes, cuenta de posts - TODO en SQL
       Post.findAll({
         attributes: [
           [fn('COUNT', col('id')), 'totalPosts'],
@@ -440,7 +413,6 @@ const getPostsStats = async (req, res) => {
         where: { active: true },
         raw: true,
       }),
-      // Usuarios agrupados por rol y status - una query con GROUP BY
       User.findAll({
         attributes: [
           'role',
@@ -450,24 +422,19 @@ const getPostsStats = async (req, res) => {
         group: ['role', 'status'],
         raw: true,
       }),
-      // Solo viewedBy para calcular weekly visits (necesario para la función)
-      // Nota: calculateWeeklyVisits procesa viewedBy en memoria, pero ahora solo
-      // traemos este campo JSON específico, no todos los campos de todos los posts
       Post.findAll({
         where: { active: true },
-        attributes: ['viewedBy'], // Solo el campo necesario para weekly visits
+        attributes: ['viewedBy'],
         raw: true,
       }),
     ]);
 
-    // Extraer valores de agregaciones
     const agg = postsAgg[0] || {};
     const totalPosts = parseInt(agg.totalPosts || 0, 10);
     const totalViews = parseInt(agg.totalViews || 0, 10);
     const totalLikes = parseInt(agg.totalLikes || 0, 10);
-    const totalVisits = totalViews; // compat con el legacy
+    const totalVisits = totalViews;
 
-    // Procesar usuarios por rol desde GROUP BY
     let activeDoctors = 0;
     let activeUsers = 0;
     for (const row of usersByRole) {
@@ -478,8 +445,6 @@ const getPostsStats = async (req, res) => {
       }
     }
 
-    // Weekly visits sigue necesitando el procesamiento en memoria
-    // pero ahora solo procesamos viewedBy, no todos los campos
     const weeklyVisits = calculateWeeklyVisits(postsForWeekly);
 
     return sendSuccess(res, {

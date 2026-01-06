@@ -30,7 +30,7 @@ const ContentEditorModal = (props: PostEditorProps) => {
     content: '',
     excerpt: '',
     description: '',
-    section: 'bienestar', // valor por defecto; se sobreescribe si viene post
+    section: 'bienestar',
     status: 'draft',
     thumbnail: null as File | string | null,
     tags: '',
@@ -42,11 +42,9 @@ const ContentEditorModal = (props: PostEditorProps) => {
     },
   });
 
-  // Prefill si recibimos post
   useEffect(() => {
     const p = props.post;
     if (!p) {
-      // creación: asegurar default limpios
       setFormData({
         title: '',
         content: '',
@@ -139,7 +137,6 @@ const ContentEditorModal = (props: PostEditorProps) => {
       const postData = new FormData();
       const { seo, tags, thumbnail, content, ...basicData } = formData;
 
-      // Campos básicos (excluyendo content que está deprecado)
       for (const [key, value] of Object.entries(basicData)) {
         if (value === null || value === undefined) continue;
         postData.append(
@@ -148,15 +145,12 @@ const ContentEditorModal = (props: PostEditorProps) => {
         );
       }
 
-      // Enviar content como string vacío ya que está deprecado pero el backend aún lo espera
       postData.append('content', '');
 
-      // Imagen
       if (thumbnail instanceof File) {
         postData.append('thumbnail', thumbnail);
       }
 
-      // Tags y SEO
       const tagsArray = tags
         .split(',')
         .map((tag) => tag.trim())
@@ -164,7 +158,6 @@ const ContentEditorModal = (props: PostEditorProps) => {
       postData.append('tags', JSON.stringify(tagsArray));
       postData.append('seo', JSON.stringify(seo));
 
-      // Datos solo en creación
       if (!isEditing) {
         postData.append('author', props.user?.id || '');
         postData.append('authorName', props.user?.name || '');
@@ -175,7 +168,6 @@ const ContentEditorModal = (props: PostEditorProps) => {
         postData.append('slug', slug);
       }
 
-      // Read time (calculado basado en description ya que content está deprecado)
       const wordCount = formData.description.trim().split(/\s+/).filter(Boolean).length;
       const readTime = Math.max(1, Math.ceil(wordCount / 200)) + ' min';
       postData.append('readTime', readTime);

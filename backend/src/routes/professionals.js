@@ -6,7 +6,6 @@ const { toProfessionalDTOList } = require('../../mappers/ProfessionalMapper');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// GET /api/professionals - Obtener todos los profesionales
 router.get('/', async (req, res) => {
   try {
     const professionals = await User.findAll({

@@ -4,7 +4,6 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Post extends Model {
     static associate(models) {
-      // Autor opcional (snapshot authorName queda en la fila)
       Post.belongsTo(models.User, {
         foreignKey: 'authorId',
         as: 'authorUser',
@@ -40,11 +39,11 @@ module.exports = (sequelize, DataTypes) => {
 
       thumbnail: { type: DataTypes.STRING(255), allowNull: true },
 
-      tags: { type: DataTypes.JSON, allowNull: true },          // string[]
-      seo:  { type: DataTypes.JSON, allowNull: true },          // { metaTitle, metaDescription, keywords }
+      tags: { type: DataTypes.JSON, allowNull: true },
+      seo:  { type: DataTypes.JSON, allowNull: true },
 
-      authorId:   { type: DataTypes.BIGINT, allowNull: true },  // FK a Users.id
-      authorName: { type: DataTypes.STRING(150), allowNull: true }, // snapshot
+      authorId:   { type: DataTypes.BIGINT, allowNull: true },
+      authorName: { type: DataTypes.STRING(150), allowNull: true },
 
       featured: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 
@@ -53,9 +52,9 @@ module.exports = (sequelize, DataTypes) => {
       views: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
       likes: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
 
-      comments: { type: DataTypes.JSON, allowNull: true },      // array de comentarios (JSON)
-      likedBy:  { type: DataTypes.JSON, allowNull: true },      // string[]
-      viewedBy: { type: DataTypes.JSON, allowNull: true },      // string[]
+      comments: { type: DataTypes.JSON, allowNull: true },
+      likedBy:  { type: DataTypes.JSON, allowNull: true },
+      viewedBy: { type: DataTypes.JSON, allowNull: true },
 
       publishedAt: { type: DataTypes.DATE, allowNull: true },
       active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

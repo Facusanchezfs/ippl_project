@@ -18,28 +18,24 @@ const createRequest = async (req, res) => {
       currentStatus,
       requestedStatus,
       reason,
-      type, // opcional: 'activation' | 'status_change'
+      type,
     } = req.body;
 
-    // Validaciones básicas
     if (!patientId) {
       return sendError(res, 400, 'Falta patientId');
     }
     if (!VALID_STATUSES.includes(currentStatus) || !VALID_STATUSES.includes(requestedStatus)) {
       return sendError(res, 400, 'Estado no válido. Permitidos: active, pending, inactive');
     }
-    // Regla original: este endpoint permite únicamente active -> inactive
     if (currentStatus === 'active' && requestedStatus !== 'inactive') {
       return sendError(res, 400, 'Solo se permiten solicitudes de cambio de estado de active a inactive');
     }
 
-    // Cargar paciente para snapshot y verificación
     const patient = await Patient.findByPk(patientId);
     if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    // Evitar duplicados pendientes para el mismo paciente
     const existingPending = await StatusRequest.findOne({
       where: { patientId, status: 'pending' },
     });
@@ -47,7 +43,6 @@ const createRequest = async (req, res) => {
       return sendError(res, 400, 'Ya existe una solicitud pendiente para este paciente');
     }
 
-    // Determinar profesional (si no viene en body, tomamos del usuario autenticado si existe)
     const professionalId = bodyProfessionalId ?? req.user?.id ?? null;
     const professionalName = snapProfessionalName ?? req.user?.name ?? null;
 
@@ -56,7 +51,6 @@ const createRequest = async (req, res) => {
       ? 'activation'
       : 'status_change';
 
-    // Crear solicitud
     const created = await StatusRequest.create({
       patientId,
       patientName: snapPatientName ?? patient.name,
@@ -76,10 +70,8 @@ const createRequest = async (req, res) => {
   }
 };
 
-// Obtener solicitudes pendientes
 const getPendingRequests = async (req, res) => {
   try {
-    // Obtener IDs de pacientes activos
     const activePatients = await Patient.findAll({
       where: { active: true },
       attributes: ['id'],
@@ -102,7 +94,6 @@ const getPendingRequests = async (req, res) => {
   }
 };
 
-// Obtener solicitudes de un profesional
 const getProfessionalRequests = async (req, res) => {
   try {
     const { professionalId } = req.params;
@@ -110,7 +101,6 @@ const getProfessionalRequests = async (req, res) => {
       return sendError(res, 400, 'Falta professionalId');
     }
 
-    // Obtener IDs de pacientes activos
     const activePatients = await Patient.findAll({
       where: { active: true },
       attributes: ['id'],
@@ -133,7 +123,6 @@ const getProfessionalRequests = async (req, res) => {
   }
 };
 
-// Obtener solicitudes pendientes de un paciente específico
 const getPatientPendingRequests = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -141,7 +130,6 @@ const getPatientPendingRequests = async (req, res) => {
       return sendError(res, 400, 'Falta patientId');
     }
 
-    // Verificar que el paciente existe y está activo
     const patient = await Patient.findByPk(patientId);
     if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
@@ -162,7 +150,6 @@ const getPatientPendingRequests = async (req, res) => {
   }
 };
 
-// Aprobar una solicitud de cambio de estado
 const approveRequest = async (req, res) => {
   logger.debug('Llamada a approveRequest con ID:', { requestId: req.params.requestId });
   const { requestId } = req.params;
@@ -170,7 +157,6 @@ const approveRequest = async (req, res) => {
 
   try {
     const result = await sequelize.transaction(async (t) => {
-      // 1) Buscar la solicitud
       const request = await StatusRequest.findByPk(requestId, { transaction: t });
       if (!request) {
         return { kind: 'not_found' };
@@ -179,26 +165,22 @@ const approveRequest = async (req, res) => {
         return { kind: 'already_processed' };
       }
 
-      // 2) Buscar paciente
       const patient = await Patient.findByPk(request.patientId, { transaction: t });
       if (!patient || !patient.active) {
         return { kind: 'patient_not_found' };
       }
 
-      // 3) Actualizar estado del paciente según la solicitud
       const oldStatus = patient.status;
       const newStatus = request.requestedStatus;
 
       patient.status = newStatus;
       
-      // Si es solicitud de activación (type === 'activation'), setear activatedAt con la fecha actual
       if (request.type === 'activation' && newStatus === 'active') {
         patient.activatedAt = new Date();
       }
       
       await patient.save({ transaction: t });
 
-      // 4) Marcar solicitud como aprobada
       request.status = 'approved';
       request.adminResponse = adminResponse ?? null;
       await request.save({ transaction: t });
@@ -206,7 +188,6 @@ const approveRequest = async (req, res) => {
       return { kind: 'ok', request, patient, oldStatus, newStatus };
     });
 
-    // Manejo de resultados fuera de la transacción
     if (result.kind === 'not_found') {
       logger.debug('Solicitud no encontrada para ID:', { requestId });
       return sendError(res, 404, 'Solicitud no encontrada');
@@ -220,7 +201,6 @@ const approveRequest = async (req, res) => {
 
     const { request, patient, oldStatus, newStatus } = result;
 
-    // 5) Crear actividad (fuera de la tx; si falla el log, no rompemos la aprobación)
     try {
       const activityType =
         request.type === 'activation'
@@ -250,7 +230,6 @@ const approveRequest = async (req, res) => {
       logger.warn('No se pudo registrar la actividad de aprobación:', logErr);
     }
 
-    // 6) Devolver DTO de la solicitud aprobada
     return sendSuccess(res, toStatusRequestDTO(request), 'Solicitud aprobada correctamente');
   } catch (error) {
     logger.error('Error al aprobar solicitud:', error);
@@ -259,7 +238,6 @@ const approveRequest = async (req, res) => {
 };
 
 
-// Rechazar una solicitud (status-request)
 const rejectRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -269,7 +247,6 @@ const rejectRequest = async (req, res) => {
       return sendError(res, 400, 'Se requiere una razón para el rechazo');
     }
 
-    // Traer la solicitud
     const sr = await StatusRequest.findByPk(requestId);
     if (!sr) {
       return sendError(res, 404, 'Solicitud no encontrada');
@@ -278,24 +255,19 @@ const rejectRequest = async (req, res) => {
       return sendError(res, 400, 'Esta solicitud ya fue procesada');
     }
 
-    // (Opcional) Traer paciente para validar existencia/estado actual (no modificamos al paciente en un rechazo)
     const patient = await Patient.findByPk(sr.patientId);
     if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    // Transacción para garantizar consistencia entre la actualización y la actividad
     let t;
     try {
       t = await sequelize.transaction();
 
-      // Rechazar solicitud
       sr.status = 'rejected';
       sr.adminResponse = adminResponse;
       await sr.save({ transaction: t });
 
-      // Registrar actividad (el cliente espera STATUS_CHANGE_* para status)
-      // Para solicitudes de activación también usamos STATUS_CHANGE_REJECTED para que el front la capte.
       await createActivity(
         'STATUS_CHANGE_REJECTED',
         'Cambio de estado rechazado',
@@ -309,7 +281,7 @@ const rejectRequest = async (req, res) => {
           currentStatus: sr.currentStatus,
           reason: adminResponse,
         },
-        { transaction: t } // si tu createActivity soporta options; si no, quita este arg.
+        { transaction: t }
       );
 
       await t.commit();
@@ -318,7 +290,6 @@ const rejectRequest = async (req, res) => {
       throw err;
     }
 
-    // Refrescar y devolver DTO
     await sr.reload();
     return sendSuccess(res, toStatusRequestDTO(sr), 'Solicitud rechazada correctamente');
   } catch (error) {

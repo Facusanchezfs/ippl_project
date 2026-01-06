@@ -7,7 +7,6 @@ const { authenticateToken } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// Asegurar que los directorios existan
 async function ensureDirectories() {
   const uploadDir = path.join(__dirname, '../../uploads');
   const audioDir = path.join(uploadDir, 'audios');
@@ -25,10 +24,8 @@ async function ensureDirectories() {
   }
 }
 
-// Crear directorios al iniciar
 ensureDirectories().catch((err) => logger.error('Error al crear directorios de upload:', err));
 
-// Configurar multer para almacenar los archivos
 const storage = multer.diskStorage({
   destination: async function (req, file, cb) {
     await ensureDirectories();
@@ -51,17 +48,16 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 30 * 1024 * 1024 // 30MB max o mas de 15 minutos
+    fileSize: 30 * 1024 * 1024
   }
 });
 
 const uploadAudio = upload.single('audio');
 
-// Ruta para subir audio
 router.post(
   '/audio',
   authenticateToken,
-  uploadAudio, // MODIFICADO: uso del middleware named uploadAudio
+  uploadAudio,
   async (req, res) => {
     try {
       if (!req.file) {
@@ -70,10 +66,8 @@ router.post(
 
       logger.debug('Archivo recibido:', { filename: req.file.filename, size: req.file.size });
 
-      // Construir la URL relativa del audio
       const audioUrl = `/uploads/audios/${req.file.filename}`;
       
-      // Verificar que el archivo existe y es accesible
       try {
         await fs.access(path.join(__dirname, '../../uploads/audios', req.file.filename));
         logger.info('Archivo guardado exitosamente:', { url: audioUrl });
@@ -82,7 +76,6 @@ router.post(
         return sendError(res, 500, 'Error al guardar el archivo de audio', { error: error.message });
       }
       
-      // Enviar respuesta con URL y filename
       return sendSuccess(res, {
         url: audioUrl,
         audioUrl: audioUrl,
@@ -96,8 +89,6 @@ router.post(
   }
 );
 
-// --- Carrusel de imágenes ---
-// Cambiado: ahora guarda en uploads/carousel en lugar de public/images/carousel
 const carouselDir = path.join(__dirname, '../../uploads/carousel');
 async function ensureCarouselDir() {
   try {
@@ -129,7 +120,7 @@ const uploadCarousel = multer({
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB max
+    fileSize: 10 * 1024 * 1024
   }
 });
 
@@ -138,7 +129,6 @@ router.post('/carousel', authenticateToken, uploadCarousel.single('image'), asyn
     if (!req.file) {
       return sendError(res, 400, 'No se proporcionó ninguna imagen');
     }
-    // Cambiado: ahora devuelve /uploads/carousel/ en lugar de /images/carousel/
     const imageUrl = `/uploads/carousel/${req.file.filename}`;
     return sendSuccess(res, {
       url: imageUrl,

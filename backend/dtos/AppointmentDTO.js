@@ -24,12 +24,12 @@ class AppointmentDTO {
     this.professionalId = a.professionalId != null ? String(a.professionalId) : '';
     this.professionalName = a.professionalName ?? '';
 
-    this.date = a.date; // 'YYYY-MM-DD'
-    this.startTime = a.startTime; // 'HH:mm'
-    this.endTime = a.endTime;     // 'HH:mm'
+    this.date = a.date;
+    this.startTime = a.startTime;
+    this.endTime = a.endTime;
 
-    this.type = a.type;           // 'regular' | 'first_time' | 'emergency'
-    this.status = a.status;       // 'scheduled' | 'completed' | 'cancelled'
+    this.type = a.type;
+    this.status = a.status;
 
     this.notes = a.notes ?? undefined;
     this.audioNote = a.audioNote ?? undefined;

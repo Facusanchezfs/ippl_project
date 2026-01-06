@@ -11,14 +11,14 @@ const rateLimit = require('express-rate-limit');
  * 1000 requests por 30 segundos por IP
  */
 const globalLimiter = rateLimit({
-	windowMs: 30 * 1000, // 30 segundos
-	max: 1000, // 1000 requests por ventana
+	windowMs: 30 * 1000,
+	max: 1000,
 	message: {
 		error: 'Demasiadas solicitudes desde esta IP, por favor intenta nuevamente en 30 segundos.',
 		code: 'RATE_LIMIT_EXCEEDED'
 	},
-	standardHeaders: true, // Retorna información de rate limit en headers `RateLimit-*`
-	legacyHeaders: false, // Deshabilita headers `X-RateLimit-*`
+	standardHeaders: true,
+	legacyHeaders: false,
 });
 
 /**
@@ -27,15 +27,14 @@ const globalLimiter = rateLimit({
  * Previene ataques de fuerza bruta
  */
 const loginLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutos
-	max: 30, // 5 intentos por ventana
+	windowMs: 15 * 60 * 1000,
+	max: 30,
 	message: {
 		error: 'Demasiados intentos de inicio de sesión. Por favor intenta nuevamente en 15 minutos.',
 		code: 'LOGIN_RATE_LIMIT_EXCEEDED'
 	},
 	standardHeaders: true,
 	legacyHeaders: false,
-	// Saltar rate limit si la request es exitosa (opcional, pero puede ser útil)
 	skipSuccessfulRequests: false,
 });
 
@@ -45,15 +44,14 @@ const loginLimiter = rateLimit({
  * Protege contra abuso de operaciones que modifican datos
  */
 const writeLimiter = rateLimit({
-	windowMs: 60 * 1000, // 1 minuto
-	max: 100, // 20 requests por ventana
+	windowMs: 60 * 1000,
+	max: 100,
 	message: {
 		error: 'Demasiadas solicitudes de escritura desde esta IP. Por favor intenta nuevamente en un minuto.',
 		code: 'WRITE_RATE_LIMIT_EXCEEDED'
 	},
 	standardHeaders: true,
 	legacyHeaders: false,
-	// Solo aplicar a métodos de escritura
 	skip: (req) => {
 		const writeMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
 		return !writeMethods.includes(req.method);

@@ -52,7 +52,6 @@ const ContentDashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [userLoaded, setUserLoaded] = useState<User>();
 
-  // Filtros disponibles
   const sectionOptions = [
     { value: 'all', label: 'Todas las secciones' },
     { value: 'ninos', label: 'Niños' },
@@ -208,11 +207,10 @@ const ContentDashboard = () => {
     toast.loading('Subiendo imagen...');
     try {
       const files = Array.from(fileInputRef.current?.files ?? []);
-      // Usamos el servicio de posts que tiene la función de subida
       await contentManagementService.uploadCarouselImages(files);
       toast.dismiss();
       toast.success('Imagen subida exitosamente.');
-      fetchCarouselImages(); // Refrescar la galería
+      fetchCarouselImages();
       if(fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -253,7 +251,6 @@ const ContentDashboard = () => {
     }
   };
 
-  // Filtrar posts basado en los criterios de búsqueda
   const filteredPosts = posts.filter(post => {
     const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          post.content.toLowerCase().includes(searchTerm.toLowerCase());

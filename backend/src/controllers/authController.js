@@ -61,16 +61,13 @@ const refreshToken = async (req, res) => {
 			return sendError(res, 400, 'Token no proporcionado');
 		}
 
-		// Decodifica sin importar expiración
 		const decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
 
-		// 🔍 Busca usuario en DB
 		const user = await User.findByPk(decoded.id);
 		if (!user || user.status === 'inactive') {
 			return sendError(res, 403, 'Usuario no válido o inactivo');
 		}
 
-		// 🆕 Nuevo token
 		const newToken = generateToken(user);
 		res.json({ token: newToken });
 	} catch (error) {
@@ -104,24 +101,20 @@ const verifyToken = (req, res, next) => {
  */
 const getCurrentUser = async (req, res) => {
 	try {
-		// req.user viene del middleware authenticateToken
 		if (!req.user || !req.user.id) {
 			return sendError(res, 401, 'Usuario no autenticado');
 		}
 
-		// Buscar usuario en la base de datos
 		const user = await User.findByPk(req.user.id);
 
 		if (!user) {
 			return sendError(res, 404, 'Usuario no encontrado');
 		}
 
-		// Verificar que el usuario esté activo
 		if (user.status === 'inactive') {
 			return sendError(res, 403, 'Cuenta inactiva. Contacta al administrador.');
 		}
 
-		// Devolver usuario en formato DTO (mantener formato { user } para compatibilidad con frontend)
 		const userDTO = toUserDTO(user);
 		return res.json({ user: userDTO });
 	} catch (error) {

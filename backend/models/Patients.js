@@ -71,7 +71,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
-      // Denormalizado para evitar join cuando solo necesitás mostrar el nombre
       professionalName: {
         type: DataTypes.STRING(150),
         allowNull: true,
@@ -82,7 +81,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
-      // Se setea cuando el admin aprueba una solicitud de activación
       activatedAt: {
         type: DataTypes.DATE,
         allowNull: true,
@@ -93,7 +91,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
-      // Soft-delete
       active: {
         type: DataTypes.BOOLEAN,
         allowNull: false,

@@ -19,12 +19,6 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const getAllAppointments = async (req, res) => {
   try {
-    // OPTIMIZACIÓN FASE 3 PARTE 2: getAllAppointments
-    // PROBLEMA: Sin paginación, trae todos los registros. Sin atributos específicos, overfetching.
-    // IMPACTO: Con miles de citas = transferencia masiva, lento, alto uso de memoria.
-    // SOLUCIÓN: Paginación obligatoria + atributos específicos + índices compuestos.
-    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
-    
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     
@@ -52,8 +46,6 @@ const getAllAppointments = async (req, res) => {
 
     const totalPages = Math.ceil(count / limit);
     
-    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
-    // Si se pasa paginación, devolver formato nuevo con paginación
     const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
     
     if (hasPagination) {
@@ -67,7 +59,6 @@ const getAllAppointments = async (req, res) => {
         },
       });
     } else {
-      // Formato antiguo para compatibilidad con frontend actual
       return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
     }
   } catch (error) {
@@ -78,12 +69,6 @@ const getAllAppointments = async (req, res) => {
 
 const getProfessionalAppointments = async (req, res) => {
   try {
-    // OPTIMIZACIÓN FASE 3 PARTE 2: getProfessionalAppointments
-    // PROBLEMA: Sin paginación, trae todos los registros del profesional. Sin atributos específicos.
-    // IMPACTO: Con muchos profesionales = transferencia masiva, lento.
-    // SOLUCIÓN: Paginación obligatoria + atributos específicos + índices compuestos.
-    // COMPATIBILIDAD: Formato de respuesta con paginación estándar, mantiene DTO.
-    
     const { professionalId } = req.params;
     
     const page = parseInt(req.query.page, 10) || 1;
@@ -113,8 +98,6 @@ const getProfessionalAppointments = async (req, res) => {
 
     const totalPages = Math.ceil(count / limit);
 
-    // COMPATIBILIDAD: Si no se pasa paginación explícitamente, devolver formato antiguo
-    // Si se pasa paginación, devolver formato nuevo con paginación
     const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
     
     if (hasPagination) {
@@ -128,7 +111,6 @@ const getProfessionalAppointments = async (req, res) => {
         },
       });
     } else {
-      // Formato antiguo para compatibilidad con frontend actual
       return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
     }
   } catch (error) {
@@ -141,7 +123,6 @@ const getTodayProfessionalAppointments = async (req, res) => {
   try {
     const { professionalId } = req.params;
 
-    // YYYY-MM-DD en hora local del servidor
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -202,7 +183,6 @@ const createAppointment = async (req, res) => {
       sessionCost,
     } = req.body;
 
-    // 1) Validaciones básicas
     if (!patientId || !professionalId || !date || !startTime || !endTime) {
       return sendError(res, 400, 'Faltan campos requeridos (patientId, professionalId, date, startTime, endTime)');
     }
@@ -210,7 +190,6 @@ const createAppointment = async (req, res) => {
       return sendError(res, 400, 'endTime debe ser mayor que startTime');
     }
 
-    // 2) Snapshots de nombres (si no existen, seguimos con texto por defecto)
     const [patient, professional] = await Promise.all([
       Patient.findByPk(patientId, { attributes: ['id', 'name', 'active'] }),
       User.findByPk(professionalId, { attributes: ['id', 'name'] }),
@@ -220,12 +199,6 @@ const createAppointment = async (req, res) => {
       return sendError(res, 404, 'Paciente no encontrado o eliminado');
     }
 
-    // 3) Chequeo de solapamientos: misma fecha/profesional, activo y no cancelado
-    // OPTIMIZACIÓN FASE 3 PARTE 2: createAppointment - Validación de solapamientos
-    // PROBLEMA: Query sin índices optimizados para búsqueda por professionalId + date + active + status.
-    // IMPACTO: Escaneo completo de tabla en lugar de usar índice compuesto.
-    // SOLUCIÓN: Usar atributos específicos y asegurar que la query use índices (migración de índice necesaria).
-    // COMPATIBILIDAD: Misma lógica de validación, solo optimización de query.
     const sameDay = await Appointment.findAll({
       where: {
         active: true,
@@ -233,33 +206,29 @@ const createAppointment = async (req, res) => {
         date,
         status: { [Op.eq]: 'scheduled' },
       },
-      attributes: ['id', 'startTime', 'endTime'], // Solo campos necesarios para validación
+      attributes: ['id', 'startTime', 'endTime'],
     });
     const newStart = toMinutes(startTime);
     const newEnd = toMinutes(endTime);
     const overlaps = sameDay.some((a) => {
       const s = toMinutes(a.startTime);
       const e = toMinutes(a.endTime);
-      // Solapa si empieza antes de que termine la otra y termina después de que empieza la otra
       return newStart < e && s < newEnd;
     });
     if (overlaps) {
       return sendError(res, 400, 'El horario seleccionado no está disponible');
     }
 
-    // 4) Saneos / normalizaciones
     const safeAudio =
       audioNote && typeof audioNote === 'string' && audioNote.startsWith('/uploads/')
         ? audioNote
         : null;
 
     const sessionCostNum = toAmount(sessionCost);
-    // Como no hay paymentAmount en el DTO de creación, asumimos 0 al calcular remainingBalance
     const paymentAmountNum = 0;
     const remainingBalanceNum =
       sessionCostNum !== null ? Math.max(sessionCostNum - paymentAmountNum, 0) : null;
 
-    // 5) Crear cita (status fijo 'scheduled'; completedAt lo setean hooks al marcar 'completed')
     const created = await Appointment.create({
       patientId,
       patientName: patient?.name || 'Paciente no encontrado',
@@ -268,15 +237,14 @@ const createAppointment = async (req, res) => {
       date,
       startTime,
       endTime,
-      type,                 // 'regular' | 'first_time' | 'emergency'
-      status: 'scheduled',  // ← forzado al crear
+      type,
+      status: 'scheduled',
       notes: notes ?? null,
       audioNote: safeAudio,
       sessionCost: sessionCostNum,
-      attended: null,               // no viene en el DTO de creación
-      paymentAmount: null,          // no viene en el DTO de creación
+      attended: null,
+      paymentAmount: null,
       remainingBalance: remainingBalanceNum,
-      // active: true por defecto (soft delete en el modelo)
     });
 
     return sendSuccess(res, toAppointmentDTO(created), 'Cita creada correctamente', 201);
@@ -287,27 +255,22 @@ const createAppointment = async (req, res) => {
 };
 
 
-// PUT /appointments/:id
 const updateAppointment = async (req, res) => {
   try {
-    // La cita ya viene validada (existe, active=true, permisos OK)
     const appt = req.appointment;
     const body = req.body;
 
-    // Campos permitidos
     const updates = {};
     const fields = [
       'date', 'startTime', 'endTime',
       'type', 'status',
       'notes', 'audioNote',
       'sessionCost', 'attended',
-      'paymentAmount', // remainingBalance lo recalculamos
-      'noShowPaymentAmount', // monto cobrado cuando no asistió (no es un pago)
+      'paymentAmount',
+      'noShowPaymentAmount',
       'patientId', 'professionalId',
     ];
     for (const f of fields) if (body[f] !== undefined) updates[f] = body[f];
-
-    // Normalizar attended (acepta string "true"/"false")
     if (updates.attended !== undefined) {
       if (typeof updates.attended === 'string') {
         updates.attended = updates.attended.toLowerCase() === 'true';
@@ -316,15 +279,13 @@ const updateAppointment = async (req, res) => {
       }
     }
 
-    // Saneo de audioNote (solo rutas internas)
     if (updates.audioNote !== undefined) {
       const v = updates.audioNote;
       updates.audioNote =
         v && typeof v === 'string' && v.startsWith('/uploads/') ? v : null;
     }
 
-    // Si cambian fecha/hora/profesional → validar (end > start) + solapamientos
-    const newDate  = updates.date            ?? appt.date;
+    const newDate  = updates.date ?? appt.date;
     const newStart = updates.startTime       ?? appt.startTime;
     const newEnd   = updates.endTime         ?? appt.endTime;
     const newProf  = updates.professionalId  ?? appt.professionalId;
@@ -339,8 +300,6 @@ const updateAppointment = async (req, res) => {
       updates.endTime !== undefined ||
       updates.professionalId !== undefined
     ) {
-      // OPTIMIZACIÓN FASE 3 PARTE 2: updateAppointment - Validación de solapamientos optimizada
-      // Usar atributos específicos y asegurar uso de índices compuestos.
       const sameDay = await Appointment.findAll({
         where: {
           id: { [Op.ne]: appt.id },
@@ -349,7 +308,7 @@ const updateAppointment = async (req, res) => {
           date: newDate,
           status: { [Op.eq]: 'scheduled' },
         },
-        attributes: ['id', 'startTime', 'endTime'], // Solo campos necesarios para validación
+        attributes: ['id', 'startTime', 'endTime'],
       });
 
       const nS = toMinutes(newStart);
@@ -357,14 +316,13 @@ const updateAppointment = async (req, res) => {
       const overlaps = sameDay.some(a => {
         const s = toMinutes(a.startTime);
         const e = toMinutes(a.endTime);
-        return nS < e && s < nE; // solapamiento
+        return nS < e && s < nE;
       });
       if (overlaps) {
         return sendError(res, 400, 'El horario seleccionado no está disponible');
       }
     }
 
-    // Refrescar snapshots si cambian IDs
     if (updates.patientId !== undefined) {
       const patient = await Patient.findByPk(updates.patientId, { attributes: ['id', 'name', 'active'] });
       if (!patient || !patient.active) {
@@ -377,7 +335,6 @@ const updateAppointment = async (req, res) => {
       updates.professionalName = prof?.name || 'Profesional no encontrado';
     }
 
-    // Normalizar montos y recalcular remainingBalance si corresponde
     let recalcRB = false;
 
     if (updates.sessionCost !== undefined) {
@@ -392,16 +349,13 @@ const updateAppointment = async (req, res) => {
       updates.attended !== undefined ? updates.attended : appt.attended;
 
     if (finalAttended === false) {
-      // NO asistió
       updates.paymentAmount = null;
       updates.remainingBalance = null;
 
-      // Normalizar y establecer noShowPaymentAmount cuando attended = false
       if (body.noShowPaymentAmount !== undefined) {
         const normalized = toAmount(body.noShowPaymentAmount);
         updates.noShowPaymentAmount = normalized;
       } else {
-        // Si no viene en el body, preservar el valor existente o null
         updates.noShowPaymentAmount = appt.noShowPaymentAmount ?? null;
       }
 
@@ -409,7 +363,6 @@ const updateAppointment = async (req, res) => {
     }
 
     if (finalAttended === true) {
-      // SÍ asistió
       updates.noShowPaymentAmount = null;
     }
 
@@ -419,7 +372,6 @@ const updateAppointment = async (req, res) => {
       updates.remainingBalance = Math.max(sc - pa, 0);
     }
 
-    // ===== Ajuste de saldos por cambio a/desde completed & attended =====
     const prevStatus   = appt.status;
     const prevAttended = appt.attended === true;
     const prevCost     = toAmount(appt.sessionCost) ?? 0;
@@ -434,11 +386,9 @@ const updateAppointment = async (req, res) => {
     const includeNext = nextStatus === 'completed' && nextAttended;
 
     await sequelize.transaction(async (t) => {
-      // 1) Persistir cita
       await appt.update(updates, { transaction: t });
       await appt.reload({ transaction: t });
 
-      // 2) Helper que usa commission del usuario (entero %) para saldoPendiente
       const applyDelta = async (userId, delta) => {
         if (!userId || !delta) return;
 
@@ -451,7 +401,6 @@ const updateAppointment = async (req, res) => {
         const currentTotal = toAmount(prof.saldoTotal) ?? 0;
         const newTotal = round2(currentTotal + delta);
 
-        // commission: entero 0..100 (si viene null/undefined, usar 0)
         let commissionInt = parseInt(prof.commission ?? 0, 10);
         if (isNaN(commissionInt)) commissionInt = 0;
         commissionInt = Math.max(0, Math.min(100, commissionInt));
@@ -486,7 +435,7 @@ const updateAppointment = async (req, res) => {
 
 const deleteAppointment = async (req, res) => {
   try {
-    const appt = req.appointment; // ya viene del middleware y está activa
+    const appt = req.appointment;
     await appt.update({ active: false });
 
     return sendSuccess(res, null, 'Cita eliminada correctamente', 204);
@@ -505,7 +454,6 @@ const getAvailableSlots = async (req, res) => {
       return sendError(res, 400, 'professionalId y date son requeridos');
     }
 
-    // Traer citas activas del profesional para ese día (excepto canceladas)
     const dayAppointments = await Appointment.findAll({
       where: {
         active: true,
@@ -517,21 +465,17 @@ const getAvailableSlots = async (req, res) => {
       order: [['startTime', 'ASC']],
     });
 
-    // Generar slots de 60 min entre 09:00 y 17:00 (inclusive 17:00 como en tu implementación original)
     const fmt = (h) => String(h).padStart(2, '0') + ':00';
-    const allSlots = Array.from({ length: 9 }, (_, i) => fmt(9 + i)); // 09:00 ... 17:00
+    const allSlots = Array.from({ length: 9 }, (_, i) => fmt(9 + i));
     const SLOT_MINUTES = 60;
 
     const availableSlots = allSlots.filter((slot) => {
       const sStart = toMinutes(slot);
       const sEnd = sStart + SLOT_MINUTES;
 
-      // Excluir si solapa con alguna cita existente
       const overlaps = dayAppointments.some((a) => {
         const aStart = toMinutes(a.startTime);
         const aEnd = toMinutes(a.endTime);
-        // solapan si el inicio del slot es antes del fin de la cita y
-        // el inicio de la cita es antes del fin del slot
         return sStart < aEnd && aStart < sEnd;
       });
 
@@ -548,14 +492,12 @@ const getAvailableSlots = async (req, res) => {
 const getUpcomingAppointments = async (req, res) => {
   try {
     const today = new Date();
-    // YYYY-MM-DD para comparar con DATEONLY
     const yyyyMMdd = today.toISOString().slice(0, 10);
     
     const appts = await Appointment.findAll({
       where: {
         active: true,
         status: 'scheduled',
-        // Fecha >= hoy (según la BD)
         date: { [Op.gte]: yyyyMMdd },
       },
       order: [

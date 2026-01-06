@@ -23,7 +23,6 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
     e.preventDefault();
     const updateData: UpdateUserData = {};
     
-    // Solo incluir campos que han sido modificados
     if (formData.name !== user.name) updateData.name = formData.name;
     if (formData.email !== user.email) updateData.email = formData.email;
     if (formData.password) updateData.password = formData.password;

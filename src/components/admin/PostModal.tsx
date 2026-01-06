@@ -52,17 +52,14 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, onClose, onSave, post }) 
         data.append("status", formData.status ?? "draft");
         data.append("featured", String(formData.featured ?? false));
 
-// Arrays / objetos → serializar a JSON
         data.append("tags", JSON.stringify(formData.tags ?? []));
         data.append("seo", JSON.stringify(formData.seo ?? {}));
 
-// Autores / opcionales
         data.append("author", String(formData.author ?? ""));
         data.append("authorName", formData.authorName ?? "");
         data.append("slug", formData.slug ?? "");
         data.append("readTime", formData.readTime ?? "1 min");
 
-// Imagen (solo si es File)
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-expect-error
         if (formData.thumbnail instanceof File) {

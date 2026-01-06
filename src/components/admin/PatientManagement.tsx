@@ -35,29 +35,24 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
 
-  // Precargar datos del paciente cuando se abre el modal
   useEffect(() => {
     if (isOpen && patient) {
-      // Precargar profesional si existe
       if (patient.professionalId) {
         setSelectedProfessional(patient.professionalId);
       } else {
         setSelectedProfessional('');
       }
 
-      // Precargar estado
       if (patient.status) {
         setStatus(patient.status);
       }
 
-      // Precargar frecuencia
       if (patient.sessionFrequency) {
         setSessionFrequency(patient.sessionFrequency);
       } else {
         setSessionFrequency('weekly');
       }
 
-      // Precargar nota de texto si existe
       if (patient.textNote) {
         setTextNote(patient.textNote);
         setNoteType('text');
@@ -65,10 +60,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
         setTextNote('');
       }
 
-      // Verificar si existe nota de voz
       if (patient.audioNote) {
         setHasExistingAudioNote(true);
-        // Si hay audio pero no hay texto, mostrar audio como tipo seleccionado
         if (!patient.textNote) {
           setNoteType('audio');
         }
@@ -76,10 +69,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
         setHasExistingAudioNote(false);
       }
 
-      // Resetear audio grabado (no precargamos el blob, solo indicamos existencia)
       setAudioBlob(null);
     } else if (!isOpen) {
-      // Resetear estados cuando se cierra el modal
       setSelectedProfessional('');
       setStatus('active');
       setSessionFrequency('weekly');
@@ -140,39 +131,29 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
         return;
       }
 
-      // Construir payload dinámicamente, solo con campos que cambiaron
       const assignData: any = {
         patientId: patient.id,
         professionalId: selectedProfessional,
         professionalName: selectedProf.name,
       };
 
-      // Solo enviar status si cambió
       if (status !== patient.status) {
         assignData.status = status;
       }
 
-      // Solo enviar frecuencia si cambió
       if (sessionFrequency !== patient.sessionFrequency) {
         assignData.sessionFrequency = sessionFrequency;
       }
 
-      // Manejar notas: solo enviar lo que el usuario está creando/editing en el tipo seleccionado
-      // Si cambia de tipo, se reemplaza la nota anterior (no se preserva)
-      
       const trimmedTextNote = textNote.trim();
       
       if (noteType === 'text') {
-        // Modo texto: solo enviar texto si hay contenido
         if (trimmedTextNote) {
           assignData.textNote = trimmedTextNote;
         }
-        // No enviar audio cuando se está en modo texto (se borra el audio existente)
       } else if (noteType === 'audio') {
-        // Modo audio: solo enviar audio si se grabó uno nuevo
         if (audioBlob) {
           try {
-            // Validar que el blob tenga datos
             if (audioBlob.size === 0) {
               toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
               return;
@@ -193,10 +174,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
             return;
           }
         }
-        // No enviar texto cuando se está en modo audio (se borra el texto existente)
       }
 
-      // Solo actualizar assignedAt si es una nueva asignación (no tenía profesional antes)
       if (!patient.professionalId && selectedProfessional) {
         assignData.assignedAt = new Date().toISOString();
       }

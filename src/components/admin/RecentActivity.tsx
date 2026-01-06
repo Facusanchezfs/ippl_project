@@ -64,22 +64,22 @@ const RecentActivity: React.FC = () => {
     }
   };
 
-  const getActivityIcon = (type: Activity['type']) => {
-    switch (type) {
-      case 'NEW_POST':
-        return '📝';
-      case 'NEW_PATIENT':
-        return '👤';
-      case 'APPOINTMENT_COMPLETED':
-        return '✅';
-      case 'PATIENT_DISCHARGE_REQUEST':
-        return '🔔';
-      case 'NEW_MESSAGE':
-        return '✉️';
-      default:
-        return '📌';
-    }
-  };
+  // const getActivityIcon = (type: Activity['type']) => {
+  //   switch (type) {
+  //     case 'NEW_POST':
+  //       return '📝';
+  //     case 'NEW_PATIENT':
+  //       return '👤';
+  //     case 'APPOINTMENT_COMPLETED':
+  //       return '✅';
+  //     case 'PATIENT_DISCHARGE_REQUEST':
+  //       return '🔔';
+  //     case 'NEW_MESSAGE':
+  //       return '✉️';
+  //     default:
+  //       return '📌';
+  //   }
+  // };
 
   const getRelativeTime = (date: string) => {
     const now = new Date();

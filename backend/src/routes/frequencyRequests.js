@@ -9,8 +9,6 @@ const { createActivity } = require('../controllers/activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// Crear una nueva solicitud
-// POST /frequency-requests
 router.post(
   '/',
   authenticateToken,
@@ -20,7 +18,6 @@ router.post(
       const { patientId, newFrequency, reason } = req.body;
       const { id: professionalId, name: professionalName } = req.user;
 
-      // Validaciones básicas
       if (!patientId || !newFrequency || !reason) {
         return sendError(res, 400, 'Faltan campos requeridos. Se necesita: patientId, newFrequency y reason');
       }
@@ -34,27 +31,22 @@ router.post(
         return sendError(res, 400, 'La razón del cambio no puede estar vacía');
       }
 
-      // Buscar paciente
       const patient = await Patient.findByPk(patientId);
       if (!patient) {
         return sendError(res, 404, 'Paciente no encontrado');
       }
 
-      // Debe estar asignado al profesional que solicita
       if (String(patient.professionalId ?? '') !== String(professionalId)) {
         return sendError(res, 403, 'No tienes permiso para modificar este paciente');
       }
 
-      // ¿Es primera asignación?
       const isFirstAssignment = !patient.sessionFrequency; // null/undefined
       const currentForRequest = isFirstAssignment ? newFrequency : patient.sessionFrequency;
 
-      // Si NO es primera asignación, la nueva debe ser distinta
       if (!isFirstAssignment && patient.sessionFrequency === newFrequency) {
         return sendError(res, 400, 'La nueva frecuencia debe ser diferente a la frecuencia actual');
       }
 
-      // Verificar pendiente existente
       const existing = await FrequencyRequest.findOne({
         where: { patientId, status: 'pending' },
       });
@@ -62,19 +54,17 @@ router.post(
         return sendError(res, 400, 'Ya existe una solicitud pendiente para este paciente');
       }
 
-      // Crear solicitud
       const created = await FrequencyRequest.create({
         patientId,
         patientName: patient.name,
         professionalId,
         professionalName,
-        currentFrequency: currentForRequest,    // siempre un valor válido
+        currentFrequency: currentForRequest,
         requestedFrequency: newFrequency,
         reason,
         status: 'pending',
       });
 
-      // Actividad: “asignar” si es la primera, “cambiar” si ya tenía
       const verbo = isFirstAssignment ? 'asignar' : 'cambiar';
       await createActivity(
         'FREQUENCY_CHANGE_REQUESTED',
@@ -121,7 +111,6 @@ router.get(
 );
 
 
-// GET /frequency-requests/patient/:patientId
 router.get(
   '/patient/:patientId',
   authenticateToken,
@@ -144,7 +133,6 @@ router.get(
 );
 
 
-// POST /frequency-requests/:requestId/approve
 router.post(
   '/:requestId/approve',
   authenticateToken,
@@ -154,10 +142,9 @@ router.post(
     const { adminResponse } = req.body;
 
     try {
-      let snapshot; // para responder y crear actividad luego del commit
+      let snapshot;
 
       await sequelize.transaction(async (t) => {
-        // 1) Buscar la solicitud con lock
         const request = await FrequencyRequest.findByPk(requestId, {
           transaction: t,
           lock: t.LOCK.UPDATE,
@@ -173,7 +160,6 @@ router.post(
           throw err;
         }
 
-        // 2) Buscar paciente con lock
         const patient = await Patient.findByPk(request.patientId, {
           transaction: t,
           lock: t.LOCK.UPDATE,
@@ -184,13 +170,11 @@ router.post(
           throw err;
         }
 
-        // 3) Actualizar frecuencia del paciente
         await patient.update(
           { sessionFrequency: request.requestedFrequency },
           { transaction: t }
         );
 
-        // 4) Marcar solicitud como aprobada
         await request.update(
           {
             status: 'approved',
@@ -199,11 +183,9 @@ router.post(
           { transaction: t }
         );
 
-        // Tomar snapshot para usar fuera de la transacción
         snapshot = request.get({ plain: true });
-      }); // ← si todo va bien, COMMIT automático; si algo lanza error, ROLLBACK
+      });
 
-      // 5) Side-effect fuera de la TX (actividad)
       await createActivity(
         'FREQUENCY_CHANGE_APPROVED',
         'Solicitud de cambio de frecuencia aprobada',
@@ -220,7 +202,6 @@ router.post(
         }
       );
 
-      // 6) Responder al cliente con DTO
       return sendSuccess(res, toFrequencyRequestDTO(snapshot), 'Solicitud aprobada exitosamente');
     } catch (error) {
       const status = error.status || 500;
@@ -237,7 +218,6 @@ module.exports = router;
 
 
 
-// POST /frequency-requests/:requestId/reject
 router.post(
   '/:requestId/reject',
   authenticateToken,
@@ -254,7 +234,6 @@ router.post(
       let snapshot;
 
       await sequelize.transaction(async (t) => {
-        // 1) Buscar la solicitud con lock
         const request = await FrequencyRequest.findByPk(requestId, {
           transaction: t,
           lock: t.LOCK.UPDATE,
@@ -270,7 +249,6 @@ router.post(
           throw err;
         }
 
-        // 2) Marcar como rechazada
         await request.update(
           {
             status: 'rejected',
@@ -282,7 +260,6 @@ router.post(
         snapshot = request.get({ plain: true });
       });
 
-      // 3) Actividad fuera de la transacción
       await createActivity(
         'FREQUENCY_CHANGE_REJECTED',
         'Solicitud de cambio de frecuencia rechazada',
@@ -298,7 +275,6 @@ router.post(
         }
       );
 
-      // 4) Respuesta
       return sendSuccess(res, toFrequencyRequestDTO(snapshot), 'Solicitud rechazada exitosamente');
     } catch (error) {
       const status = error.status || 500;

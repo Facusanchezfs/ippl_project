@@ -7,11 +7,8 @@ const {
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// Lista historiales filtrando por patientId o professionalId (vía params o query).
-// Respuesta: { histories: MedicalHistoryDTO[] }
 async function getMedicalHistories(req, res) {
   try {
-    // Permite ambos orígenes
     const patientIdParam =
       req.params.patientId ?? req.query.patientId ?? undefined;
 
@@ -22,13 +19,11 @@ async function getMedicalHistories(req, res) {
       return sendError(res, 400, 'Debe proporcionar patientId o professionalId (params o query)');
     }
 
-    // Convertir strings a números si es necesario
     const patientId = patientIdParam ? parseInt(patientIdParam, 10) : undefined;
     const professionalId = professionalIdParam ? parseInt(professionalIdParam, 10) : undefined;
 
     const where = {};
     if (patientId) {
-      // Verificar que el paciente existe y está activo
       const patient = await Patient.findByPk(patientId, { attributes: ['id', 'active'] });
       if (!patient || !patient.active) {
         return sendError(res, 404, 'Paciente no encontrado');
@@ -71,27 +66,23 @@ async function createMedicalHistory(req, res) {
   try {
     const { patientId: patientIdParam, date, diagnosis, treatment, notes } = req.body;
 
-    // Validaciones básicas (notes es opcional)
     if (!patientIdParam || !date || !diagnosis || !treatment) {
       return sendError(res, 400, 'Faltan campos requeridos');
     }
 
-    // Convertir patientId a número si es necesario
     const patientId = typeof patientIdParam === 'string' ? parseInt(patientIdParam, 10) : patientIdParam;
 
-    // Verificar que el paciente exista y esté activo
     const patient = await Patient.findByPk(patientId, { attributes: ['id', 'active'] });
     if (!patient || !patient.active) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    // Profesional (si estás autenticando, suele venir en req.user)
     const professionalId = req.user?.id ?? null;
 
     const created = await MedicalHistory.create({
       patientId,
       professionalId,
-      date,        // YYYY-MM-DD (DATEONLY)
+      date,
       diagnosis,
       treatment,
       notes,
@@ -105,7 +96,6 @@ async function createMedicalHistory(req, res) {
 }
 
 
-// Actualiza diagnosis/treatment/notes (UpdateMedicalHistoryDto)
 async function updateMedicalHistory(req, res) {
   try {
     const { id } = req.params;
@@ -116,7 +106,6 @@ async function updateMedicalHistory(req, res) {
       return sendError(res, 404, 'Historial médico no encontrado');
     }
 
-    // Autorización simple: autor (professionalId) o admin
     const isAdmin = req.user?.role === 'admin';
     const isAuthor = req.user && String(req.user.id) === String(mh.professionalId ?? '');
     if (!isAdmin && !isAuthor) {

@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('./utils/logger');
 
-// Función para crear directorios de forma recursiva
 function createDirectories() {
   const directories = [
     path.join(__dirname, '..', 'uploads'),
@@ -20,7 +19,6 @@ function createDirectories() {
   });
 }
 
-// Ejecutar la creación de directorios
 try {
   createDirectories();
   logger.info('🚀 Setup completado exitosamente!');

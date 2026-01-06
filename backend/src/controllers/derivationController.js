@@ -4,8 +4,6 @@ const { toDerivationDTOList } = require('../../mappers/DerivationMapper');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
-// GET /api/derivations
-// Opcional: ?professionalId=123
 const getDerivations = async (req, res) => {
   try {
     const { professionalId } = req.query;

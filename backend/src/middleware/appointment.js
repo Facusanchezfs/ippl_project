@@ -7,7 +7,6 @@ async function preloadAppointmentForWrite(req, res, next) {
   try {
     const { id } = req.params;
 
-    // Soft delete: solo citas activas
     const appointment = await Appointment.findOne({
       where: { id, active: true },
     });
@@ -24,7 +23,6 @@ async function preloadAppointmentForWrite(req, res, next) {
       return res.status(403).json({ message: 'Acceso denegado' });
     }
 
-    // Inyectamos la cita para reutilizar en el controller
     req.appointment = appointment;
     next();
   } catch (err) {
