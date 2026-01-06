@@ -47,6 +47,7 @@ const updateAppointmentSchema = Joi.object({
     sessionCost: Joi.number().min(0).optional(),
     attended: Joi.boolean().optional(),
     paymentAmount: Joi.number().min(0).optional(),
+    noShowPaymentAmount: Joi.number().min(0).allow(null).optional(),
     patientId: Joi.number().integer().positive().optional(),
     professionalId: Joi.number().integer().positive().optional(),
   }),

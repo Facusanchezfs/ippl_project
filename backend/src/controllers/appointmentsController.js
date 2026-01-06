@@ -39,7 +39,7 @@ const getAllAppointments = async (req, res) => {
         'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
         'date', 'startTime', 'endTime', 'type', 'status',
         'notes', 'audioNote', 'sessionCost', 'attended',
-        'paymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
+        'paymentAmount', 'noShowPaymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
       ],
       order: [
         ['date', 'DESC'],
@@ -100,7 +100,7 @@ const getProfessionalAppointments = async (req, res) => {
         'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
         'date', 'startTime', 'endTime', 'type', 'status',
         'notes', 'audioNote', 'sessionCost', 'attended',
-        'paymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
+        'paymentAmount', 'noShowPaymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
       ],
       order: [
         ['date', 'DESC'],
@@ -302,6 +302,7 @@ const updateAppointment = async (req, res) => {
       'notes', 'audioNote',
       'sessionCost', 'attended',
       'paymentAmount', // remainingBalance lo recalculamos
+      'noShowPaymentAmount', // monto cobrado cuando no asistió (no es un pago)
       'patientId', 'professionalId',
     ];
     for (const f of fields) if (body[f] !== undefined) updates[f] = body[f];
@@ -386,6 +387,30 @@ const updateAppointment = async (req, res) => {
     if (updates.paymentAmount !== undefined) {
       updates.paymentAmount = toAmount(updates.paymentAmount);
       recalcRB = true;
+    }
+    const finalAttended =
+      updates.attended !== undefined ? updates.attended : appt.attended;
+
+    if (finalAttended === false) {
+      // NO asistió
+      updates.paymentAmount = null;
+      updates.remainingBalance = null;
+
+      // Normalizar y establecer noShowPaymentAmount cuando attended = false
+      if (body.noShowPaymentAmount !== undefined) {
+        const normalized = toAmount(body.noShowPaymentAmount);
+        updates.noShowPaymentAmount = normalized;
+      } else {
+        // Si no viene en el body, preservar el valor existente o null
+        updates.noShowPaymentAmount = appt.noShowPaymentAmount ?? null;
+      }
+
+      recalcRB = false;
+    }
+
+    if (finalAttended === true) {
+      // SÍ asistió
+      updates.noShowPaymentAmount = null;
     }
 
     if (recalcRB) {

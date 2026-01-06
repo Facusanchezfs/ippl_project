@@ -37,6 +37,7 @@ class AppointmentDTO {
     this.sessionCost = toNum(a.sessionCost);
     this.attended = a.attended ?? undefined;
     this.paymentAmount = toNum(a.paymentAmount);
+    this.noShowPaymentAmount = toNum(a.noShowPaymentAmount);
     this.remainingBalance = toNum(a.remainingBalance);
 
     this.completedAt = toIso(a.completedAt);

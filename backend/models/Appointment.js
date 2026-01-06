@@ -95,6 +95,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(12, 2),
         allowNull: true,
       },
+      noShowPaymentAmount: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: true,
+      },
       remainingBalance: {
         type: DataTypes.DECIMAL(12, 2),
         allowNull: true,

@@ -14,6 +14,7 @@ export interface Appointment {
   sessionCost?: number;
   attended?: boolean;
   paymentAmount?: number;
+  noShowPaymentAmount?: number;
   remainingBalance?: number;
   completedAt?: string;
   createdAt: string;

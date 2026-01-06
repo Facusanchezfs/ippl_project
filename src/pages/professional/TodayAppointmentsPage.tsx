@@ -42,6 +42,7 @@ const AppointmentsPage = () => {
   const [showFinishAppointmentModal, setShowFinishAppointmentModal] = useState(false);
   const [selectedAppointmentForFinish, setSelectedAppointmentForFinish] = useState<Appointment | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [noShowPaymentAmount, setNoShowPaymentAmount] = useState<number>(0);
   const [attended, setAttended] = useState<boolean>(true);
   const [remainingBalance, setRemainingBalance] = useState<number>(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -206,22 +207,32 @@ const AppointmentsPage = () => {
 
   const handleFinishAppointment = async (appointmentId: string, finishData: {
     attended: boolean;
-    paymentAmount: number;
-    remainingBalance: number;
+    paymentAmount?: number;
+    noShowPaymentAmount?: number;
+    remainingBalance?: number;
   }) => {
     try {
-      await appointmentsService.updateAppointment(appointmentId, {
+      const updateData: any = {
         status: 'completed',
         attended: finishData.attended,
-        paymentAmount: finishData.paymentAmount,
-        remainingBalance: finishData.remainingBalance,
         completedAt: new Date().toISOString()
-      });
+      };
+
+      // Exclusión mutua: attended=true → paymentAmount, attended=false → noShowPaymentAmount
+      if (finishData.attended) {
+        updateData.paymentAmount = finishData.paymentAmount || 0;
+        updateData.remainingBalance = finishData.remainingBalance || 0;
+      } else {
+        updateData.noShowPaymentAmount = finishData.noShowPaymentAmount || 0;
+      }
+
+      await appointmentsService.updateAppointment(appointmentId, updateData);
       
       await loadAppointments();
       setShowFinishAppointmentModal(false);
       setSelectedAppointmentForFinish(null);
       setPaymentAmount(0);
+      setNoShowPaymentAmount(0);
       setAttended(true);
       setRemainingBalance(0);
       toast.success('Cita finalizada exitosamente');
@@ -422,6 +433,9 @@ const AppointmentsPage = () => {
                         onClick={() => {
                           setSelectedAppointmentForFinish(appointment);
                           setPaymentAmount(appointment.sessionCost || 0);
+                          setNoShowPaymentAmount(0);
+                          setAttended(true);
+                          setRemainingBalance(0);
                           setShowFinishAppointmentModal(true);
                         }}
                         className="text-green-600 hover:text-green-900 inline-flex items-center"
@@ -537,6 +551,9 @@ const AppointmentsPage = () => {
                               onClick={() => {
                                 setSelectedAppointmentForFinish(appointment);
                                 setPaymentAmount(appointment.sessionCost || 0);
+                                setNoShowPaymentAmount(0);
+                                setAttended(true);
+                                setRemainingBalance(0);
                                 setShowFinishAppointmentModal(true);
                               }}
                               className="text-green-600 hover:text-green-900 mr-4"
@@ -999,6 +1016,7 @@ const AppointmentsPage = () => {
                   setShowFinishAppointmentModal(false);
                   setSelectedAppointmentForFinish(null);
                   setPaymentAmount(0);
+                  setNoShowPaymentAmount(0);
                   setAttended(true);
                   setRemainingBalance(0);
                 }}
@@ -1069,7 +1087,7 @@ const AppointmentsPage = () => {
                 </div>
               </div>
 
-              {attended && (
+              {attended ? (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -1116,6 +1134,32 @@ const AppointmentsPage = () => {
                     </p>
                   </div>
                 </>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Abonó
+                  </label>
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="number"
+                      value={noShowPaymentAmount}
+                      onChange={(e) => {
+                        const amount = Number(e.target.value);
+                        setNoShowPaymentAmount(amount);
+                      }}
+                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Este monto es para el registro del profesional y no se registrará como pago. Por cualquier duda o aviso, contactar al administrador.
+                  </p>
+                </div>
               )}
             </div>
 
@@ -1125,6 +1169,7 @@ const AppointmentsPage = () => {
                   setShowFinishAppointmentModal(false);
                   setSelectedAppointmentForFinish(null);
                   setPaymentAmount(0);
+                  setNoShowPaymentAmount(0);
                   setAttended(true);
                   setRemainingBalance(0);
                 }}
@@ -1135,8 +1180,10 @@ const AppointmentsPage = () => {
               <button
                 onClick={() => handleFinishAppointment(selectedAppointmentForFinish.id, {
                   attended,
-                  paymentAmount,
-                  remainingBalance
+                  ...(attended 
+                    ? { paymentAmount, remainingBalance }
+                    : { noShowPaymentAmount }
+                  )
                 })}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >

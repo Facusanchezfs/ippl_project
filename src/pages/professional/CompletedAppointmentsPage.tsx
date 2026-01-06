@@ -166,8 +166,8 @@ const badge = (ok?: boolean) =>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asistió</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago sin asistir</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo Pendiente</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -200,23 +200,12 @@ const badge = (ok?: boolean) =>
                           ${appointment.paymentAmount?.toFixed(2) || '0.00'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${appointment.remainingBalance?.toFixed(2) || '0.00'}
+                          {appointment.attended === false && appointment.noShowPaymentAmount 
+                            ? `$${appointment.noShowPaymentAmount.toFixed(2)}`
+                            : '—'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          {appointment.attended && getPatientTotalDebt(appointment.patientId) > 0 ? (
-                            <button
-                              onClick={() => {
-                                setSelectedAppointment(appointment);
-                                setEditPaymentAmount(appointment.paymentAmount || 0);
-                                setEditRemainingBalance(appointment.remainingBalance || 0);
-                                setShowEditPaymentModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="Actualizar pago"
-                            >
-                              <PencilIcon className="h-5 w-5" />
-                            </button>
-                          ) : null}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          ${appointment.remainingBalance?.toFixed(2) || '0.00'}
                         </td>
                       </tr>
                     ))}
@@ -270,24 +259,14 @@ const badge = (ok?: boolean) =>
                         </div>
                       </div>
 
-                      {/* Acciones */}
-                      <div className="mt-3 flex justify-end">
-                        {appointment.attended && getPatientTotalDebt(appointment.patientId) > 0 ? (
-                          <button
-                            onClick={() => {
-                              setSelectedAppointment(appointment);
-                              setEditPaymentAmount(appointment.paymentAmount || 0);
-                              setEditRemainingBalance(appointment.remainingBalance || 0);
-                              setShowEditPaymentModal(true);
-                            }}
-                            className="inline-flex items-center text-blue-600 hover:text-blue-800"
-                            title="Actualizar pago"
-                          >
-                            <PencilIcon className="h-5 w-5 mr-1" />
-                            Actualizar pago
-                          </button>
-                        ) : null}
-                      </div>
+                      {appointment.attended === false && appointment.noShowPaymentAmount ? (
+                        <div className="mt-3 rounded bg-gray-50 p-2 text-sm">
+                          <div className="text-gray-500">Pago sin asistir</div>
+                          <div className="font-medium text-gray-900">
+                            ${appointment.noShowPaymentAmount.toFixed(2)}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
