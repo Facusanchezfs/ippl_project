@@ -718,7 +718,7 @@ const AppointmentsPage = () => {
                   </div>
                 </div>
                 
-                <div>
+                {/*<div>
                   <label className="block text-sm font-medium text-gray-700">
                     Notas
                   </label>
@@ -727,7 +727,7 @@ const AppointmentsPage = () => {
                     rows={3}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   ></textarea>
-                </div>
+                </div>*/}
               </div>
               
               <div className="mt-6 flex justify-end gap-3">
