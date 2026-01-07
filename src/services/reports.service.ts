@@ -9,107 +9,7 @@ export interface MonthlyRevenueResponse {
     professionalName: string;
     total: number;
   }>;
-  debug?: {
-    input: {
-      fromRaw: string;
-      toRaw: string;
-      fromDate: string;
-      toDate: string;
-      today: string;
-      fromStr: string;
-      toStr: string;
-    };
-    appointmentsSample: {
-      count: number;
-      sampleRows: Array<{
-        id: number;
-        date: string;
-        status: string;
-        attended: boolean;
-        sessionCost: number | string;
-        professionalId: number | null;
-        professionalName: string | null;
-        commission?: number | string;
-      }>;
-      allAppointments?: Array<{
-        id: number;
-        date: string;
-        status: string;
-        attended: boolean;
-        sessionCost: number | string;
-        professionalId: number | null;
-        professionalName: string | null;
-        commission?: number | string;
-      }>;
-    };
-    professionalsCommission: {
-      professionalIds: number[];
-      professionals: Array<{
-        id: number;
-        name: string;
-        commission: number | string;
-      }>;
-    };
-    sqlQueries: {
-      byProfessional: string;
-      total: string;
-      params: {
-        fromDate: string;
-        toDate: string;
-      };
-    };
-    results: {
-      revenueByProfessionalRaw: any[];
-      totalResultRaw: any[];
-      parsedTotal: number;
-      byProfessionalFinal: Array<{
-        professionalId: string;
-        professionalName: string;
-        total: number;
-      }>;
-    };
-    calculationVerification?: {
-      manualCalculationByProfessional: Array<{
-        professionalId: number;
-        professionalName: string;
-        appointmentCount: number;
-        totalSessionCost: number;
-        totalInstituteRevenue: number;
-      }>;
-    };
-    missingProfessionals?: {
-      expectedNames: string[];
-      foundAppointments: Array<{
-        id: number;
-        date: string;
-        status: string;
-        attended: boolean;
-        sessionCost: number | string;
-        professionalId: number | null;
-        professionalName: string | null;
-        commission?: number | string;
-        user_name?: string | null;
-      }>;
-      foundAppointmentsUnfiltered?: Array<{
-        id: number;
-        date: string;
-        status: string;
-        attended: boolean | number;
-        sessionCost: number | string | null;
-        professionalId: number | null;
-        professionalName: string | null;
-        commission?: number | string;
-        user_name?: string | null;
-        active?: boolean | number;
-      }>;
-      allProfessionalsInRangeUnfiltered?: Array<{
-        professionalId: number | null;
-        professionalName: string | null;
-        user_name?: string | null;
-        commission?: number | string;
-      }>;
-    };
-  };
+  professionalsWithNullSessionCost: string[];
 }
 
 const reportsService = {
@@ -122,7 +22,8 @@ const reportsService = {
         from,
         to,
         total: 0,
-        byProfessional: []
+        byProfessional: [],
+        professionalsWithNullSessionCost: []
       };
     } catch (error) {
       console.error('Error fetching monthly revenue:', error);

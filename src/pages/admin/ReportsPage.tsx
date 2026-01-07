@@ -254,74 +254,10 @@ const ReportsPage: React.FC = () => {
 
       const revenueData = await reportsService.getMonthlyRevenue(startDateRevenue, endDateRevenue);
 
-      // DEBUG: Console logs con toda la información
-      if (revenueData.debug) {
-        console.log('\n\n');
-        console.log('================= MONTHLY REVENUE DEBUG (INPUT) =================');
-        console.log('from (raw):', revenueData.debug.input.fromRaw);
-        console.log('to   (raw):', revenueData.debug.input.toRaw);
-        console.log('fromDate:', revenueData.debug.input.fromDate);
-        console.log('toDate  :', revenueData.debug.input.toDate);
-        console.log('today   :', revenueData.debug.input.today);
-        console.log('fromStr :', revenueData.debug.input.fromStr);
-        console.log('toStr   :', revenueData.debug.input.toStr);
-        console.log('================================================================\n');
-
-        console.log('================= MONTHLY REVENUE DEBUG (APPOINTMENTS SAMPLE) ===============');
-        console.log('count(*) en rango (con filtros):', revenueData.debug.appointmentsSample.count);
-        console.log('Top 10 filas:');
-        console.log(JSON.stringify(revenueData.debug.appointmentsSample.sampleRows, null, 2));
-        console.log('============================================================================\n');
-
-        console.log('================= MONTHLY REVENUE DEBUG (PROFESSIONALS COMMISSION) ==========');
-        console.log('professionalIds en rango:', revenueData.debug.professionalsCommission.professionalIds);
-        console.log('Commissions:');
-        console.log(JSON.stringify(revenueData.debug.professionalsCommission.professionals, null, 2));
-        console.log('============================================================================\n');
-
-        console.log('================= MONTHLY REVENUE DEBUG (SQL EXEC) ==========================');
-        console.log('SQL byProfessional:');
-        console.log(revenueData.debug.sqlQueries.byProfessional);
-        console.log('\nSQL total:');
-        console.log(revenueData.debug.sqlQueries.total);
-        console.log('\nParams:', revenueData.debug.sqlQueries.params);
-        console.log('============================================================================\n');
-
-        console.log('================= MONTHLY REVENUE DEBUG (RESULTS) ===========================');
-        console.log('revenueByProfessionalRaw (count=' + revenueData.debug.results.revenueByProfessionalRaw.length + '):');
-        console.log(JSON.stringify(revenueData.debug.results.revenueByProfessionalRaw, null, 2));
-        console.log('\ntotalResultRaw:');
-        console.log(JSON.stringify(revenueData.debug.results.totalResultRaw, null, 2));
-        console.log('\nParsed total:', revenueData.debug.results.parsedTotal);
-        console.log('\nbyProfessionalFinal:');
-        console.log(JSON.stringify(revenueData.debug.results.byProfessionalFinal, null, 2));
-        console.log('============================================================================\n');
-
-        console.log('================= MONTHLY REVENUE DEBUG (ALL APPOINTMENTS) =================');
-        console.log('Total citas en rango:', revenueData.debug.appointmentsSample.allAppointments?.length || 0);
-        console.log('Todas las citas:');
-        console.log(JSON.stringify(revenueData.debug.appointmentsSample.allAppointments || [], null, 2));
-        console.log('============================================================================\n');
-
-        if (revenueData.debug.calculationVerification) {
-          console.log('================= MONTHLY REVENUE DEBUG (MANUAL CALCULATION) ================');
-          console.log('Cálculo manual por profesional:');
-          console.log(JSON.stringify(revenueData.debug.calculationVerification.manualCalculationByProfessional, null, 2));
-          console.log('============================================================================\n');
-        }
-
-        if (revenueData.debug.missingProfessionals) {
-          console.log('================= MONTHLY REVENUE DEBUG (MISSING PROFESSIONALS) =============');
-          console.log('Profesionales esperados que no aparecen:', revenueData.debug.missingProfessionals.expectedNames);
-          console.log('\nCitas encontradas con esos nombres (CON filtros):');
-          console.log(JSON.stringify(revenueData.debug.missingProfessionals.foundAppointments, null, 2));
-          console.log('\nCitas encontradas con esos nombres (SIN filtros - todas las citas en rango):');
-          console.log(JSON.stringify(revenueData.debug.missingProfessionals.foundAppointmentsUnfiltered, null, 2));
-          console.log('\nTODOS los profesionales que tienen citas en el rango (sin filtros):');
-          console.log(JSON.stringify(revenueData.debug.missingProfessionals.allProfessionalsInRangeUnfiltered, null, 2));
-          console.log('============================================================================\n\n');
-        }
-      }
+      // Console log de la respuesta completa
+      console.log('\n\n================= MONTHLY REVENUE RESPONSE =================');
+      console.log('Respuesta completa:', JSON.stringify(revenueData, null, 2));
+      console.log('============================================================================\n\n');
 
       const doc = new jsPDF();
       doc.setFontSize(18);
