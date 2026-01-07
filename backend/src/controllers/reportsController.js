@@ -32,8 +32,8 @@ const getMonthlyRevenue = async (req, res) => {
     fromDate.setHours(0, 0, 0, 0);
     toDate.setHours(23, 59, 59, 999);
 
-    const fromStr = fromDate.toISOString().split('T')[0];
-    const toStr = toDate.toISOString().split('T')[0];
+    const fromStr = from; // usar directamente YYYY-MM-DD recibido
+    const toStr = to;     // evitar shift por toISOString()/UTC
 
     // DEBUG: Muestreo de citas en rango (para validar filtros/fechas/montos)
     const sampleRows = await sequelize.query(`
