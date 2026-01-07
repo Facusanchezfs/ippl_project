@@ -313,8 +313,12 @@ const ReportsPage: React.FC = () => {
         if (revenueData.debug.missingProfessionals) {
           console.log('================= MONTHLY REVENUE DEBUG (MISSING PROFESSIONALS) =============');
           console.log('Profesionales esperados que no aparecen:', revenueData.debug.missingProfessionals.expectedNames);
-          console.log('Citas encontradas con esos nombres:');
+          console.log('\nCitas encontradas con esos nombres (CON filtros):');
           console.log(JSON.stringify(revenueData.debug.missingProfessionals.foundAppointments, null, 2));
+          console.log('\nCitas encontradas con esos nombres (SIN filtros - todas las citas en rango):');
+          console.log(JSON.stringify(revenueData.debug.missingProfessionals.foundAppointmentsUnfiltered, null, 2));
+          console.log('\nTODOS los profesionales que tienen citas en el rango (sin filtros):');
+          console.log(JSON.stringify(revenueData.debug.missingProfessionals.allProfessionalsInRangeUnfiltered, null, 2));
           console.log('============================================================================\n\n');
         }
       }

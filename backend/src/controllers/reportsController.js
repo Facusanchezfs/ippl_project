@@ -50,6 +50,27 @@ const getMonthlyRevenue = async (req, res) => {
 
     // DEBUG: Buscar profesionales mencionados en la imagen esperada
     const expectedProfessionals = ['Julieta Basgall', 'Florencia Richard', 'Juliana Badano', 'Pablo Reto'];
+    
+    // Buscar citas de esos profesionales SIN filtros (para ver qué está pasando)
+    const appointmentsWithExpectedNamesUnfiltered = await sequelize.query(`
+      SELECT a.id, a.date, a.status, a.attended, a.sessionCost, a.professionalId, a.professionalName, u.commission, u.name as user_name, a.active
+      FROM Appointments a
+      LEFT JOIN Users u ON a.professionalId = u.id
+      WHERE a.date BETWEEN :fromDate AND :toDate
+        AND (
+          a.professionalName LIKE '%Julieta%' OR a.professionalName LIKE '%Basgall%'
+          OR a.professionalName LIKE '%Florencia%' OR a.professionalName LIKE '%Richard%'
+          OR a.professionalName LIKE '%Juliana%' OR a.professionalName LIKE '%Badano%'
+          OR a.professionalName LIKE '%Pablo%' OR a.professionalName LIKE '%Reto%'
+          OR u.name LIKE '%Julieta%' OR u.name LIKE '%Basgall%'
+          OR u.name LIKE '%Florencia%' OR u.name LIKE '%Richard%'
+          OR u.name LIKE '%Juliana%' OR u.name LIKE '%Badano%'
+          OR u.name LIKE '%Pablo%' OR u.name LIKE '%Reto%'
+        )
+      ORDER BY a.date ASC, a.id ASC
+    `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
+
+    // Buscar citas de esos profesionales CON filtros (como en la query principal)
     const appointmentsWithExpectedNames = await sequelize.query(`
       SELECT a.id, a.date, a.status, a.attended, a.sessionCost, a.professionalId, a.professionalName, u.commission, u.name as user_name
       FROM Appointments a
@@ -70,6 +91,16 @@ const getMonthlyRevenue = async (req, res) => {
           OR u.name LIKE '%Pablo%' OR u.name LIKE '%Reto%'
         )
       ORDER BY a.date ASC, a.id ASC
+    `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
+
+    // Buscar TODOS los profesionales que tienen citas en ese rango (sin filtros de status/attended)
+    const allProfessionalsInRangeUnfiltered = await sequelize.query(`
+      SELECT DISTINCT a.professionalId, a.professionalName, u.name as user_name, u.commission
+      FROM Appointments a
+      LEFT JOIN Users u ON a.professionalId = u.id
+      WHERE a.date BETWEEN :fromDate AND :toDate
+        AND a.professionalId IS NOT NULL
+      ORDER BY a.professionalName ASC, u.name ASC
     `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
 
     // DEBUG: Muestreo de citas (primeras 10 para no saturar)
@@ -206,7 +237,9 @@ const getMonthlyRevenue = async (req, res) => {
       },
       missingProfessionals: {
         expectedNames: expectedProfessionals,
-        foundAppointments: appointmentsWithExpectedNames || []
+        foundAppointments: appointmentsWithExpectedNames || [],
+        foundAppointmentsUnfiltered: appointmentsWithExpectedNamesUnfiltered || [],
+        allProfessionalsInRangeUnfiltered: allProfessionalsInRangeUnfiltered || []
       },
       calculationVerification: {
         manualCalculationByProfessional: (() => {

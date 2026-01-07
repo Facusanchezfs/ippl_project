@@ -90,6 +90,24 @@ export interface MonthlyRevenueResponse {
         commission?: number | string;
         user_name?: string | null;
       }>;
+      foundAppointmentsUnfiltered?: Array<{
+        id: number;
+        date: string;
+        status: string;
+        attended: boolean | number;
+        sessionCost: number | string | null;
+        professionalId: number | null;
+        professionalName: string | null;
+        commission?: number | string;
+        user_name?: string | null;
+        active?: boolean | number;
+      }>;
+      allProfessionalsInRangeUnfiltered?: Array<{
+        professionalId: number | null;
+        professionalName: string | null;
+        user_name?: string | null;
+        commission?: number | string;
+      }>;
     };
   };
 }
