@@ -295,7 +295,20 @@ const ReportsPage: React.FC = () => {
         console.log('\nParsed total:', revenueData.debug.results.parsedTotal);
         console.log('\nbyProfessionalFinal:');
         console.log(JSON.stringify(revenueData.debug.results.byProfessionalFinal, null, 2));
-        console.log('============================================================================\n\n');
+        console.log('============================================================================\n');
+
+        console.log('================= MONTHLY REVENUE DEBUG (ALL APPOINTMENTS) =================');
+        console.log('Total citas en rango:', revenueData.debug.appointmentsSample.allAppointments?.length || 0);
+        console.log('Todas las citas:');
+        console.log(JSON.stringify(revenueData.debug.appointmentsSample.allAppointments || [], null, 2));
+        console.log('============================================================================\n');
+
+        if (revenueData.debug.calculationVerification) {
+          console.log('================= MONTHLY REVENUE DEBUG (MANUAL CALCULATION) ================');
+          console.log('Cálculo manual por profesional:');
+          console.log(JSON.stringify(revenueData.debug.calculationVerification.manualCalculationByProfessional, null, 2));
+          console.log('============================================================================\n\n');
+        }
       }
 
       const doc = new jsPDF();

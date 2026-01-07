@@ -35,18 +35,21 @@ const getMonthlyRevenue = async (req, res) => {
     const fromStr = from; // usar directamente YYYY-MM-DD recibido
     const toStr = to;     // evitar shift por toISOString()/UTC
 
-    // DEBUG: Muestreo de citas en rango (para validar filtros/fechas/montos)
-    const sampleRows = await sequelize.query(`
-      SELECT a.id, a.date, a.status, a.attended, a.sessionCost, a.professionalId, a.professionalName
+    // DEBUG: TODAS las citas en rango (para validar filtros/fechas/montos)
+    const allAppointmentsInRange = await sequelize.query(`
+      SELECT a.id, a.date, a.status, a.attended, a.sessionCost, a.professionalId, a.professionalName, u.commission
       FROM Appointments a
+      LEFT JOIN Users u ON a.professionalId = u.id
       WHERE a.active = true
         AND a.status = 'completed'
         AND a.attended = true
         AND a.date BETWEEN :fromDate AND :toDate
         AND a.sessionCost IS NOT NULL
       ORDER BY a.date ASC, a.id ASC
-      LIMIT 10
     `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
+
+    // DEBUG: Muestreo de citas (primeras 10 para no saturar)
+    const sampleRows = allAppointmentsInRange.slice(0, 10);
 
     const sampleCountRes = await sequelize.query(`
       SELECT COUNT(*) as cnt
@@ -135,7 +138,8 @@ const getMonthlyRevenue = async (req, res) => {
       },
       appointmentsSample: {
         count: sampleCountRes?.[0]?.cnt ?? 0,
-        sampleRows: sampleRows || []
+        sampleRows: sampleRows || [],
+        allAppointments: allAppointmentsInRange || []
       },
       professionalsCommission: {
         professionalIds: proIds,
@@ -175,6 +179,46 @@ const getMonthlyRevenue = async (req, res) => {
         totalResultRaw: totalResult || [],
         parsedTotal: total,
         byProfessionalFinal: byProfessional || []
+      },
+      calculationVerification: {
+        manualCalculationByProfessional: (() => {
+          const manualCalc = {};
+          allAppointmentsInRange.forEach(apt => {
+            const profId = apt.professionalId;
+            const profName = apt.professionalName || 'Sin profesional';
+            const sessionCost = parseFloat(apt.sessionCost || 0);
+            const commission = parseFloat(apt.commission || 0);
+            const instituteRevenue = sessionCost * (1 - commission / 100);
+            
+            if (!manualCalc[profId]) {
+              manualCalc[profId] = {
+                professionalId: profId,
+                professionalName: profName,
+                appointments: [],
+                totalSessionCost: 0,
+                totalInstituteRevenue: 0
+              };
+            }
+            
+            manualCalc[profId].appointments.push({
+              id: apt.id,
+              date: apt.date,
+              sessionCost,
+              commission,
+              instituteRevenue
+            });
+            manualCalc[profId].totalSessionCost += sessionCost;
+            manualCalc[profId].totalInstituteRevenue += instituteRevenue;
+          });
+          
+          return Object.values(manualCalc).map(prof => ({
+            professionalId: prof.professionalId,
+            professionalName: prof.professionalName,
+            appointmentCount: prof.appointments.length,
+            totalSessionCost: prof.totalSessionCost,
+            totalInstituteRevenue: prof.totalInstituteRevenue
+          }));
+        })()
       }
     };
 

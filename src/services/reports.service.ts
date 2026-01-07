@@ -29,6 +29,17 @@ export interface MonthlyRevenueResponse {
         sessionCost: number | string;
         professionalId: number | null;
         professionalName: string | null;
+        commission?: number | string;
+      }>;
+      allAppointments?: Array<{
+        id: number;
+        date: string;
+        status: string;
+        attended: boolean;
+        sessionCost: number | string;
+        professionalId: number | null;
+        professionalName: string | null;
+        commission?: number | string;
       }>;
     };
     professionalsCommission: {
@@ -55,6 +66,15 @@ export interface MonthlyRevenueResponse {
         professionalId: string;
         professionalName: string;
         total: number;
+      }>;
+    };
+    calculationVerification?: {
+      manualCalculationByProfessional: Array<{
+        professionalId: number;
+        professionalName: string;
+        appointmentCount: number;
+        totalSessionCost: number;
+        totalInstituteRevenue: number;
       }>;
     };
   };
