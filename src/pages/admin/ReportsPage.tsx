@@ -250,6 +250,19 @@ const ReportsPage: React.FC = () => {
         return new Date(y, m - 1, d);
       };
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (endDateRevenue) {
+        const endDate = toLocalDate(endDateRevenue);
+        endDate.setHours(0, 0, 0, 0);
+        if (endDate > today) {
+          alert('La fecha fin no puede ser mayor a la fecha actual');
+          setLoading(false);
+          return;
+        }
+      }
+
       const start = startDateRevenue ? toLocalDate(startDateRevenue) : null;
       const end = endDateRevenue ? toLocalDate(endDateRevenue) : null;
       if (start) start.setHours(0, 0, 0, 0);
@@ -270,8 +283,25 @@ const ReportsPage: React.FC = () => {
         (a: any) => a.status === 'completed' && a.attended === true
       );
 
-      const ingresoTotal = ingresos.reduce(
-        (sum: number, a: any) => sum + (a.sessionCost ?? 0),
+      const porProfesional: { [key: string]: { nombre: string; total: number } } = {};
+      
+      ingresos.forEach((a: any) => {
+        const profId = a.professionalId || 'sin-profesional';
+        const profName = a.professionalName || 'Sin profesional';
+        
+        if (!porProfesional[profId]) {
+          porProfesional[profId] = { nombre: profName, total: 0 };
+        }
+        
+        porProfesional[profId].total += a.sessionCost ?? 0;
+      });
+
+      const profesionales = Object.values(porProfesional).sort((a, b) => 
+        a.nombre.localeCompare(b.nombre)
+      );
+
+      const ingresoTotal = profesionales.reduce(
+        (sum: number, p) => sum + p.total,
         0
       );
 
@@ -286,13 +316,41 @@ const ReportsPage: React.FC = () => {
       doc.text(`Rango de reporte: ${startDateRevenue || '...'} a ${endDateRevenue || '...'}`, 10, 41);
       doc.setLineWidth(0.5);
       doc.line(10, 45, 200, 45);
-      doc.setFontSize(16);
+      
+      let yPos = 60;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      
+      profesionales.forEach((prof) => {
+        const nombre = prof.nombre;
+        const total = prof.total.toLocaleString('es-CO', { minimumFractionDigits: 2 });
+        const totalStr = `$${total}`;
+        const maxChars = 60;
+        const nombreLen = nombre.length;
+        const totalLen = totalStr.length;
+        const espacioNecesario = maxChars - nombreLen - totalLen;
+        const puntos = espacioNecesario > 0 ? '.'.repeat(espacioNecesario) : ' ';
+        doc.text(`${nombre}${puntos}${totalStr}`, 10, yPos);
+        yPos += 7;
+      });
+
+      doc.setLineWidth(0.3);
+      doc.line(10, yPos, 200, yPos);
+      yPos += 7;
+
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Ingreso Total: $${ingresoTotal.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, 10, 60);
+      const totalLabel = 'Ingreso Total';
+      const totalStr = `$${ingresoTotal.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+      const maxChars = 60;
+      const nombreLen = totalLabel.length;
+      const totalLen = totalStr.length;
+      const espacioNecesario = maxChars - nombreLen - totalLen;
+      const puntos = espacioNecesario > 0 ? '.'.repeat(espacioNecesario) : ' ';
+      doc.text(`${totalLabel}${puntos}${totalStr}`, 10, yPos);
+
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Cantidad de citas: ${ingresos.length}`, 10, 70);
-      doc.setFontSize(10);
       doc.text('Instituto Psicológico y Psicoanálisis del Litoral - Reporte confidencial', 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       const fechaArchivo = new Date().toISOString().split('T')[0];
       doc.save(`reporte_ingreso_total_${fechaArchivo}.pdf`);
@@ -498,7 +556,13 @@ const ReportsPage: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Fecha fin</label>
-            <input type="date" value={endDateRevenue} onChange={e => setEndDateRevenue(e.target.value)} className="border rounded px-2 py-1" />
+            <input 
+              type="date" 
+              value={endDateRevenue} 
+              onChange={e => setEndDateRevenue(e.target.value)} 
+              max={new Date().toISOString().split('T')[0]}
+              className="border rounded px-2 py-1" 
+            />
           </div>
           <button
             onClick={generateMonthlyRevenuePDF}
@@ -508,7 +572,7 @@ const ReportsPage: React.FC = () => {
             {loading ? 'Generando...' : 'Generar PDF'}
           </button>
         </div>
-        <p className="text-gray-500">El reporte mostrará el ingreso total del sistema en el período seleccionado, calculado sobre citas completadas y asistidas.</p>
+        <p className="text-gray-500">El reporte mostrará el ingreso total del sistema desglosado por profesional en el período seleccionado, calculado sobre citas completadas y asistidas.</p>
       </div>
     </div>
   );
