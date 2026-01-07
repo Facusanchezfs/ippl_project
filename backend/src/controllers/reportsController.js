@@ -36,7 +36,7 @@ const getMonthlyRevenue = async (req, res) => {
     const toStr = toDate.toISOString().split('T')[0];
 
     // DEBUG: Parámetros y normalización de fechas
-    logger.debug(`
+    logger.info(`
 
 ================= MONTHLY REVENUE DEBUG (INPUT) =================
 from (raw): ${from}
@@ -75,7 +75,7 @@ toStr   : ${toStr}
         AND a.sessionCost IS NOT NULL
     `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
 
-    logger.debug(`
+    logger.info(`
 
 ================= MONTHLY REVENUE DEBUG (APPOINTMENTS SAMPLE) ===============
 count(*) en rango (con filtros): ${sampleCountRes?.[0]?.cnt ?? 'N/A'}
@@ -109,7 +109,7 @@ ${JSON.stringify(sampleRows, null, 2)}
       `, { replacements: proIds, type: Sequelize.QueryTypes.SELECT });
     }
 
-    logger.debug(`
+    logger.info(`
 
 ================= MONTHLY REVENUE DEBUG (PROFESSIONALS COMMISSION) ==========
 professionalIds en rango: ${JSON.stringify(proIds)}
@@ -120,7 +120,7 @@ ${JSON.stringify(prosWithCommission, null, 2)}
 `);
 
     // DEBUG: SQL a ejecutar (byProfessional y total) + parámetros
-    logger.debug(`
+    logger.info(`
 
 ================= MONTHLY REVENUE DEBUG (SQL EXEC) ==========================
 SQL byProfessional:
@@ -197,7 +197,7 @@ Params: { fromDate: ${fromStr}, toDate: ${toStr} }
     }));
 
     // DEBUG: Resultados de salida
-    logger.debug(`
+    logger.info(`
 
 ================= MONTHLY REVENUE DEBUG (RESULTS) ===========================
 byProfessional (count=${byProfessional.length}):
