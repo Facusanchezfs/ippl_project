@@ -17,6 +17,8 @@ const ReportsPage: React.FC = () => {
   const [selectedProfessionalForActivations, setSelectedProfessionalForActivations] = useState('');
   const [selectedProfessionalForDerivations, setSelectedProfessionalForDerivations] = useState('');
   const [professionals, setProfessionals] = useState<any[]>([]);
+  const [startDateRevenue, setStartDateRevenue] = useState('');
+  const [endDateRevenue, setEndDateRevenue] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -240,6 +242,65 @@ const ReportsPage: React.FC = () => {
     }
   };
 
+  const generateMonthlyRevenuePDF = async () => {
+    setLoading(true);
+    try {
+      const toLocalDate = (ymd: string) => {
+        const [y, m, d] = ymd.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
+
+      const start = startDateRevenue ? toLocalDate(startDateRevenue) : null;
+      const end = endDateRevenue ? toLocalDate(endDateRevenue) : null;
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
+
+      const allAppointments = await appointmentsService.getAllAppointments();
+
+      const inRange = (a: any) => {
+        const d = toLocalDate(a.date);
+        if (start && end) return d >= start && d <= end;
+        if (start && !end) return d >= start;
+        if (!start && end) return d <= end;
+        return true;
+      };
+
+      const filtered = allAppointments.filter(inRange);
+      const ingresos = filtered.filter(
+        (a: any) => a.status === 'completed' && a.attended === true
+      );
+
+      const ingresoTotal = ingresos.reduce(
+        (sum: number, a: any) => sum + (a.sessionCost ?? 0),
+        0
+      );
+
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text('Instituto Psicológico y Psicoanálisis del Litoral', 105, 15, { align: 'center' });
+      doc.setFontSize(14);
+      doc.text('Ingreso Total Mensual', 105, 25, { align: 'center' });
+      doc.setFontSize(10);
+      const fechaGeneracion = new Date().toLocaleString('es-ES');
+      doc.text(`Fecha de generación: ${fechaGeneracion}`, 10, 35);
+      doc.text(`Rango de reporte: ${startDateRevenue || '...'} a ${endDateRevenue || '...'}`, 10, 41);
+      doc.setLineWidth(0.5);
+      doc.line(10, 45, 200, 45);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Ingreso Total: $${ingresoTotal.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, 10, 60);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Cantidad de citas: ${ingresos.length}`, 10, 70);
+      doc.setFontSize(10);
+      doc.text('Instituto Psicológico y Psicoanálisis del Litoral - Reporte confidencial', 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      const fechaArchivo = new Date().toISOString().split('T')[0];
+      doc.save(`reporte_ingreso_total_${fechaArchivo}.pdf`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const generateProfessionalPDF = async () => {
   if (!selectedProfessional) return;
 
@@ -286,13 +347,18 @@ const ReportsPage: React.FC = () => {
     f === 'biweekly' ? 'Quincenal' :
     f === 'monthly' ? 'Mensual' : '-';
 
-  // OJO: aquí decides qué mostrar como “Saldo”
+  // OJO: aquí decides qué mostrar como "Saldo"
   const rows = finalizadas.map(a => [
     a.patientName,
     a.attended ? 'Asistió' : 'No asistió',
     freqLabel(patientMap[a.patientId]?.sessionFrequency),
     `$${(a.paymentAmount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
   ]);
+
+  // Calcular TOTAL: suma de paymentAmount solo de filas con attended === true
+  const asistidas = finalizadas.filter(a => a.attended === true);
+  const total = asistidas.reduce((sum, a) => sum + (a.paymentAmount ?? 0), 0);
+  const totalRow = ['TOTAL', '', '', `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`];
 
   const doc = new jsPDF();
   doc.setFontSize(16);
@@ -306,10 +372,18 @@ const ReportsPage: React.FC = () => {
 
   autoTable(doc, {
     head: [['Paciente', 'Asistencia', 'Frecuencia', 'Saldo']],
-    body: rows,
+    body: [...rows, totalRow],
     startY: 52,
     styles: { fontSize: 10 },
     headStyles: { fillColor: [41, 128, 185] },
+    didParseCell: (data: any) => {
+      if (data.row.index === rows.length && data.column.index >= 0) {
+        data.cell.styles.fontStyle = 'bold';
+        if (data.column.index === 0) {
+          data.cell.styles.fillColor = [240, 240, 240];
+        }
+      }
+    },
   });
   doc.save(`Reporte_Citas_${prof.name.replace(/ /g, '_')}.pdf`);
 };
@@ -414,6 +488,27 @@ const ReportsPage: React.FC = () => {
           </button>
         </div>
         <p className="text-gray-500">El reporte incluirá la cantidad de citas finalizadas, nombre del paciente, asistencia, frecuencia y saldo correspondiente al rango de fechas seleccionado.</p>
+      </div>
+      <div className="mt-12">
+        <h2 className="text-xl font-bold mb-4">Ingreso total mensual</h2>
+        <div className="flex gap-4 mb-6 items-end">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha inicio</label>
+            <input type="date" value={startDateRevenue} onChange={e => setStartDateRevenue(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha fin</label>
+            <input type="date" value={endDateRevenue} onChange={e => setEndDateRevenue(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <button
+            onClick={generateMonthlyRevenuePDF}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Generando...' : 'Generar PDF'}
+          </button>
+        </div>
+        <p className="text-gray-500">El reporte mostrará el ingreso total del sistema en el período seleccionado, calculado sobre citas completadas y asistidas.</p>
       </div>
     </div>
   );
