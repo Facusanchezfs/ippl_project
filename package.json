@@ -1,7 +1,7 @@
 {
   "name": "ippl-web",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "license": "MIT",
   "description": "Web platform for managing patients, professionals, appointments and clinical activity for IPPL institute.",
