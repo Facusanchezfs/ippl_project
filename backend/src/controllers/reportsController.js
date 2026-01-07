@@ -35,7 +35,7 @@ const getMonthlyRevenue = async (req, res) => {
     const revenueByProfessional = await Appointment.findAll({
       attributes: [
         [col('Appointments.professionalId'), 'professionalId'],
-        [col('Appointments.professionalName'), 'professionalName'],
+        [fn('MAX', col('professional.name')), 'professionalName'],
         [fn('SUM', literal('Appointments.sessionCost * (1 - COALESCE(professional.commission, 0) / 100)')), 'total']
       ],
       include: [{
@@ -55,7 +55,7 @@ const getMonthlyRevenue = async (req, res) => {
           [Op.ne]: null
         }
       },
-      group: [col('Appointments.professionalId'), col('Appointments.professionalName')],
+      group: [col('Appointments.professionalId')],
       raw: true
     });
 
