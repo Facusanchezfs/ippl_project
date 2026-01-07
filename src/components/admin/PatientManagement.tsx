@@ -163,9 +163,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
               type: 'audio/webm'
             });
             
-            console.log('Subiendo audio:', { size: audioFile.size, type: audioFile.type });
             const audioNoteUrl = await patientsService.uploadAudio(audioFile);
-            console.log('Audio subido exitosamente:', audioNoteUrl);
             assignData.audioNote = audioNoteUrl;
           } catch (error: any) {
             console.error('Error al subir el audio:', error);
@@ -793,10 +791,6 @@ const PatientManagement = () => {
   const [selectedActivationRequest, setSelectedActivationRequest] = useState<StatusRequest | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  console.log({
-    navigate,
-    location
-  })
   // Preservar el origen de navegación en estado local para que no se pierda
   const [navigationFrom, setNavigationFrom] = useState<string | undefined>(
     (location.state as { from?: string } | null)?.from

@@ -91,19 +91,12 @@ const patientsService = {
       const formData = new FormData();
       formData.append('audio', audioFile);
       
-      console.log('Enviando request de audio:', { 
-        size: audioFile.size, 
-        type: audioFile.type,
-        name: audioFile.name 
-      });
       
       const response = await api.post('/upload/audio', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
-      console.log('Respuesta del servidor:', response.data);
       
       // El backend devuelve { success: true, data: { audioUrl: ... } }
       const audioUrl = response.data?.data?.audioUrl || response.data?.data?.url;

@@ -36,7 +36,6 @@ const ReportsPage: React.FC = () => {
         selectedProfessionalForDerivations || undefined
       );
       
-      // Filtrar por rango de fechas usando createdAt
       const filtered = allDerivations.filter(d => {
         if (!d.createdAt) return false;
 
@@ -51,9 +50,8 @@ const ReportsPage: React.FC = () => {
         }
 
         if (endDate) {
-          // Parsear la fecha sin hora para evitar problemas de timezone
           const [year, month, day] = endDate.split('-').map(Number);
-          end = new Date(year, month - 1, day); // month es 0-indexed
+          end = new Date(year, month - 1, day);
           end.setHours(23, 59, 59, 999);
         }
 
@@ -125,22 +123,17 @@ const ReportsPage: React.FC = () => {
       
       let filtered: any[] = [];
       if (reportType === 'activation') {
-        // Incluir pacientes con activationRequest aprobada (tienen activatedAt o activationRequest con requestDate)
         filtered = allPatients.filter(p => 
           p.status === 'active' && (p.activatedAt || p.activationRequest?.requestDate)
         );
       } else {
-        // Para bajas: incluir pacientes que tengan dischargeRequest aprobada, independientemente de su status actual
-        // (puede que hayan sido reactivados después de la baja)
         filtered = allPatients.filter(p => p.dischargeRequest?.requestDate);
       }
       filtered = filtered.filter(p => {
-        // Filtro por profesional
         if (selectedProfessionalForActivations && p.professionalId !== selectedProfessionalForActivations) {
           return false;
         }
         
-        // Para activaciones: usar activatedAt si existe, sino usar activationRequest.requestDate
         let fechaAprobacion: Date | null = null;
         if (reportType === 'activation') {
           if (p.activatedAt) {
@@ -157,7 +150,6 @@ const ReportsPage: React.FC = () => {
           return false;
         }
         
-        // Normalizar fechas: start al inicio del día, end al final del día
         let start: Date | null = null;
         let end: Date | null = null;
         
@@ -167,18 +159,15 @@ const ReportsPage: React.FC = () => {
         }
         
         if (endDate) {
-          // Parsear la fecha sin hora para evitar problemas de timezone
           const [year, month, day] = endDate.split('-').map(Number);
-          end = new Date(year, month - 1, day); // month es 0-indexed
+          end = new Date(year, month - 1, day);
           end.setHours(23, 59, 59, 999);
         }
         
-        // Si no hay filtros de fecha, incluir todos
         if (!start && !end) {
           return true;
         }
         
-        // Aplicar filtros
         if (start && fechaAprobacion < start) {
           return false;
         }
@@ -191,7 +180,6 @@ const ReportsPage: React.FC = () => {
       });
       const rows = filtered.map(p => {
         const professional = users.find(prof => String(prof.id) === String(p.professionalId));
-        // Para activaciones: usar activatedAt si existe, sino usar activationRequest.requestDate
         let fechaAprobacion: Date | null = null;
         if (reportType === 'activation') {
           if (p.activatedAt) {
@@ -254,11 +242,6 @@ const ReportsPage: React.FC = () => {
 
       const revenueData = await reportsService.getMonthlyRevenue(startDateRevenue, endDateRevenue);
 
-      // Console log de la respuesta completa
-      console.log('\n\n================= MONTHLY REVENUE RESPONSE =================');
-      console.log('Respuesta completa:', JSON.stringify(revenueData, null, 2));
-      console.log('============================================================================\n\n');
-
       const doc = new jsPDF();
       doc.setFontSize(18);
       doc.text('Instituto Psicológico y Psicoanálisis del Litoral', 105, 15, { align: 'center' });
@@ -309,7 +292,6 @@ const ReportsPage: React.FC = () => {
       const fechaArchivo = new Date().toISOString().split('T')[0];
       doc.save(`reporte_ingreso_total_${fechaArchivo}.pdf`);
     } catch (error: any) {
-      console.error('Error al generar reporte de ingresos:', error);
       const errorMessage = error?.response?.data?.error || error?.message || 'Error al generar el reporte';
       alert(errorMessage);
     } finally {
@@ -323,47 +305,40 @@ const ReportsPage: React.FC = () => {
   const prof = professionals.find(p => p.id == selectedProfessional);
   if (!prof) return;
 
-  // util: fecha local
   const toLocalDate = (ymd: string) => {
     const [y,m,d] = ymd.split('-').map(Number);
     return new Date(y, m-1, d);
   };
 
-  // normalizar rango (todo el día)
   const start = startDate ? toLocalDate(startDate) : null;
   const end   = endDate   ? toLocalDate(endDate)   : null;
   if (start) start.setHours(0,0,0,0);
   if (end)   end.setHours(23,59,59,999);
 
-  // pedir en paralelo
   const [appointments, patients] = await Promise.all([
     appointmentsService.getProfessionalAppointments(prof.id),
     patientsService.getProfessionalPatients(prof.id),
   ]);
 
-  // diccionario de pacientes
   const patientMap = Object.fromEntries(patients.map((p: any) => [p.id, p]));
 
-  // filtrar por rango (acepta 3 casos)
   const inRange = (a: any) => {
     const d = toLocalDate(a.date);
     if (start && end)   return d >= start && d <= end;
     if (start && !end)  return d >= start;
     if (!start && end)  return d <= end;
-    return true; // sin filtros
+    return true;
   };
 
   const filtered = appointments.filter(inRange);
   const finalizadas = filtered.filter(a => a.status === 'completed');
   const ausentes = finalizadas.filter(a => !a.attended).length;
 
-  // helper frecuencia
   const freqLabel = (f?: 'weekly'|'biweekly'|'monthly') =>
     f === 'weekly' ? 'Semanal' :
     f === 'biweekly' ? 'Quincenal' :
     f === 'monthly' ? 'Mensual' : '-';
 
-  // OJO: aquí decides qué mostrar como "Saldo"
   const rows = finalizadas.map(a => [
     a.patientName,
     a.attended ? 'Asistió' : 'No asistió',
@@ -371,7 +346,6 @@ const ReportsPage: React.FC = () => {
     `$${(a.paymentAmount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
   ]);
 
-  // Calcular TOTAL: suma de paymentAmount solo de filas con attended === true
   const asistidas = finalizadas.filter(a => a.attended === true);
   const total = asistidas.reduce((sum, a) => sum + (a.paymentAmount ?? 0), 0);
   const totalRow = ['TOTAL', '', '', `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`];

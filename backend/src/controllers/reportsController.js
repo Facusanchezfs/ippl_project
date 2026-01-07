@@ -16,12 +16,10 @@ const getMonthlyRevenue = async (req, res) => {
       return sendError(res, 400, 'Las fechas deben estar en formato YYYY-MM-DD');
     }
 
-    // Comparar fechas como strings YYYY-MM-DD para evitar problemas de timezone
     if (from > to) {
       return sendError(res, 400, 'La fecha from no puede ser mayor a la fecha to');
     }
 
-    // Obtener fecha actual en formato YYYY-MM-DD (usando fecha local del servidor)
     const today = new Date();
     const todayStr = today.getFullYear() + '-' + 
                      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
@@ -31,7 +29,6 @@ const getMonthlyRevenue = async (req, res) => {
       return sendError(res, 400, 'La fecha to no puede ser mayor a la fecha actual');
     }
 
-    // Obtener abonos del período seleccionado (filtrados por fecha del abono)
     const abonosInRange = await sequelize.query(`
       SELECT 
         ab.professionalId,
@@ -47,14 +44,12 @@ const getMonthlyRevenue = async (req, res) => {
       type: Sequelize.QueryTypes.SELECT
     });
 
-    // Convertir a formato esperado por el frontend
     const byProfessional = abonosInRange.map(item => ({
       professionalId: String(item.professionalId),
       professionalName: item.professionalName || 'Sin nombre',
       total: parseFloat(item.total || 0)
     }));
 
-    // Calcular total general
     const total = byProfessional.reduce((sum, prof) => sum + prof.total, 0);
 
     return sendSuccess(res, {
@@ -62,7 +57,7 @@ const getMonthlyRevenue = async (req, res) => {
       to,
       total: parseFloat(total.toFixed(2)),
       byProfessional,
-      professionalsWithNullSessionCost: [] // No aplica para abonos, mantener por compatibilidad
+      professionalsWithNullSessionCost: []
     });
   } catch (error) {
     logger.error('Error al obtener ingresos mensuales:', error);
