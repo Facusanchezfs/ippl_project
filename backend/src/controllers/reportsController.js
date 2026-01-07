@@ -1,5 +1,5 @@
-const { Op, fn, col } = require('sequelize');
-const { sequelize, Appointment } = require('../../models');
+const { Op, fn, col, literal } = require('sequelize');
+const { sequelize, Appointment, User } = require('../../models');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 
@@ -18,7 +18,7 @@ const getMonthlyRevenue = async (req, res) => {
     const fromDate = new Date(from);
     const toDate = new Date(to);
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(23, 59, 59, 999);    
 
     if (fromDate > toDate) {
       return sendError(res, 400, 'La fecha from no puede ser mayor a la fecha to');
@@ -34,10 +34,16 @@ const getMonthlyRevenue = async (req, res) => {
 
     const revenueByProfessional = await Appointment.findAll({
       attributes: [
-        'professionalId',
-        'professionalName',
-        [fn('SUM', col('sessionCost')), 'total']
+        [col('Appointments.professionalId'), 'professionalId'],
+        [col('Appointments.professionalName'), 'professionalName'],
+        [fn('SUM', literal('Appointments.sessionCost * (1 - COALESCE(professional.commission, 0) / 100)')), 'total']
       ],
+      include: [{
+        model: User,
+        as: 'professional',
+        attributes: [],
+        required: false
+      }],
       where: {
         active: true,
         status: 'completed',
@@ -49,14 +55,20 @@ const getMonthlyRevenue = async (req, res) => {
           [Op.ne]: null
         }
       },
-      group: ['professionalId', 'professionalName'],
+      group: [col('Appointments.professionalId'), col('Appointments.professionalName')],
       raw: true
     });
 
     const totalResult = await Appointment.findOne({
       attributes: [
-        [fn('SUM', col('sessionCost')), 'total']
+        [fn('SUM', literal('Appointments.sessionCost * (1 - COALESCE(professional.commission, 0) / 100)')), 'total']
       ],
+      include: [{
+        model: User,
+        as: 'professional',
+        attributes: [],
+        required: false
+      }],
       where: {
         active: true,
         status: 'completed',
