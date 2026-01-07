@@ -35,23 +35,6 @@ const getMonthlyRevenue = async (req, res) => {
     const fromStr = fromDate.toISOString().split('T')[0];
     const toStr = toDate.toISOString().split('T')[0];
 
-    // DEBUG: Parámetros y normalización de fechas
-    logger.info(`
-
-================= MONTHLY REVENUE DEBUG (INPUT) =================
-from (raw): ${from}
-to   (raw): ${to}
-
-fromDate: ${fromDate.toISOString()}    (midnight local set)
-toDate  : ${toDate.toISOString()}      (23:59:59.999 local set)
-today   : ${today.toISOString()}       (midnight local set)
-
-fromStr : ${fromStr}
-toStr   : ${toStr}
-================================================================
-
-`);
-
     // DEBUG: Muestreo de citas en rango (para validar filtros/fechas/montos)
     const sampleRows = await sequelize.query(`
       SELECT a.id, a.date, a.status, a.attended, a.sessionCost, a.professionalId, a.professionalName
@@ -75,17 +58,6 @@ toStr   : ${toStr}
         AND a.sessionCost IS NOT NULL
     `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
 
-    logger.info(`
-
-================= MONTHLY REVENUE DEBUG (APPOINTMENTS SAMPLE) ===============
-count(*) en rango (con filtros): ${sampleCountRes?.[0]?.cnt ?? 'N/A'}
-
-Top 10 filas (id, date, status, attended, sessionCost, professionalId, professionalName):
-${JSON.stringify(sampleRows, null, 2)}
-============================================================================
-
-`);
-
     // DEBUG: Profesionales y sus comisiones involucradas
     const prosInRange = await sequelize.query(`
       SELECT DISTINCT a.professionalId
@@ -108,51 +80,6 @@ ${JSON.stringify(sampleRows, null, 2)}
         WHERE u.id IN (${proIds.map(() => '?').join(',')})
       `, { replacements: proIds, type: Sequelize.QueryTypes.SELECT });
     }
-
-    logger.info(`
-
-================= MONTHLY REVENUE DEBUG (PROFESSIONALS COMMISSION) ==========
-professionalIds en rango: ${JSON.stringify(proIds)}
-Commissions (id, name, commission):
-${JSON.stringify(prosWithCommission, null, 2)}
-============================================================================
-
-`);
-
-    // DEBUG: SQL a ejecutar (byProfessional y total) + parámetros
-    logger.info(`
-
-================= MONTHLY REVENUE DEBUG (SQL EXEC) ==========================
-SQL byProfessional:
-SELECT 
-  a.professionalId,
-  MAX(u.name) as professionalName,
-  SUM(a.sessionCost * (1 - COALESCE(u.commission, 0) / 100)) as total
-FROM Appointments a
-LEFT JOIN Users u ON a.professionalId = u.id
-WHERE a.active = true
-  AND a.status = 'completed'
-  AND a.attended = true
-  AND a.date BETWEEN :fromDate AND :toDate
-  AND a.sessionCost IS NOT NULL
-GROUP BY a.professionalId
-ORDER BY professionalName ASC
-
-SQL total:
-SELECT 
-  SUM(a.sessionCost * (1 - COALESCE(u.commission, 0) / 100)) as total
-FROM Appointments a
-LEFT JOIN Users u ON a.professionalId = u.id
-WHERE a.active = true
-  AND a.status = 'completed'
-  AND a.attended = true
-  AND a.date BETWEEN :fromDate AND :toDate
-  AND a.sessionCost IS NOT NULL
-
-Params: { fromDate: ${fromStr}, toDate: ${toStr} }
-============================================================================
-
-`);
 
     const revenueByProfessional = await sequelize.query(`
       SELECT 
@@ -196,26 +123,67 @@ Params: { fromDate: ${fromStr}, toDate: ${toStr} }
       total: parseFloat(row.total || 0)
     }));
 
-    // DEBUG: Resultados de salida
-    logger.info(`
-
-================= MONTHLY REVENUE DEBUG (RESULTS) ===========================
-byProfessional (count=${byProfessional.length}):
-${JSON.stringify(byProfessional, null, 2)}
-
-totalResult (raw):
-${JSON.stringify(totalResult, null, 2)}
-
-Parsed total: ${total}
-============================================================================
-
-`);
+    const debugInfo = {
+      input: {
+        fromRaw: from,
+        toRaw: to,
+        fromDate: fromDate.toISOString(),
+        toDate: toDate.toISOString(),
+        today: today.toISOString(),
+        fromStr,
+        toStr
+      },
+      appointmentsSample: {
+        count: sampleCountRes?.[0]?.cnt ?? 0,
+        sampleRows: sampleRows || []
+      },
+      professionalsCommission: {
+        professionalIds: proIds,
+        professionals: prosWithCommission || []
+      },
+      sqlQueries: {
+        byProfessional: `
+          SELECT 
+            a.professionalId,
+            MAX(u.name) as professionalName,
+            SUM(a.sessionCost * (1 - COALESCE(u.commission, 0) / 100)) as total
+          FROM Appointments a
+          LEFT JOIN Users u ON a.professionalId = u.id
+          WHERE a.active = true
+            AND a.status = 'completed'
+            AND a.attended = true
+            AND a.date BETWEEN :fromDate AND :toDate
+            AND a.sessionCost IS NOT NULL
+          GROUP BY a.professionalId
+          ORDER BY professionalName ASC
+        `,
+        total: `
+          SELECT 
+            SUM(a.sessionCost * (1 - COALESCE(u.commission, 0) / 100)) as total
+          FROM Appointments a
+          LEFT JOIN Users u ON a.professionalId = u.id
+          WHERE a.active = true
+            AND a.status = 'completed'
+            AND a.attended = true
+            AND a.date BETWEEN :fromDate AND :toDate
+            AND a.sessionCost IS NOT NULL
+        `,
+        params: { fromDate: fromStr, toDate: toStr }
+      },
+      results: {
+        revenueByProfessionalRaw: revenueByProfessional || [],
+        totalResultRaw: totalResult || [],
+        parsedTotal: total,
+        byProfessionalFinal: byProfessional || []
+      }
+    };
 
     return sendSuccess(res, {
       from,
       to,
       total,
-      byProfessional
+      byProfessional,
+      debug: debugInfo
     });
   } catch (error) {
     logger.error('Error al obtener ingresos mensuales:', error);

@@ -9,6 +9,55 @@ export interface MonthlyRevenueResponse {
     professionalName: string;
     total: number;
   }>;
+  debug?: {
+    input: {
+      fromRaw: string;
+      toRaw: string;
+      fromDate: string;
+      toDate: string;
+      today: string;
+      fromStr: string;
+      toStr: string;
+    };
+    appointmentsSample: {
+      count: number;
+      sampleRows: Array<{
+        id: number;
+        date: string;
+        status: string;
+        attended: boolean;
+        sessionCost: number | string;
+        professionalId: number | null;
+        professionalName: string | null;
+      }>;
+    };
+    professionalsCommission: {
+      professionalIds: number[];
+      professionals: Array<{
+        id: number;
+        name: string;
+        commission: number | string;
+      }>;
+    };
+    sqlQueries: {
+      byProfessional: string;
+      total: string;
+      params: {
+        fromDate: string;
+        toDate: string;
+      };
+    };
+    results: {
+      revenueByProfessionalRaw: any[];
+      totalResultRaw: any[];
+      parsedTotal: number;
+      byProfessionalFinal: Array<{
+        professionalId: string;
+        professionalName: string;
+        total: number;
+      }>;
+    };
+  };
 }
 
 const reportsService = {
