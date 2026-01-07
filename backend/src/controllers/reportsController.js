@@ -18,7 +18,7 @@ const getMonthlyRevenue = async (req, res) => {
     const fromDate = new Date(from);
     const toDate = new Date(to);
     const today = new Date();
-    today.setHours(23, 59, 59, 999);    
+    today.setHours(0, 0, 0, 0);
 
     if (fromDate > toDate) {
       return sendError(res, 400, 'La fecha from no puede ser mayor a la fecha to');
@@ -71,12 +71,11 @@ const getMonthlyRevenue = async (req, res) => {
 
     const total = parseFloat(totalResult[0]?.total || 0);
 
-    const byProfessional = revenueByProfessional
-      .map(row => ({
-        professionalId: String(row.professionalId || ''),
-        professionalName: row.professionalName || 'Sin profesional',
-        total: parseFloat(row.total || 0)
-      }));
+    const byProfessional = revenueByProfessional.map(row => ({
+      professionalId: String(row.professionalId || ''),
+      professionalName: row.professionalName || 'Sin profesional',
+      total: parseFloat(row.total || 0)
+    }));
 
     return sendSuccess(res, {
       from,
@@ -86,8 +85,7 @@ const getMonthlyRevenue = async (req, res) => {
     });
   } catch (error) {
     logger.error('Error al obtener ingresos mensuales:', error);
-    logger.error('Stack trace:', error.stack);
-    return sendError(res, 500, `Error al obtener ingresos mensuales: ${error.message}`);
+    return sendError(res, 500, 'Error al obtener ingresos mensuales');
   }
 };
 
