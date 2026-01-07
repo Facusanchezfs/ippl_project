@@ -307,6 +307,14 @@ const ReportsPage: React.FC = () => {
           console.log('================= MONTHLY REVENUE DEBUG (MANUAL CALCULATION) ================');
           console.log('Cálculo manual por profesional:');
           console.log(JSON.stringify(revenueData.debug.calculationVerification.manualCalculationByProfessional, null, 2));
+          console.log('============================================================================\n');
+        }
+
+        if (revenueData.debug.missingProfessionals) {
+          console.log('================= MONTHLY REVENUE DEBUG (MISSING PROFESSIONALS) =============');
+          console.log('Profesionales esperados que no aparecen:', revenueData.debug.missingProfessionals.expectedNames);
+          console.log('Citas encontradas con esos nombres:');
+          console.log(JSON.stringify(revenueData.debug.missingProfessionals.foundAppointments, null, 2));
           console.log('============================================================================\n\n');
         }
       }

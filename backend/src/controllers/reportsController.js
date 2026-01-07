@@ -48,6 +48,30 @@ const getMonthlyRevenue = async (req, res) => {
       ORDER BY a.date ASC, a.id ASC
     `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
 
+    // DEBUG: Buscar profesionales mencionados en la imagen esperada
+    const expectedProfessionals = ['Julieta Basgall', 'Florencia Richard', 'Juliana Badano', 'Pablo Reto'];
+    const appointmentsWithExpectedNames = await sequelize.query(`
+      SELECT a.id, a.date, a.status, a.attended, a.sessionCost, a.professionalId, a.professionalName, u.commission, u.name as user_name
+      FROM Appointments a
+      LEFT JOIN Users u ON a.professionalId = u.id
+      WHERE a.active = true
+        AND a.status = 'completed'
+        AND a.attended = true
+        AND a.date BETWEEN :fromDate AND :toDate
+        AND a.sessionCost IS NOT NULL
+        AND (
+          a.professionalName LIKE '%Julieta%' OR a.professionalName LIKE '%Basgall%'
+          OR a.professionalName LIKE '%Florencia%' OR a.professionalName LIKE '%Richard%'
+          OR a.professionalName LIKE '%Juliana%' OR a.professionalName LIKE '%Badano%'
+          OR a.professionalName LIKE '%Pablo%' OR a.professionalName LIKE '%Reto%'
+          OR u.name LIKE '%Julieta%' OR u.name LIKE '%Basgall%'
+          OR u.name LIKE '%Florencia%' OR u.name LIKE '%Richard%'
+          OR u.name LIKE '%Juliana%' OR u.name LIKE '%Badano%'
+          OR u.name LIKE '%Pablo%' OR u.name LIKE '%Reto%'
+        )
+      ORDER BY a.date ASC, a.id ASC
+    `, { replacements: { fromDate: fromStr, toDate: toStr }, type: Sequelize.QueryTypes.SELECT });
+
     // DEBUG: Muestreo de citas (primeras 10 para no saturar)
     const sampleRows = allAppointmentsInRange.slice(0, 10);
 
@@ -179,6 +203,10 @@ const getMonthlyRevenue = async (req, res) => {
         totalResultRaw: totalResult || [],
         parsedTotal: total,
         byProfessionalFinal: byProfessional || []
+      },
+      missingProfessionals: {
+        expectedNames: expectedProfessionals,
+        foundAppointments: appointmentsWithExpectedNames || []
       },
       calculationVerification: {
         manualCalculationByProfessional: (() => {

@@ -77,6 +77,20 @@ export interface MonthlyRevenueResponse {
         totalInstituteRevenue: number;
       }>;
     };
+    missingProfessionals?: {
+      expectedNames: string[];
+      foundAppointments: Array<{
+        id: number;
+        date: string;
+        status: string;
+        attended: boolean;
+        sessionCost: number | string;
+        professionalId: number | null;
+        professionalName: string | null;
+        commission?: number | string;
+        user_name?: string | null;
+      }>;
+    };
   };
 }
 
