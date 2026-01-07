@@ -15,17 +15,19 @@ const getMonthlyRevenue = async (req, res) => {
     if (!dateRegex.test(from) || !dateRegex.test(to)) {
       return sendError(res, 400, 'Las fechas deben estar en formato YYYY-MM-DD');
     }
-    const fromDate = new Date(from);
-    const toDate = new Date(to);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    if (fromDate > toDate) {
+    // Comparar fechas como strings YYYY-MM-DD para evitar problemas de timezone
+    if (from > to) {
       return sendError(res, 400, 'La fecha from no puede ser mayor a la fecha to');
     }
 
-    toDate.setHours(23, 59, 59, 999);
-    if (toDate > today) {
+    // Obtener fecha actual en formato YYYY-MM-DD (usando fecha local del servidor)
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' + 
+                     String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                     String(today.getDate()).padStart(2, '0');
+
+    if (to > todayStr) {
       return sendError(res, 400, 'La fecha to no puede ser mayor a la fecha actual');
     }
 
