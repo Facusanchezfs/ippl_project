@@ -31,112 +31,30 @@ const getMonthlyRevenue = async (req, res) => {
       return sendError(res, 400, 'La fecha to no puede ser mayor a la fecha actual');
     }
 
-    const fromStr = from;
-    const toStr = to;
-
-    // PASO 1: Obtener appointments por fecha (con filtros)
-    const appointmentsInRange = await sequelize.query(`
+    // Obtener abonos del período seleccionado (filtrados por fecha del abono)
+    const abonosInRange = await sequelize.query(`
       SELECT 
-        a.id,
-        a.date,
-        a.professionalId,
-        a.professionalName,
-        a.sessionCost
-      FROM Appointments a
-      WHERE a.active = true
-        AND a.status = 'completed'
-        AND a.attended = true
-        AND a.date BETWEEN :fromDate AND :toDate
-        AND a.sessionCost IS NOT NULL
-        AND a.professionalId IS NOT NULL
-      ORDER BY a.date ASC, a.id ASC
+        ab.professionalId,
+        ab.professionalName,
+        SUM(ab.amount) as total
+      FROM Abonos ab
+      WHERE DATE(ab.date) BETWEEN :fromDate AND :toDate
+        AND ab.professionalId IS NOT NULL
+      GROUP BY ab.professionalId, ab.professionalName
+      ORDER BY ab.professionalName ASC
     `, {
-      replacements: { fromDate: fromStr, toDate: toStr },
+      replacements: { fromDate: from, toDate: to },
       type: Sequelize.QueryTypes.SELECT
     });
 
-    // PASO 2: Obtener todos los profesionales
-    const allProfessionals = await sequelize.query(`
-      SELECT 
-        u.id,
-        u.name,
-        u.commission
-      FROM Users u
-      WHERE u.role = 'professional'
-      ORDER BY u.name ASC
-    `, {
-      type: Sequelize.QueryTypes.SELECT
-    });
+    // Convertir a formato esperado por el frontend
+    const byProfessional = abonosInRange.map(item => ({
+      professionalId: String(item.professionalId),
+      professionalName: item.professionalName || 'Sin nombre',
+      total: parseFloat(item.total || 0)
+    }));
 
-    // PASO 3: Crear mapa de profesionales por ID para acceso rápido
-    const professionalsMap = {};
-    allProfessionals.forEach(prof => {
-      professionalsMap[prof.id] = prof;
-    });
-
-    // PASO 4: Calcular ingreso por appointment y detectar profesionales con sessionCost NULL
-    const professionalsWithNullSessionCost = new Set();
-    
-    // Buscar appointments con sessionCost NULL (para reportarlos)
-    const appointmentsWithNullSessionCost = await sequelize.query(`
-      SELECT DISTINCT
-        a.professionalId,
-        a.professionalName,
-        u.name as user_name
-      FROM Appointments a
-      LEFT JOIN Users u ON a.professionalId = u.id
-      WHERE a.active = true
-        AND a.status = 'completed'
-        AND a.attended = true
-        AND a.date BETWEEN :fromDate AND :toDate
-        AND a.sessionCost IS NULL
-        AND a.professionalId IS NOT NULL
-    `, {
-      replacements: { fromDate: fromStr, toDate: toStr },
-      type: Sequelize.QueryTypes.SELECT
-    });
-
-    appointmentsWithNullSessionCost.forEach(apt => {
-      const name = apt.user_name || apt.professionalName || 'Sin nombre';
-      professionalsWithNullSessionCost.add(name);
-    });
-
-    // PASO 5: Agrupar por profesional y calcular totales
-    const revenueByProfessional = {};
-
-    appointmentsInRange.forEach(apt => {
-      const profId = apt.professionalId;
-      const prof = professionalsMap[profId];
-
-      if (!prof) {
-        return; // Ignorar si no existe el profesional
-      }
-
-      const sessionCost = parseFloat(apt.sessionCost || 0);
-      const commission = parseFloat(prof.commission || 0);
-      const instituteRevenue = sessionCost * (1 - commission / 100);
-
-      if (!revenueByProfessional[profId]) {
-        revenueByProfessional[profId] = {
-          professionalId: profId,
-          professionalName: prof.name,
-          total: 0
-        };
-      }
-
-      revenueByProfessional[profId].total += instituteRevenue;
-    });
-
-    // Convertir a array y ordenar
-    const byProfessional = Object.values(revenueByProfessional)
-      .map(prof => ({
-        professionalId: String(prof.professionalId),
-        professionalName: prof.professionalName,
-        total: parseFloat(prof.total.toFixed(2))
-      }))
-      .sort((a, b) => a.professionalName.localeCompare(b.professionalName));
-
-    // PASO 6: Calcular total general
+    // Calcular total general
     const total = byProfessional.reduce((sum, prof) => sum + prof.total, 0);
 
     return sendSuccess(res, {
@@ -144,7 +62,7 @@ const getMonthlyRevenue = async (req, res) => {
       to,
       total: parseFloat(total.toFixed(2)),
       byProfessional,
-      professionalsWithNullSessionCost: Array.from(professionalsWithNullSessionCost).sort()
+      professionalsWithNullSessionCost: [] // No aplica para abonos, mantener por compatibilidad
     });
   } catch (error) {
     logger.error('Error al obtener ingresos mensuales:', error);
