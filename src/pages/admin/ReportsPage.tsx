@@ -5,6 +5,7 @@ import patientsService from '../../services/patients.service';
 import userService from '../../services/user.service';
 import appointmentsService from '../../services/appointments.service';
 import derivationService from '../../services/derivation.service';
+import reportsService from '../../services/reports.service';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -245,65 +246,13 @@ const ReportsPage: React.FC = () => {
   const generateMonthlyRevenuePDF = async () => {
     setLoading(true);
     try {
-      const toLocalDate = (ymd: string) => {
-        const [y, m, d] = ymd.split('-').map(Number);
-        return new Date(y, m - 1, d);
-      };
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (endDateRevenue) {
-        const endDate = toLocalDate(endDateRevenue);
-        endDate.setHours(0, 0, 0, 0);
-        if (endDate > today) {
-          alert('La fecha fin no puede ser mayor a la fecha actual');
-          setLoading(false);
-          return;
-        }
+      if (!startDateRevenue || !endDateRevenue) {
+        alert('Por favor selecciona ambas fechas (desde y hasta)');
+        setLoading(false);
+        return;
       }
 
-      const start = startDateRevenue ? toLocalDate(startDateRevenue) : null;
-      const end = endDateRevenue ? toLocalDate(endDateRevenue) : null;
-      if (start) start.setHours(0, 0, 0, 0);
-      if (end) end.setHours(23, 59, 59, 999);
-
-      const allAppointments = await appointmentsService.getAllAppointments();
-
-      const inRange = (a: any) => {
-        const d = toLocalDate(a.date);
-        if (start && end) return d >= start && d <= end;
-        if (start && !end) return d >= start;
-        if (!start && end) return d <= end;
-        return true;
-      };
-
-      const filtered = allAppointments.filter(inRange);
-      const ingresos = filtered.filter(
-        (a: any) => a.status === 'completed' && a.attended === true
-      );
-
-      const porProfesional: { [key: string]: { nombre: string; total: number } } = {};
-      
-      ingresos.forEach((a: any) => {
-        const profId = a.professionalId || 'sin-profesional';
-        const profName = a.professionalName || 'Sin profesional';
-        
-        if (!porProfesional[profId]) {
-          porProfesional[profId] = { nombre: profName, total: 0 };
-        }
-        
-        porProfesional[profId].total += a.sessionCost ?? 0;
-      });
-
-      const profesionales = Object.values(porProfesional).sort((a, b) => 
-        a.nombre.localeCompare(b.nombre)
-      );
-
-      const ingresoTotal = profesionales.reduce(
-        (sum: number, p) => sum + p.total,
-        0
-      );
+      const revenueData = await reportsService.getMonthlyRevenue(startDateRevenue, endDateRevenue);
 
       const doc = new jsPDF();
       doc.setFontSize(18);
@@ -313,7 +262,7 @@ const ReportsPage: React.FC = () => {
       doc.setFontSize(10);
       const fechaGeneracion = new Date().toLocaleString('es-ES');
       doc.text(`Fecha de generación: ${fechaGeneracion}`, 10, 35);
-      doc.text(`Rango de reporte: ${startDateRevenue || '...'} a ${endDateRevenue || '...'}`, 10, 41);
+      doc.text(`Rango de reporte: ${revenueData.from} a ${revenueData.to}`, 10, 41);
       doc.setLineWidth(0.5);
       doc.line(10, 45, 200, 45);
       
@@ -321,8 +270,8 @@ const ReportsPage: React.FC = () => {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
       
-      profesionales.forEach((prof) => {
-        const nombre = prof.nombre;
+      revenueData.byProfessional.forEach((prof) => {
+        const nombre = prof.professionalName;
         const total = prof.total.toLocaleString('es-CO', { minimumFractionDigits: 2 });
         const totalStr = `$${total}`;
         const maxChars = 60;
@@ -341,7 +290,7 @@ const ReportsPage: React.FC = () => {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       const totalLabel = 'Ingreso Total';
-      const totalStr = `$${ingresoTotal.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+      const totalStr = `$${revenueData.total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
       const maxChars = 60;
       const nombreLen = totalLabel.length;
       const totalLen = totalStr.length;
@@ -354,6 +303,10 @@ const ReportsPage: React.FC = () => {
       doc.text('Instituto Psicológico y Psicoanálisis del Litoral - Reporte confidencial', 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       const fechaArchivo = new Date().toISOString().split('T')[0];
       doc.save(`reporte_ingreso_total_${fechaArchivo}.pdf`);
+    } catch (error: any) {
+      console.error('Error al generar reporte de ingresos:', error);
+      const errorMessage = error?.response?.data?.error || error?.message || 'Error al generar el reporte';
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
