@@ -227,7 +227,7 @@ const badge = (ok?: boolean) =>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
-                            <button
+                            {/* <button
                               onClick={() => {
                                 setSelectedAppointment(appointment);
                                 setEditPaymentAmount(appointment.paymentAmount || 0);
@@ -238,7 +238,7 @@ const badge = (ok?: boolean) =>
                               title="Editar pago"
                             >
                               <PencilIcon className="h-5 w-5" />
-                            </button>
+                            </button> */}
                             <button
                               onClick={() => {
                                 setAppointmentToDelete(appointment);
@@ -313,7 +313,7 @@ const badge = (ok?: boolean) =>
                       ) : null}
 
                       <div className="mt-3 flex items-center justify-end gap-2">
-                        <button
+                        {/* <button
                           onClick={() => {
                             setSelectedAppointment(appointment);
                             setEditPaymentAmount(appointment.paymentAmount || 0);
@@ -324,7 +324,7 @@ const badge = (ok?: boolean) =>
                         >
                           <PencilIcon className="h-4 w-4 mr-1" />
                           Editar Pago
-                        </button>
+                        </button> */}
                         <button
                           onClick={() => {
                             setAppointmentToDelete(appointment);
@@ -400,6 +400,7 @@ const badge = (ok?: boolean) =>
                     setShowEditPaymentModal(false);
                     toast.success('Pago actualizado correctamente');
                   } catch (error) {
+                    console.error('Error al actualizar el pago:', error);
                     toast.error('Error al actualizar el pago');
                   }
                 }}
