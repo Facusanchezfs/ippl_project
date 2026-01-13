@@ -1064,7 +1064,7 @@ const ProfessionalPatients = () => {
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-medium text-gray-500 mb-2">Nota de Texto</h4>
-                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 p-4 rounded-md">
+                <p className="text-sm text-gray-900 whitespace-pre-wrap break-words bg-gray-50 p-4 rounded-md">
                   {selectedPatientForDescription.textNote || 'Sin nota de texto'}
                 </p>
               </div>
