@@ -222,13 +222,19 @@ async function assignPatient(req, res) {
 
     let finalTextNote, finalAudioNote;
 
-    if (textNote !== undefined) {
+    if (textNote !== undefined && audioNote !== undefined) {
+      finalTextNote = textNote;
+      finalAudioNote = audioNote;
+    } 
+    else if (textNote !== undefined) {
       finalTextNote = textNote;
       finalAudioNote = null;
-    } else if (audioNote !== undefined) {
+    } 
+    else if (audioNote !== undefined) {
       finalTextNote = null;
       finalAudioNote = audioNote;
-    } else {
+    } 
+    else {
       finalTextNote = lastDerivation?.textNote ?? null;
       finalAudioNote = lastDerivation?.audioNote ?? null;
     }

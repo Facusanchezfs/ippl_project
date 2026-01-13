@@ -27,7 +27,6 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
   const [selectedProfessional, setSelectedProfessional] = useState('');
   const [status, setStatus] = useState<'active' | 'pending' | 'inactive'>(patient?.status || 'active');
   const [sessionFrequency, setSessionFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
-  const [noteType, setNoteType] = useState<'text' | 'audio'>('text');
   const [textNote, setTextNote] = useState('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -55,16 +54,12 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
 
       if (patient.textNote) {
         setTextNote(patient.textNote);
-        setNoteType('text');
       } else {
         setTextNote('');
       }
 
       if (patient.audioNote) {
         setHasExistingAudioNote(true);
-        if (!patient.textNote) {
-          setNoteType('audio');
-        }
       } else {
         setHasExistingAudioNote(false);
       }
@@ -74,7 +69,6 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
       setSelectedProfessional('');
       setStatus('active');
       setSessionFrequency('weekly');
-      setNoteType('text');
       setTextNote('');
       setAudioBlob(null);
       setHasExistingAudioNote(false);
@@ -147,31 +141,35 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
 
       const trimmedTextNote = textNote.trim();
       
-      if (noteType === 'text') {
-        if (trimmedTextNote) {
-          assignData.textNote = trimmedTextNote;
-        }
-      } else if (noteType === 'audio') {
-        if (audioBlob) {
-          try {
-            if (audioBlob.size === 0) {
-              toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
-              return;
-            }
-            
-            const audioFile = new File([audioBlob], 'note.webm', { 
-              type: 'audio/webm'
-            });
-            
-            const audioNoteUrl = await patientsService.uploadAudio(audioFile);
-            assignData.audioNote = audioNoteUrl;
-          } catch (error: any) {
-            console.error('Error al subir el audio:', error);
-            const errorMessage = error?.message || 'Error al subir el audio';
-            toast.error(errorMessage);
+      // Agregar nota de texto si tiene contenido
+      if (trimmedTextNote) {
+        assignData.textNote = trimmedTextNote;
+      }
+      
+      // Manejar nota de audio
+      if (audioBlob) {
+        // Si hay un audio nuevo grabado, subirlo y usarlo
+        try {
+          if (audioBlob.size === 0) {
+            toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
             return;
           }
+          
+          const audioFile = new File([audioBlob], 'note.webm', { 
+            type: 'audio/webm'
+          });
+          
+          const audioNoteUrl = await patientsService.uploadAudio(audioFile);
+          assignData.audioNote = audioNoteUrl;
+        } catch (error: any) {
+          console.error('Error al subir el audio:', error);
+          const errorMessage = error?.message || 'Error al subir el audio';
+          toast.error(errorMessage);
+          return;
         }
+      } else if (patient.audioNote && hasExistingAudioNote) {
+        // Si no hay audio nuevo pero hay uno existente, preservarlo
+        assignData.audioNote = patient.audioNote;
       }
 
       if (!patient.professionalId && selectedProfessional) {
@@ -261,103 +259,71 @@ const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, pa
             </select>
           </div>
 
-          <div className="space-y-2">
+          <div>
             <label className="block text-sm font-medium text-gray-700">
-              Tipo de Nota
+              Nota de Texto
             </label>
-            <div className="flex space-x-4">
-              <button
-                type="button"
-                onClick={() => setNoteType('text')}
-                className={`px-3 py-2 text-sm font-medium rounded-md ${
-                  noteType === 'text'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Nota de Texto
-              </button>
-              <button
-                type="button"
-                onClick={() => setNoteType('audio')}
-                className={`px-3 py-2 text-sm font-medium rounded-md ${
-                  noteType === 'audio'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Nota de Voz
-              </button>
-            </div>
+            <textarea
+              value={textNote}
+              onChange={(e) => setTextNote(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 resize-none"
+              rows={4}
+              placeholder="Escribe una nota sobre el paciente..."
+            />
           </div>
 
-          {noteType === 'text' ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Nota de Texto
-              </label>
-              <textarea
-                value={textNote}
-                onChange={(e) => setTextNote(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                rows={4}
-                placeholder="Escribe una nota sobre el paciente..."
-              />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Nota de Audio
-              </label>
-              {hasExistingAudioNote && !audioBlob && (
-                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                  <p className="text-sm text-blue-800">
-                    ℹ️ Este paciente ya tiene una nota de voz cargada. Solo se reemplazará si grabas una nueva.
-                  </p>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Nota de Audio
+            </label>
+            {hasExistingAudioNote && !audioBlob && (
+              <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">
+                  ℹ️ Este paciente ya tiene una nota de voz cargada. Solo se reemplazará si grabas una nueva.
+                </p>
+              </div>
+            )}
+            {!audioBlob ? (
+              <button
+                type="button"
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`w-full flex items-center justify-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium ${
+                  isRecording
+                    ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
+                    : 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200'
+                }`}
+              >
+                <MicrophoneIcon className="h-5 w-5 mr-2" />
+                {isRecording ? 'Detener Grabación' : 'Iniciar Grabación'}
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-md">
+                  <span className="text-sm text-gray-600">Audio grabado</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAudioBlob(null);
+                      chunksRef.current = [];
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    Eliminar
+                  </button>
                 </div>
-              )}
-              {!audioBlob ? (
-                <button
-                  type="button"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  className={`w-full flex items-center justify-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium ${
-                    isRecording
-                      ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
-                      : 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200'
-                  }`}
-                >
-                  <MicrophoneIcon className="h-5 w-5 mr-2" />
-                  {isRecording ? 'Detener Grabación' : 'Iniciar Grabación'}
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-md">
-                    <span className="text-sm text-gray-600">Audio grabado</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAudioBlob(null);
-                        chunksRef.current = [];
-                      }}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                  {audioBlob && (
-                    <audio
-                      controls
-                      src={URL.createObjectURL(audioBlob)}
-                      className="w-full mt-2"
-                      preload="metadata"
-                    >
-                      Tu navegador no soporta el elemento de audio.
-                    </audio>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                {audioBlob && (
+                  <audio
+                    controls
+                    src={URL.createObjectURL(audioBlob)}
+                    className="w-full mt-2"
+                    preload="metadata"
+                  >
+                    Tu navegador no soporta el elemento de audio.
+                  </audio>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end space-x-2">
             <button

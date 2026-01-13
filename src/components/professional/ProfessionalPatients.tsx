@@ -385,6 +385,7 @@ const ProfessionalPatients = () => {
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedPatientForDescription, setSelectedPatientForDescription] = useState<Patient | null>(null);
+  const [showNoteModal, setShowNoteModal] = useState(false);
   const [isRequestActivationModalOpen, setIsRequestActivationModalOpen] = useState(false);
   const [selectedPatientForActivation, setSelectedPatientForActivation] = useState<Patient | null>(null);
 
@@ -653,9 +654,34 @@ const ProfessionalPatients = () => {
                 </div>
               </div>
 
-              {/* Notas (audio o texto) */}
+              {/* Nota de Texto */}
               <div className="mt-3">
-                <div className="text-sm text-gray-500 mb-1">Notas</div>
+                <div className="text-sm text-gray-500 mb-1">Nota</div>
+                {patient.textNote ? (
+                  <div>
+                    <p className="text-sm text-gray-700 line-clamp-3 break-words">
+                      {patient.textNote}
+                    </p>
+                    {patient.textNote.length > 100 && (
+                      <button
+                        onClick={() => {
+                          setSelectedPatientForDescription(patient);
+                          setShowNoteModal(true);
+                        }}
+                        className="mt-1 text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Ver nota completa
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-sm">-</span>
+                )}
+              </div>
+
+              {/* Audio */}
+              <div className="mt-3">
+                <div className="text-sm text-gray-500 mb-1">Audios</div>
                 {patient.audioNote ? (
                   <div className="flex items-center">
                     <audio
@@ -670,12 +696,8 @@ const ProfessionalPatients = () => {
                       Tu navegador no soporta el elemento de audio.
                     </audio>
                   </div>
-                ) : patient.textNote ? (
-                  <p className="text-sm text-gray-700 line-clamp-3 break-words">
-                    {patient.textNote}
-                  </p>
                 ) : (
-                  <span className="text-gray-400 text-sm">Sin notas</span>
+                  <span className="text-gray-400 text-sm">-</span>
                 )}
               </div>
 
@@ -747,7 +769,10 @@ const ProfessionalPatients = () => {
                   Frecuencia
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Notas
+                  Nota
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Audios
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Acciones
@@ -786,12 +811,34 @@ const ProfessionalPatients = () => {
                       {getFrequencyLabel(patient.sessionFrequency)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 min-w-[300px]">
+                  <td className="px-6 py-4 min-w-[200px] max-w-[300px]">
+                    {patient.textNote ? (
+                      <div className="max-w-xs">
+                        <p className="text-sm text-gray-600 line-clamp-2 break-words">
+                          {patient.textNote}
+                        </p>
+                        {patient.textNote.length > 100 && (
+                          <button
+                            onClick={() => {
+                              setSelectedPatientForDescription(patient);
+                              setShowNoteModal(true);
+                            }}
+                            className="mt-1 text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            Ver nota completa
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 min-w-[200px]">
                     {patient.audioNote ? (
                       <div className="flex items-center space-x-2">
                         <audio
                           controls
-                          className="min-w-[300px] max-w-full h-10"
+                          className="min-w-[200px] max-w-full h-10"
                           controlsList="nodownload"
                           preload="metadata"
                         >
@@ -801,14 +848,8 @@ const ProfessionalPatients = () => {
                           Tu navegador no soporta el elemento de audio.
                         </audio>
                       </div>
-                    ) : patient.textNote ? (
-                      <div className="max-w-xs">
-                        <p className="text-sm text-gray-600 line-clamp-2 break-words">
-                          {patient.textNote}
-                        </p>
-                      </div>
                     ) : (
-                      <span className="text-gray-400 text-sm">Sin notas</span>
+                      <span className="text-gray-400 text-sm">-</span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
@@ -986,6 +1027,55 @@ const ProfessionalPatients = () => {
             <div className="mt-6">
               <button
                 onClick={() => setShowDescriptionModal(false)}
+                className="w-full inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-transparent rounded-lg hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de nota completa */}
+      {showNoteModal && selectedPatientForDescription && (
+        <Modal isOpen={showNoteModal} onClose={() => {
+          setShowNoteModal(false);
+          setSelectedPatientForDescription(null);
+        }}>
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Nota Completa - {selectedPatientForDescription.name}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowNoteModal(false);
+                  setSelectedPatientForDescription(null);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Cerrar</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Nota de Texto</h4>
+                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 p-4 rounded-md">
+                  {selectedPatientForDescription.textNote || 'Sin nota de texto'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <button
+                onClick={() => {
+                  setShowNoteModal(false);
+                  setSelectedPatientForDescription(null);
+                }}
                 className="w-full inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-transparent rounded-lg hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500"
               >
                 Cerrar
