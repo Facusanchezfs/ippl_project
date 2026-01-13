@@ -10,9 +10,11 @@ import {
   ArrowPathIcon,
   ArrowLeftIcon,
   PencilIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
 
 const CompletedAppointmentsPage = () => {
   const { user } = useAuth();
@@ -27,6 +29,8 @@ const CompletedAppointmentsPage = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
   const [attendedFilter, setAttendedFilter] = useState("todos");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
 
   useEffect(() => {
     loadAppointments();
@@ -60,6 +64,21 @@ const CompletedAppointmentsPage = () => {
     return appointments
       .filter(a => a.patientId === patientId && a.attended)
       .reduce((acc, curr) => acc + (curr.remainingBalance || 0), 0);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!appointmentToDelete) return;
+
+    try {
+      await appointmentsService.deleteAppointment(appointmentToDelete.id, appointmentToDelete);
+      await loadAppointments();
+      toast.success('Cita eliminada exitosamente');
+      setShowDeleteModal(false);
+      setAppointmentToDelete(null);
+    } catch (error) {
+      console.error('Error al eliminar la cita:', error);
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar la cita');
+    }
   };
 
   if (isLoading) {
@@ -166,6 +185,7 @@ const badge = (ok?: boolean) =>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago sin asistir</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo Pendiente</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -204,6 +224,32 @@ const badge = (ok?: boolean) =>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           ${appointment.remainingBalance?.toFixed(2) || '0.00'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setEditPaymentAmount(appointment.paymentAmount || 0);
+                                setEditRemainingBalance(appointment.remainingBalance || 0);
+                                setShowEditPaymentModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Editar pago"
+                            >
+                              <PencilIcon className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setAppointmentToDelete(appointment);
+                                setShowDeleteModal(true);
+                              }}
+                              className="text-red-600 hover:text-red-900"
+                              title="Eliminar cita"
+                            >
+                              <TrashIcon className="h-5 w-5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -265,6 +311,31 @@ const badge = (ok?: boolean) =>
                           </div>
                         </div>
                       ) : null}
+
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedAppointment(appointment);
+                            setEditPaymentAmount(appointment.paymentAmount || 0);
+                            setEditRemainingBalance(appointment.remainingBalance || 0);
+                            setShowEditPaymentModal(true);
+                          }}
+                          className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
+                        >
+                          <PencilIcon className="h-4 w-4 mr-1" />
+                          Editar Pago
+                        </button>
+                        <button
+                          onClick={() => {
+                            setAppointmentToDelete(appointment);
+                            setShowDeleteModal(true);
+                          }}
+                          className="flex items-center px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100"
+                        >
+                          <TrashIcon className="h-4 w-4 mr-1" />
+                          Eliminar
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -340,6 +411,33 @@ const badge = (ok?: boolean) =>
           </div>
         </div>
       )}
+
+      {/* Modal de confirmación para eliminar cita */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setAppointmentToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Eliminar Cita Finalizada"
+        message={
+          appointmentToDelete
+            ? `¿Estás seguro de que deseas eliminar la cita con ${appointmentToDelete.patientName} del ${new Date(appointmentToDelete.date).toLocaleDateString(
+                'es-ES',
+                {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                }
+              )}?\n\n⚠️ Esta acción es IRREVERSIBLE.\n\nSe eliminará permanentemente la cita y se revertirán automáticamente los saldos del profesional asociados a esta cita. Esta operación no se puede deshacer.`
+            : ''
+        }
+        confirmText="Eliminar Permanentemente"
+        cancelText="Cancelar"
+        type="danger"
+      />
     </div>
   );
 };

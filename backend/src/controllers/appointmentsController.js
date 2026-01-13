@@ -434,12 +434,49 @@ const updateAppointment = async (req, res) => {
 
 
 const deleteAppointment = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const appt = req.appointment;
-    await appt.update({ active: false });
-
+    
+    // Si la cita estaba completada y asistida, revertir saldos del profesional
+    if (appt.status === 'completed' && appt.attended === true && appt.sessionCost) {
+      const sessionCost = toAmount(appt.sessionCost) ?? 0;
+      
+      if (sessionCost > 0 && appt.professionalId) {
+        const prof = await User.findByPk(appt.professionalId, {
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        });
+        
+        if (prof) {
+          const currentTotal = toAmount(prof.saldoTotal) ?? 0;
+          const newTotal = round2(Math.max(0, currentTotal - sessionCost));
+          
+          let commissionInt = parseInt(prof.commission ?? 0, 10);
+          if (isNaN(commissionInt)) commissionInt = 0;
+          commissionInt = Math.max(0, Math.min(100, commissionInt));
+          const commissionRate = commissionInt / 100;
+          
+          const newPend = round2(newTotal * commissionRate);
+          
+          await prof.update(
+            { saldoTotal: newTotal, saldoPendiente: newPend },
+            { transaction: t }
+          );
+          
+          logger.info(`[deleteAppointment] Revertidos saldos del profesional ${appt.professionalId}: -${sessionCost}`);
+        }
+      }
+    }
+    
+    // Soft delete
+    await appt.update({ active: false }, { transaction: t });
+    
+    await t.commit();
+    logger.info(`[deleteAppointment] Cita ${appt.id} eliminada correctamente`);
     return sendSuccess(res, null, 'Cita eliminada correctamente', 204);
   } catch (error) {
+    await t.rollback();
     logger.error('[deleteAppointment] Error:', error);
     return sendError(res, 500, 'Error al eliminar la cita');
   }

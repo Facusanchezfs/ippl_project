@@ -17,6 +17,7 @@ export interface Appointment {
   noShowPaymentAmount?: number;
   remainingBalance?: number;
   completedAt?: string;
+  active?: boolean;
   createdAt: string;
   updatedAt?: string;
 } 
