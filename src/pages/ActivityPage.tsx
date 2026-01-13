@@ -352,15 +352,19 @@ const ActivityPage: React.FC = () => {
   };
 
   const handleBack = () => {
+    // Navegar al dashboard según el rol del usuario
+    // Usamos replace: true para evitar que el botón "atrás" vuelva a esta página
     if (user?.role === 'admin') {
-      navigate('/admin');
-      return;
+      navigate('/admin', { replace: true });
+    } else if (user?.role === 'professional') {
+      navigate('/professional', { replace: true });
+    } else if (user?.role === 'financial') {
+      navigate('/financial', { replace: true });
+    } else if (user?.role === 'content_manager') {
+      navigate('/content', { replace: true });
+    } else {
+      navigate('/', { replace: true });
     }
-    if (user?.role === 'professional') {
-      navigate('/professional');
-      return;
-    }
-    navigate('/');
   };
 
   const getRelativeTime = (date: string) => {

@@ -547,9 +547,10 @@ interface NewPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (name: string, description: string) => Promise<void>;
+  showDescription?: boolean;
 }
 
-const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSubmit }) => {
+const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSubmit, showDescription = false }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -581,15 +582,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
           <h3 className="text-lg font-semibold text-gray-900">
             Nuevo Paciente
           </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
-          >
-            <span className="sr-only">Cerrar</span>
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -608,6 +600,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             />
           </div>
 
+          {showDescription && (
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700">
               Descripción
@@ -621,6 +614,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
               placeholder="Ingresa una descripción opcional"
             />
           </div>
+          )}
 
           <div className="flex justify-end space-x-3">
             <button
