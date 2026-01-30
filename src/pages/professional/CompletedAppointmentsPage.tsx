@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import appointmentsService from '../../services/appointments.service';
 import { Appointment } from '../../types/Appointment';
@@ -9,7 +9,6 @@ import {
   UserIcon,
   ArrowPathIcon,
   ArrowLeftIcon,
-  PencilIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
@@ -22,10 +21,6 @@ const CompletedAppointmentsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
-  const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [editPaymentAmount, setEditPaymentAmount] = useState<number>(0);
-  const [editRemainingBalance, setEditRemainingBalance] = useState<number>(0);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
   const [attendedFilter, setAttendedFilter] = useState("todos");
@@ -58,12 +53,6 @@ const CompletedAppointmentsPage = () => {
     await loadAppointments();
     setIsRefreshing(false);
     toast.success('Datos actualizados');
-  };
-
-  const getPatientTotalDebt = (patientId: string) => {
-    return appointments
-      .filter(a => a.patientId === patientId && a.attended)
-      .reduce((acc, curr) => acc + (curr.remainingBalance || 0), 0);
   };
 
   const handleDeleteConfirm = async () => {
@@ -183,8 +172,6 @@ const badge = (ok?: boolean) =>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asistió</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago sin asistir</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo Pendiente</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
@@ -217,28 +204,8 @@ const badge = (ok?: boolean) =>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           ${appointment.paymentAmount?.toFixed(2) || '0.00'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {appointment.attended === false && appointment.noShowPaymentAmount 
-                            ? `$${appointment.noShowPaymentAmount.toFixed(2)}`
-                            : '—'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${appointment.remainingBalance?.toFixed(2) || '0.00'}
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
-                            {/* <button
-                              onClick={() => {
-                                setSelectedAppointment(appointment);
-                                setEditPaymentAmount(appointment.paymentAmount || 0);
-                                setEditRemainingBalance(appointment.remainingBalance || 0);
-                                setShowEditPaymentModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="Editar pago"
-                            >
-                              <PencilIcon className="h-5 w-5" />
-                            </button> */}
                             <button
                               onClick={() => {
                                 setAppointmentToDelete(appointment);
@@ -266,7 +233,7 @@ const badge = (ok?: boolean) =>
                 >
                   <div className="flex items-start gap-3">
                     <UserIcon className="h-6 w-6 text-gray-400 shrink-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-base font-semibold text-gray-900 truncate">
                         {appointment.patientName}
                       </h3>
@@ -288,43 +255,14 @@ const badge = (ok?: boolean) =>
                         </span>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                        <div className="rounded bg-gray-50 p-2">
-                          <div className="text-gray-500">Pago</div>
-                          <div className="font-medium text-gray-900">
-                            ${appointment.paymentAmount?.toFixed(2) || '0.00'}
-                          </div>
-                        </div>
-                        <div className="rounded bg-gray-50 p-2">
-                          <div className="text-gray-500">Saldo</div>
-                          <div className="font-medium text-gray-900">
-                            ${appointment.remainingBalance?.toFixed(2) || '0.00'}
-                          </div>
+                      <div className="mt-3 rounded bg-gray-50 p-2 text-sm">
+                        <div className="text-gray-500">Pago</div>
+                        <div className="font-medium text-gray-900">
+                          ${appointment.paymentAmount?.toFixed(2) || '0.00'}
                         </div>
                       </div>
 
-                      {appointment.attended === false && appointment.noShowPaymentAmount ? (
-                        <div className="mt-3 rounded bg-gray-50 p-2 text-sm">
-                          <div className="text-gray-500">Pago sin asistir</div>
-                          <div className="font-medium text-gray-900">
-                            ${appointment.noShowPaymentAmount.toFixed(2)}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="mt-3 flex items-center justify-end gap-2">
-                        {/* <button
-                          onClick={() => {
-                            setSelectedAppointment(appointment);
-                            setEditPaymentAmount(appointment.paymentAmount || 0);
-                            setEditRemainingBalance(appointment.remainingBalance || 0);
-                            setShowEditPaymentModal(true);
-                          }}
-                          className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
-                        >
-                          <PencilIcon className="h-4 w-4 mr-1" />
-                          Editar Pago
-                        </button> */}
+                      <div className="mt-3 flex items-center justify-end">
                         <button
                           onClick={() => {
                             setAppointmentToDelete(appointment);
@@ -352,66 +290,6 @@ const badge = (ok?: boolean) =>
           </div>
         )}
       </div>
-      {showEditPaymentModal && selectedAppointment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Actualizar Pago de la Cita</h2>
-            <div className="mb-4">
-              <span className="block text-sm font-medium text-gray-700 mb-1">Saldo pendiente acumulado del paciente:</span>
-              <span className="block text-lg font-bold text-red-600 mb-2">
-                ${getPatientTotalDebt(selectedAppointment.patientId).toFixed(2)}
-              </span>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Monto a abonar</label>
-              <input
-                type="number"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                value={editPaymentAmount}
-                min={0}
-                onChange={e => setEditPaymentAmount(Number(e.target.value))}
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Saldo pendiente de esta cita</label>
-              <input
-                type="number"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                value={editRemainingBalance}
-                min={0}
-                onChange={e => setEditRemainingBalance(Number(e.target.value))}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowEditPaymentModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    await appointmentsService.updateAppointment(selectedAppointment.id, {
-                      paymentAmount: editPaymentAmount,
-                      remainingBalance: editRemainingBalance,
-                    });
-                    await loadAppointments();
-                    setShowEditPaymentModal(false);
-                    toast.success('Pago actualizado correctamente');
-                  } catch (error) {
-                    console.error('Error al actualizar el pago:', error);
-                    toast.error('Error al actualizar el pago');
-                  }
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal de confirmación para eliminar cita */}
       <ConfirmationModal
@@ -443,4 +321,4 @@ const badge = (ok?: boolean) =>
   );
 };
 
-export default CompletedAppointmentsPage; 
+export default CompletedAppointmentsPage;
