@@ -5,8 +5,8 @@ import patientsService from '../../services/patients.service';
 import { Appointment, AppointmentStatus } from '../../types/Appointment';
 import { Patient } from '../../types/Patient';
 import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
-import { 
-  CalendarIcon, 
+import {
+  CalendarIcon,
   ClockIcon,
   UserIcon,
   ArrowPathIcon,
@@ -41,10 +41,7 @@ const AppointmentsPage = () => {
   const [selectedAppointmentForDescription, setSelectedAppointmentForDescription] = useState<Appointment | null>(null);
   const [showFinishAppointmentModal, setShowFinishAppointmentModal] = useState(false);
   const [selectedAppointmentForFinish, setSelectedAppointmentForFinish] = useState<Appointment | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [noShowPaymentAmount, setNoShowPaymentAmount] = useState<number>(0);
   const [attended, setAttended] = useState<boolean>(true);
-  const [remainingBalance, setRemainingBalance] = useState<number>(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
   const navigate = useNavigate();
@@ -70,7 +67,7 @@ const AppointmentsPage = () => {
 
   const loadAppointments = async () => {
     if (!user) return;
-    
+
     try {
       setIsLoading(true);
       const data = await appointmentsService.getProfessionalAppointments(user.id);
@@ -85,13 +82,13 @@ const AppointmentsPage = () => {
   };
 
   const combineLocalDateTime = (dateStr: string, timeStr?: string) => {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  let hh = 0, mm = 0;
-  if (timeStr) {
-    [hh, mm] = timeStr.split(':').map(Number);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    let hh = 0, mm = 0;
+    if (timeStr) {
+      [hh, mm] = timeStr.split(':').map(Number);
+    }
+    return new Date(y, (m - 1), d, hh, mm);
   }
-  return new Date(y, (m - 1), d, hh, mm);
-}
 
   const formatDateTime = (dateStr: string, timeStr?: string) => {
     const date = combineLocalDateTime(dateStr, timeStr);
@@ -111,15 +108,15 @@ const AppointmentsPage = () => {
   };
 
   const getAppointmentStatus = (status: string) => {
-    switch(status){
+    switch (status) {
       case AppointmentStatus.scheduled:
-        return {label: 'Pendiente', class: 'bg-yellow-100 text-yellow-800'}
+        return { label: 'Pendiente', class: 'bg-yellow-100 text-yellow-800' }
       case AppointmentStatus.completed:
-        return {label: 'Finalizada', class: 'bg-gray-100 text-gray-800'}
+        return { label: 'Finalizada', class: 'bg-gray-100 text-gray-800' }
       case AppointmentStatus.cancelled:
-        return {label: 'Cancelada', class: 'bg-red-100 text-red-800'}
+        return { label: 'Cancelada', class: 'bg-red-100 text-red-800' }
       default:
-        return {label: '', class: ''};
+        return { label: '', class: '' };
     }
   };
 
@@ -138,7 +135,7 @@ const AppointmentsPage = () => {
         patientName: selectedPatient.name,
         status: 'scheduled'
       });
-      
+
       await loadAppointments();
       setShowNewAppointmentModal(false);
       toast.success('Cita creada exitosamente');
@@ -172,7 +169,7 @@ const AppointmentsPage = () => {
         ...appointmentData,
         status: 'scheduled'
       });
-      
+
       await loadAppointments();
       setShowEditAppointmentModal(false);
       setSelectedAppointment(null);
@@ -217,21 +214,18 @@ const AppointmentsPage = () => {
       };
 
       if (finishData.attended) {
-        updateData.paymentAmount = finishData.paymentAmount || 0;
-        updateData.remainingBalance = finishData.remainingBalance || 0;
+        updateData.paymentAmount = selectedAppointmentForFinish?.sessionCost || 0;
+        updateData.remainingBalance = 0;
       } else {
         updateData.noShowPaymentAmount = finishData.noShowPaymentAmount || 0;
       }
 
       await appointmentsService.updateAppointment(appointmentId, updateData);
-      
+
       await loadAppointments();
       setShowFinishAppointmentModal(false);
       setSelectedAppointmentForFinish(null);
-      setPaymentAmount(0);
-      setNoShowPaymentAmount(0);
       setAttended(true);
-      setRemainingBalance(0);
       toast.success('Cita finalizada exitosamente');
     } catch (error) {
       console.error('Error al finalizar la cita:', error);
@@ -242,23 +236,23 @@ const AppointmentsPage = () => {
   const filteredAppointments = appointments
     .filter(appointment => appointment.status != 'completed')
     .filter(appointment => {
-    const appointmentDateTime = combineLocalDateTime(appointment.date, appointment.startTime);
-    const now = new Date();
+      const appointmentDateTime = combineLocalDateTime(appointment.date, appointment.startTime);
+      const now = new Date();
 
-    switch (filterStatus) {
-      case 'upcoming':
-        return appointmentDateTime >= now;
-      case 'past':
-        return appointmentDateTime < now;
-      default:
-        return true;
-    }
+      switch (filterStatus) {
+        case 'upcoming':
+          return appointmentDateTime >= now;
+        case 'past':
+          return appointmentDateTime < now;
+        default:
+          return true;
+      }
     })
     .sort((a, b) => {
-    const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
-    const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
-    return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-  });
+      const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
+      const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
+      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
 
   if (isLoading) {
     return (
@@ -298,9 +292,8 @@ const AppointmentsPage = () => {
             </button>
             <button
               onClick={handleRefresh}
-              className={`flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors ${
-                isRefreshing ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+              className={`flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               disabled={isRefreshing}
             >
               <ArrowPathIcon
@@ -344,7 +337,7 @@ const AppointmentsPage = () => {
             Ordenar por fecha
           </button>
         </div>
-        
+
         {filteredAppointments.length > 0 ? (
           <>
             {/* ===== MOBILE/TABLET: CARDS ===== */}
@@ -385,8 +378,8 @@ const AppointmentsPage = () => {
                         {appointment.type === 'regular'
                           ? 'Regular'
                           : appointment.type === 'first_time'
-                          ? 'Primera Vez'
-                          : 'Emergencia'}
+                            ? 'Primera Vez'
+                            : 'Emergencia'}
                       </span>
                     </div>
 
@@ -427,10 +420,7 @@ const AppointmentsPage = () => {
                       <button
                         onClick={() => {
                           setSelectedAppointmentForFinish(appointment);
-                          setPaymentAmount(appointment.sessionCost || 0);
-                          setNoShowPaymentAmount(0);
                           setAttended(true);
-                          setRemainingBalance(0);
                           setShowFinishAppointmentModal(true);
                         }}
                         className="text-green-600 hover:text-green-900 inline-flex items-center"
@@ -515,8 +505,8 @@ const AppointmentsPage = () => {
                             {appointment.type === 'regular'
                               ? 'Regular'
                               : appointment.type === 'first_time'
-                              ? 'Primera Vez'
-                              : 'Emergencia'}
+                                ? 'Primera Vez'
+                                : 'Emergencia'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             ${appointment.sessionCost?.toFixed(2) || '0.00'}
@@ -545,10 +535,7 @@ const AppointmentsPage = () => {
                             <button
                               onClick={() => {
                                 setSelectedAppointmentForFinish(appointment);
-                                setPaymentAmount(appointment.sessionCost || 0);
-                                setNoShowPaymentAmount(0);
                                 setAttended(true);
-                                setRemainingBalance(0);
                                 setShowFinishAppointmentModal(true);
                               }}
                               className="text-green-600 hover:text-green-900 mr-4"
@@ -604,7 +591,7 @@ const AppointmentsPage = () => {
                 </svg>
               </button>
             </div>
-            
+
             <form onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
@@ -642,7 +629,7 @@ const AppointmentsPage = () => {
                     </p>
                   )}
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Fecha</label>
@@ -682,7 +669,7 @@ const AppointmentsPage = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Tipo de Cita
@@ -717,7 +704,7 @@ const AppointmentsPage = () => {
                     />
                   </div>
                 </div>
-                
+
                 {/*<div>
                   <label className="block text-sm font-medium text-gray-700">
                     Notas
@@ -729,7 +716,7 @@ const AppointmentsPage = () => {
                   ></textarea>
                 </div>*/}
               </div>
-              
+
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   type="button"
@@ -741,11 +728,10 @@ const AppointmentsPage = () => {
                 <button
                   type="submit"
                   disabled={patients.length === 0}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
-                    patients.length > 0 
-                      ? 'bg-blue-600 hover:bg-blue-700' 
+                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${patients.length > 0
+                      ? 'bg-blue-600 hover:bg-blue-700'
                       : 'bg-gray-400 cursor-not-allowed'
-                  }`}
+                    }`}
                 >
                   Crear Cita
                 </button>
@@ -773,7 +759,7 @@ const AppointmentsPage = () => {
                 </svg>
               </button>
             </div>
-            
+
             <form onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
@@ -798,7 +784,7 @@ const AppointmentsPage = () => {
                     className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Fecha</label>
@@ -838,7 +824,7 @@ const AppointmentsPage = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Tipo de Cita
@@ -875,7 +861,7 @@ const AppointmentsPage = () => {
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Notas
@@ -888,7 +874,7 @@ const AppointmentsPage = () => {
                   ></textarea>
                 </div>
               </div>
-              
+
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   type="button"
@@ -928,7 +914,7 @@ const AppointmentsPage = () => {
                 <XMarkIcon className="h-6 w-6" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Paciente</h3>
@@ -939,24 +925,24 @@ const AppointmentsPage = () => {
                 <h3 className="text-sm font-medium text-gray-500">Fecha y Hora</h3>
                 <p className="mt-1 text-sm text-gray-900">
                   {combineLocalDateTime(
-                      selectedAppointmentForDescription.date,
-                      selectedAppointmentForDescription.startTime
-                    ).toLocaleString('es-ES', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    selectedAppointmentForDescription.date,
+                    selectedAppointmentForDescription.startTime
+                  ).toLocaleString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
                 </p>
               </div>
 
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Tipo de Cita</h3>
                 <p className="mt-1 text-sm text-gray-900">
-                  {selectedAppointmentForDescription.type === 'regular' ? 'Regular' : 
-                   selectedAppointmentForDescription.type === 'first_time' ? 'Primera Vez' : 'Emergencia'}
+                  {selectedAppointmentForDescription.type === 'regular' ? 'Regular' :
+                    selectedAppointmentForDescription.type === 'first_time' ? 'Primera Vez' : 'Emergencia'}
                 </p>
               </div>
 
@@ -983,7 +969,7 @@ const AppointmentsPage = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => {
@@ -1009,10 +995,7 @@ const AppointmentsPage = () => {
                 onClick={() => {
                   setShowFinishAppointmentModal(false);
                   setSelectedAppointmentForFinish(null);
-                  setPaymentAmount(0);
-                  setNoShowPaymentAmount(0);
                   setAttended(true);
-                  setRemainingBalance(0);
                 }}
                 className="text-gray-400 hover:text-gray-500"
               >
@@ -1036,16 +1019,16 @@ const AppointmentsPage = () => {
                 </label>
                 <p className="mt-1 text-sm text-gray-900">
                   {combineLocalDateTime(
-                      selectedAppointmentForFinish.date,
-                      selectedAppointmentForFinish.startTime
-                    ).toLocaleString('es-ES', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    selectedAppointmentForFinish.date,
+                    selectedAppointmentForFinish.startTime
+                  ).toLocaleString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
                 </p>
               </div>
 
@@ -1057,11 +1040,10 @@ const AppointmentsPage = () => {
                   <button
                     type="button"
                     onClick={() => setAttended(true)}
-                    className={`flex items-center px-4 py-2 rounded-lg ${
-                      attended
+                    className={`flex items-center px-4 py-2 rounded-lg ${attended
                         ? 'bg-green-100 text-green-800 border-2 border-green-500'
                         : 'bg-gray-100 text-gray-800 border-2 border-transparent'
-                    }`}
+                      }`}
                   >
                     <CheckCircleIcon className="h-5 w-5 mr-2" />
                     Sí asistió
@@ -1069,11 +1051,10 @@ const AppointmentsPage = () => {
                   <button
                     type="button"
                     onClick={() => setAttended(false)}
-                    className={`flex items-center px-4 py-2 rounded-lg ${
-                      !attended
+                    className={`flex items-center px-4 py-2 rounded-lg ${!attended
                         ? 'bg-red-100 text-red-800 border-2 border-red-500'
                         : 'bg-gray-100 text-gray-800 border-2 border-transparent'
-                    }`}
+                      }`}
                   >
                     <XCircleIcon className="h-5 w-5 mr-2" />
                     No asistió
@@ -1081,77 +1062,13 @@ const AppointmentsPage = () => {
                 </div>
               </div>
 
-              {attended ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Costo de la sesión
-                    </label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      ${selectedAppointmentForFinish.sessionCost?.toFixed(2) || '0.00'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Monto pagado
-                    </label>
-                    <div className="mt-1 relative rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="number"
-                        value={paymentAmount}
-                        onChange={(e) => {
-                          const paid = Number(e.target.value);
-                          setPaymentAmount(paid);
-                          const total = selectedAppointmentForFinish.sessionCost || 0;
-                          setRemainingBalance(total - paid);
-                        }}
-                        className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Saldo pendiente
-                    </label>
-                    <p className={`mt-1 text-sm font-semibold ${
-                      remainingBalance > 0 ? 'text-red-600' : 'text-green-600'
-                    }`}>
-                      ${remainingBalance.toFixed(2)}
-                    </p>
-                  </div>
-                </>
-              ) : (
+              {attended && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Abonó
+                    Costo de la sesión
                   </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="number"
-                      value={noShowPaymentAmount}
-                      onChange={(e) => {
-                        const amount = Number(e.target.value);
-                        setNoShowPaymentAmount(amount);
-                      }}
-                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Este monto es para el registro del profesional y no se registrará como pago. Por cualquier duda o aviso, contactar al administrador.
+                  <p className="mt-1 text-sm text-gray-900">
+                    ${selectedAppointmentForFinish.sessionCost?.toFixed(2) || '0.00'}
                   </p>
                 </div>
               )}
@@ -1162,10 +1079,7 @@ const AppointmentsPage = () => {
                 onClick={() => {
                   setShowFinishAppointmentModal(false);
                   setSelectedAppointmentForFinish(null);
-                  setPaymentAmount(0);
-                  setNoShowPaymentAmount(0);
                   setAttended(true);
-                  setRemainingBalance(0);
                 }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
@@ -1173,11 +1087,7 @@ const AppointmentsPage = () => {
               </button>
               <button
                 onClick={() => handleFinishAppointment(selectedAppointmentForFinish.id, {
-                  attended,
-                  ...(attended 
-                    ? { paymentAmount, remainingBalance }
-                    : { noShowPaymentAmount }
-                  )
+                  attended
                 })}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -1199,19 +1109,18 @@ const AppointmentsPage = () => {
         title="Eliminar Cita"
         message={
           appointmentToDelete
-            ? `¿Estás seguro de que deseas eliminar la cita con ${
-                appointmentToDelete.patientName
-              } programada para el ${new Date(appointmentToDelete.date).toLocaleDateString(
-                'es-ES',
-                {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }
-              )}?`
+            ? `¿Estás seguro de que deseas eliminar la cita con ${appointmentToDelete.patientName
+            } programada para el ${new Date(appointmentToDelete.date).toLocaleDateString(
+              'es-ES',
+              {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }
+            )}?`
             : ''
         }
         confirmText="Eliminar"
