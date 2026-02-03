@@ -399,6 +399,7 @@ const updateAppointment = async (req, res) => {
         if (!prof) return;
 
         const currentTotal = toAmount(prof.saldoTotal) ?? 0;
+        const currentPend = toAmount(prof.saldoPendiente) ?? 0;
         const newTotal = round2(currentTotal + delta);
 
         let commissionInt = parseInt(prof.commission ?? 0, 10);
@@ -406,7 +407,8 @@ const updateAppointment = async (req, res) => {
         commissionInt = Math.max(0, Math.min(100, commissionInt));
         const commissionRate = commissionInt / 100;
 
-        const newPend = round2(newTotal * commissionRate);
+        const newSessionPend = round2(delta * commissionRate);
+        const newPend = round2(currentPend + newSessionPend);
 
         await prof.update(
           { saldoTotal: newTotal, saldoPendiente: newPend },

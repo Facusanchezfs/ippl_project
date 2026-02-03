@@ -384,13 +384,13 @@ const abonarComision = async (req, res) => {
     const prevSaldo = toAmount(professional.saldoPendiente);
     const rawNext = prevSaldo - amount;
 
-    const nextSaldo = rawNext <= 0 ? 0 : +rawNext.toFixed(2);
-    const paidInFull = nextSaldo === 0 && prevSaldo > 0;
+    const nextSaldo = +rawNext.toFixed(2);
+    const shouldResetTotal = nextSaldo <= 0;
 
     await professional.update(
       {
         saldoPendiente: nextSaldo,
-        saldoTotal: paidInFull ? 0 : professional.saldoTotal,
+        saldoTotal: shouldResetTotal ? 0 : professional.saldoTotal,
         updatedAt: new Date(),
       },
       { transaction: t }
@@ -409,7 +409,7 @@ const abonarComision = async (req, res) => {
     await t.commit();
     return sendSuccess(res, {
       saldoPendiente: nextSaldo,
-      paidInFull,
+      paidInFull: shouldResetTotal && prevSaldo > 0,
     }, 'Comisión abonada correctamente');
   } catch (error) {
     await t.rollback();
