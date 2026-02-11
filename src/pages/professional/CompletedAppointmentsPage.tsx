@@ -36,8 +36,7 @@ const CompletedAppointmentsPage = () => {
     
     try {
       setIsLoading(true);
-      const data = await appointmentsService.getProfessionalAppointments(user.id);
-      const completedAppointments = data.filter(appointment => appointment.status === 'completed');
+      const completedAppointments = await appointmentsService.getCompletedAppointments(user.id);
       setAppointments(completedAppointments);
     } catch (error) {
       console.error('Error al cargar las citas:', error);

@@ -48,7 +48,7 @@ const PsychologistDashboard = () => {
         userService.getUserById(parseNumber(user?.id))
       ]);
       setPatients(patientsData);
-      setAppointments(appointmentsData);
+      setAppointments(appointmentsData.appointments);
       setUserLoaded(userPromise);
     } catch (error) {
       console.error('Error al cargar datos:', error);

@@ -44,14 +44,27 @@ const AppointmentsPage = () => {
   const [attended, setAttended] = useState<boolean>(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  } | null>(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadAppointments();
-    if (user) {
-      loadPatients();
-    }
+    loadPatients();
   }, [user]);
+  
+  useEffect(() => {
+    loadAppointments();
+  }, [user, page, filterStatus]);
+  
+  
 
   const loadPatients = async () => {
     try {
@@ -67,19 +80,29 @@ const AppointmentsPage = () => {
 
   const loadAppointments = async () => {
     if (!user) return;
-
+  
     try {
       setIsLoading(true);
-      const data = await appointmentsService.getProfessionalAppointments(user.id);
-      setAppointments(data);
+  
+      const data = await appointmentsService.getProfessionalAppointments(
+        user.id,
+        page,
+        20,
+        filterStatus
+      );
+  
+      setAppointments(data.appointments);
+      setPagination(data.pagination || null);
+  
     } catch (error) {
-      console.error('Error al cargar las citas:', error);
-      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.APPOINTMENT_LOAD_FAILED);
-      toast.error(friendlyMessage);
+      console.error("Error al cargar las citas:", error);
+      toast.error("Error al cargar citas");
     } finally {
       setIsLoading(false);
     }
   };
+  
+  
 
   const combineLocalDateTime = (dateStr: string, timeStr?: string) => {
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -250,7 +273,7 @@ const AppointmentsPage = () => {
         );
 
       case "past":
-        return appointmentDateTime < now;
+        return appointment.status === "completed";
 
       case "all":
       default:
@@ -569,6 +592,42 @@ const AppointmentsPage = () => {
                     })}
                   </tbody>
                 </table>
+                {pagination && (
+                  <div className="flex justify-between items-center mt-6">
+
+                    {/* Prev */}
+                    <button
+                      disabled={!pagination.hasPrev}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium
+                        ${pagination.hasPrev
+                          ? "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed"
+                        }`}
+                    >
+                      ◀ Página anterior
+                    </button>
+
+                    {/* Info */}
+                    <span className="text-sm text-gray-600">
+                      Página {pagination.page} de {pagination.totalPages}
+                    </span>
+
+                    {/* Next */}
+                    <button
+                      disabled={!pagination.hasNext}
+                      onClick={() => setPage((p) => p + 1)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium
+                        ${pagination.hasNext
+                          ? "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed"
+                        }`}
+                    >
+                      Página siguiente ▶
+                    </button>
+                  </div>
+                )}
+
               </div>
             </div>
           </>

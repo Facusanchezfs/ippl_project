@@ -61,7 +61,15 @@ const getProfessionalAppointmentsSchema = Joi.object({
   params: Joi.object({
     professionalId: Joi.number().integer().positive().required(),
   }),
+
+  query: Joi.object({
+    page: Joi.number().integer().min(1).optional(),
+    limit: Joi.number().integer().min(1).max(100).optional(),
+    filter: Joi.string().valid('all', 'upcoming', 'past').optional(),
+  }).unknown(true),
+  
 });
+
 
 const getPatientAppointmentsSchema = Joi.object({
   params: Joi.object({

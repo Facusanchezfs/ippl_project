@@ -70,18 +70,66 @@ const getAllAppointments = async (req, res) => {
 const getProfessionalAppointments = async (req, res) => {
   try {
     const { professionalId } = req.params;
-    
+
+    // Pagination
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
-    
+
+    // Filter: all | upcoming | past
+    const filter = req.query.filter || 'all';
+
     if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
     if (limit < 1 || limit > 100)
       return sendError(res, 400, 'limit debe estar entre 1 y 100');
-    
+
     const offset = (page - 1) * limit;
 
+    // Base WHERE
+    let whereClause = {
+      active: true,
+      professionalId,
+    };
+
+    // Fecha actual
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm
+
+    // ✅ Aplicar filtros
+    if (filter === 'upcoming') {
+      whereClause = {
+        ...whereClause,
+        [Op.or]: [
+          // citas futuras
+          { date: { [Op.gt]: today } },
+
+          // citas de hoy pero más tarde
+          {
+            date: today,
+            startTime: { [Op.gte]: nowTime },
+          },
+        ],
+      };
+    }
+
+    if (filter === 'past') {
+      whereClause = {
+        ...whereClause,
+        [Op.or]: [
+          // citas anteriores
+          { date: { [Op.lt]: today } },
+
+          // citas de hoy pero ya pasaron
+          {
+            date: today,
+            startTime: { [Op.lt]: nowTime },
+          },
+        ],
+      };
+    }
+
+    // Query final
     const { count, rows } = await Appointment.findAndCountAll({
-      where: { active: true, professionalId },
+      where: whereClause,
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
@@ -109,6 +157,32 @@ const getProfessionalAppointments = async (req, res) => {
     return sendError(res, 500, 'Error al obtener citas');
   }
 };
+
+const getCompletedProfessionalAppointments = async (req, res) => {
+  try {
+    const { professionalId } = req.params;
+
+    const appointments = await Appointment.findAll({
+      where: {
+        professionalId,
+        status: "completed"
+      },
+      order: [
+        ["date", "DESC"],
+        ["startTime", "ASC"]
+      ]
+    });
+
+    return sendSuccess(res, {
+      appointments: toAppointmentDTOList(appointments)
+    });
+
+  } catch (error) {
+    logger.error("Error al obtener citas completadas:", error);
+    return sendError(res, 500, "Error al obtener citas completadas");
+  }
+};
+
 
 const getTodayProfessionalAppointments = async (req, res) => {
   try {
@@ -548,6 +622,7 @@ module.exports = {
   getAllAppointments,
   getProfessionalAppointments,
   getTodayProfessionalAppointments,
+  getCompletedProfessionalAppointments,
   getPatientAppointments,
   createAppointment,
   updateAppointment,

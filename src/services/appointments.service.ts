@@ -13,6 +13,19 @@ export interface CreateAppointmentDTO {
   sessionCost?: number;
 }
 
+export interface PaginatedAppointmentsResponse {
+  appointments: Appointment[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+
 class AppointmentsService {
   async getAllAppointments(): Promise<Appointment[]> {
     try {
@@ -36,16 +49,45 @@ class AppointmentsService {
     }
   }
 
-  async getProfessionalAppointments(professionalId: string): Promise<Appointment[]> {
+  async getProfessionalAppointments(
+    professionalId: string,
+    page: number = 1,
+    limit: number = 20,
+    filter: "all" | "upcoming" | "past" = "all"
+  ): Promise<PaginatedAppointmentsResponse> {
     try {
-      const response = await api.get(`/appointments/professional/${professionalId}`);
-      const appointments = response.data?.data?.appointments || response.data?.data || [];
-      return Array.isArray(appointments) ? appointments : [];
+      const response = await api.get(
+        `/appointments/professional/${professionalId}`,
+        {
+          params: { page, limit, filter }
+        }
+      );
+  
+      return response.data.data;
     } catch (error) {
-      console.error('Error fetching professional appointments:', error);
+      console.error("Error fetching professional appointments:", error);
+      return {
+        appointments: [],
+        pagination: undefined
+      };
+    }
+  }
+
+  async getCompletedAppointments(
+    professionalId: string
+  ): Promise<Appointment[]> {
+    try {
+      const response = await api.get(
+        `/appointments/professional/${professionalId}/completed`
+      );
+  
+      return response.data.data.appointments || [];
+    } catch (error) {
+      console.error("Error fetching completed appointments:", error);
       return [];
     }
   }
+  
 
     async getTodayProfessionalAppointments(professionalId: string): Promise<Appointment[]> {
     try {

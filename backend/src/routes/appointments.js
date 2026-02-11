@@ -7,6 +7,7 @@ const {
   getAllAppointments,
   getProfessionalAppointments,
   getTodayProfessionalAppointments,
+  getCompletedProfessionalAppointments,
   getPatientAppointments,
   createAppointment,
   updateAppointment,
@@ -21,6 +22,8 @@ router.use(verifyToken);
 
 router.get('/professional/:professionalId', validate(appointmentValidators.getProfessionalAppointments), getProfessionalAppointments);
 router.get('/professional/today/:professionalId', validate(appointmentValidators.getProfessionalAppointments), getTodayProfessionalAppointments);
+router.get( "/professional/:professionalId/completed", getCompletedProfessionalAppointments );
+
 router.get('/patient/:patientId', validate(appointmentValidators.getPatientAppointments), getPatientAppointments);
 router.get('/slots/:professionalId', validate(appointmentValidators.getAvailableSlots), getAvailableSlots);
 router.get('/upcoming', getUpcomingAppointments);
