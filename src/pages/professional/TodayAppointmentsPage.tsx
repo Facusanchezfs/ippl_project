@@ -167,7 +167,7 @@ const AppointmentsPage = () => {
 
       await appointmentsService.updateAppointment(selectedAppointment.id, {
         ...appointmentData,
-        status: 'scheduled'
+        status: appointmentData.status ?? selectedAppointment.status
       });
 
       await loadAppointments();
@@ -234,25 +234,38 @@ const AppointmentsPage = () => {
   };
 
   const filteredAppointments = appointments
-    .filter(appointment => appointment.status != 'completed')
-    .filter(appointment => {
-      const appointmentDateTime = combineLocalDateTime(appointment.date, appointment.startTime);
-      const now = new Date();
+  .filter((appointment) => {
+    const appointmentDateTime = combineLocalDateTime(
+      appointment.date,
+      appointment.startTime
+    );
 
-      switch (filterStatus) {
-        case 'upcoming':
-          return appointmentDateTime >= now;
-        case 'past':
-          return appointmentDateTime < now;
-        default:
-          return true;
-      }
-    })
-    .sort((a, b) => {
-      const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
-      const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
-      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-    });
+    const now = new Date();
+
+    switch (filterStatus) {
+      case "upcoming":
+        return (
+          appointmentDateTime >= now &&
+          appointment.status !== "completed"
+        );
+
+      case "past":
+        return appointmentDateTime < now;
+
+      case "all":
+      default:
+        return true;
+    }
+  })
+  .sort((a, b) => {
+    const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
+    const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
+
+    return sortOrder === "asc"
+      ? dateA - dateB
+      : dateB - dateA;
+  });
+
 
   if (isLoading) {
     return (

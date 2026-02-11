@@ -75,18 +75,13 @@ const getProfessionalAppointments = async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 20;
     
     if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
-    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+    if (limit < 1 || limit > 100)
+      return sendError(res, 400, 'limit debe estar entre 1 y 100');
     
     const offset = (page - 1) * limit;
 
-    const { count, rows: appts } = await Appointment.findAndCountAll({
+    const { count, rows } = await Appointment.findAndCountAll({
       where: { active: true, professionalId },
-      attributes: [
-        'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
-        'date', 'startTime', 'endTime', 'type', 'status',
-        'notes', 'audioNote', 'sessionCost', 'attended',
-        'paymentAmount', 'noShowPaymentAmount', 'remainingBalance', 'createdAt', 'updatedAt'
-      ],
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
@@ -98,21 +93,17 @@ const getProfessionalAppointments = async (req, res) => {
 
     const totalPages = Math.ceil(count / limit);
 
-    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
-    
-    if (hasPagination) {
-      return sendSuccess(res, {
-        appointments: toAppointmentDTOList(appts),
-        pagination: {
-          page,
-          limit,
-          total: count,
-          totalPages,
-        },
-      });
-    } else {
-      return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
-    }
+    return sendSuccess(res, {
+      appointments: toAppointmentDTOList(rows),
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    });
   } catch (error) {
     logger.error('Error al obtener citas del profesional:', error);
     return sendError(res, 500, 'Error al obtener citas');
