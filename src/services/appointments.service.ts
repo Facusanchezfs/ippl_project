@@ -87,6 +87,24 @@ class AppointmentsService {
       return [];
     }
   }
+
+  async getScheduledAppointments(
+    professionalId: string
+  ): Promise<Appointment[]> {
+    try {
+      const response = await api.get(
+        `/appointments/professional/${professionalId}/scheduled`
+      );
+  
+      // La respuesta puede venir en data.data.appointments o data.data
+      const appointments = response.data?.data?.appointments || response.data?.data || [];
+      return Array.isArray(appointments) ? appointments : [];
+    } catch (error) {
+      console.error("Error fetching scheduled appointments:", error);
+      return [];
+    }
+  }
+  
   
 
     async getTodayProfessionalAppointments(professionalId: string): Promise<Appointment[]> {

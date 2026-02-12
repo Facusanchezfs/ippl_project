@@ -184,6 +184,25 @@ const getCompletedProfessionalAppointments = async (req, res) => {
   }
 };
 
+const getScheduledAppointments = async (req, res) => {
+  const { professionalId } = req.params;
+
+  try {
+    const appointments = await Appointment.findAll({ // o .find() si Mongo
+      where: {
+        professionalId,
+        status: "scheduled", // solo las que están programadas
+      },
+      order: [["date", "ASC"], ["startTime", "ASC"]], // opcional, por orden cronológico
+    });
+
+    return res.json({ success: true, data: { appointments } });
+  } catch (error) {
+    console.error("Error fetching scheduled appointments:", error);
+    return res.status(500).json({ success: false, message: "No se pudieron obtener las citas programadas" });
+  }
+};
+
 
 const getTodayProfessionalAppointments = async (req, res) => {
   try {
@@ -624,6 +643,7 @@ module.exports = {
   getProfessionalAppointments,
   getTodayProfessionalAppointments,
   getCompletedProfessionalAppointments,
+  getScheduledAppointments,
   getPatientAppointments,
   createAppointment,
   updateAppointment,

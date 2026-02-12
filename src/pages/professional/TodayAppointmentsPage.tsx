@@ -449,7 +449,7 @@ const AppointmentsPage = () => {
                       >
                         <PencilIcon className="h-5 w-5" />
                       </button>
-
+                      {appointment.status === 'scheduled' && (
                       <button
                         onClick={() => {
                           setSelectedAppointmentForFinish(appointment);
@@ -461,7 +461,7 @@ const AppointmentsPage = () => {
                       >
                         <CheckCircleIcon className="h-5 w-5" />
                       </button>
-
+                      )}
                       <button
                         onClick={() => handleDeleteClick(appointment)}
                         className="text-red-600 hover:text-red-900 inline-flex items-center"
@@ -565,6 +565,7 @@ const AppointmentsPage = () => {
                             >
                               <PencilIcon className="h-5 w-5" />
                             </button>
+                            {appointment.status === 'scheduled' && (
                             <button
                               onClick={() => {
                                 setSelectedAppointmentForFinish(appointment);
@@ -576,6 +577,7 @@ const AppointmentsPage = () => {
                             >
                               <CheckCircleIcon className="h-5 w-5" />
                             </button>
+                            )}
                             <button
                               onClick={() => handleDeleteClick(appointment)}
                               className="text-red-600 hover:text-red-900"
@@ -861,6 +863,7 @@ const AppointmentsPage = () => {
                       type="date"
                       name="date"
                       required
+                      defaultValue={selectedAppointment.date}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
@@ -875,6 +878,7 @@ const AppointmentsPage = () => {
                       min="06:00"
                       max="22:00"
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      defaultValue={selectedAppointment.startTime}
                     />
                   </div>
 
@@ -924,23 +928,11 @@ const AppointmentsPage = () => {
                       required
                       min="0"
                       step="0.01"
-                      defaultValue={selectedAppointment.sessionCost}
                       className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       placeholder="0.00"
+                      defaultValue={selectedAppointment.sessionCost}
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Notas
-                  </label>
-                  <textarea
-                    name="notes"
-                    rows={3}
-                    defaultValue={selectedAppointment.notes}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  ></textarea>
                 </div>
               </div>
 

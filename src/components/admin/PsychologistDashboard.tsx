@@ -26,7 +26,8 @@ const PsychologistDashboard = () => {
   const { user, logout } = useAuth();
   const [userLoaded, setUserLoaded] = useState<User>();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
+  const [scheduledAppointments, setScheduledAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -42,22 +43,31 @@ const PsychologistDashboard = () => {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [patientsData, appointmentsData, userPromise] = await Promise.all([
+  
+      const [patientsData, completed, scheduled, userPromise] = await Promise.all([
         patientsService.getProfessionalPatients(user!.id),
-        appointmentsService.getProfessionalAppointments(user!.id),
+        appointmentsService.getCompletedAppointments(user!.id),
+        appointmentsService.getScheduledAppointments(user!.id),
         userService.getUserById(parseNumber(user?.id))
       ]);
+  
       setPatients(patientsData);
-      setAppointments(appointmentsData.appointments);
+      setCompletedAppointments(completed);
+      setScheduledAppointments(scheduled);
       setUserLoaded(userPromise);
+  
     } catch (error) {
       console.error('Error al cargar datos:', error);
-      const friendlyMessage = getFriendlyErrorMessage(error, 'No se pudieron cargar los datos. Intenta recargar la página.');
+      const friendlyMessage = getFriendlyErrorMessage(
+        error,
+        'No se pudieron cargar los datos. Intenta recargar la página.'
+      );
       toast.error(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
   };
+  
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -100,12 +110,11 @@ const PsychologistDashboard = () => {
   a.getDate() === b.getDate();
 
   const activePatients = patients.filter(p => p.status === 'active');
-  const completedAppointments = appointments.filter(a => a.status === 'completed');
-  const todayAppointments = appointments.filter(a => {
-  const appointmentDate = toLocalDateFromYMD(a.date);
+  const todayAppointments = scheduledAppointments.filter(a => {
+    const appointmentDate = toLocalDateFromYMD(a.date);
     const today = new Date();
-    return isSameLocalDay(appointmentDate, today) && a.status !== 'completed';
-  });
+    return isSameLocalDay(appointmentDate, today);
+  });  
 
   if (isLoading) {
     return (
