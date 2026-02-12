@@ -165,7 +165,8 @@ const getCompletedProfessionalAppointments = async (req, res) => {
     const appointments = await Appointment.findAll({
       where: {
         professionalId,
-        status: "completed"
+        status: "completed",
+        active: true
       },
       order: [
         ["date", "DESC"],

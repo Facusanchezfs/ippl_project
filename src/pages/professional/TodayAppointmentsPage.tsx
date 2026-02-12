@@ -262,17 +262,15 @@ const AppointmentsPage = () => {
       appointment.date,
       appointment.startTime
     );
-
     const now = new Date();
 
     switch (filterStatus) {
       case "upcoming":
-        return (
-          appointmentDateTime >= now &&
-          appointment.status !== "completed"
-        );
+        // Solo citas futuras que estén realmente programadas
+        return appointmentDateTime >= now && appointment.status === "scheduled";
 
       case "past":
+        // Solo citas completadas
         return appointment.status === "completed";
 
       case "all":
@@ -284,10 +282,9 @@ const AppointmentsPage = () => {
     const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
     const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
 
-    return sortOrder === "asc"
-      ? dateA - dateB
-      : dateB - dateA;
+    return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
   });
+
 
 
   if (isLoading) {
