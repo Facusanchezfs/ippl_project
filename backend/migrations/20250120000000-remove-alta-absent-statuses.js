@@ -3,6 +3,30 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // FASE 0: Verificar que las tablas necesarias existan
+    // Esta migración fue diseñada para entornos donde ya existen las tablas
+    // Patients y StatusRequests. En una base recién creada (migraciones desde cero)
+    // estas tablas aún no existen al momento de ejecutar esta migración, por lo que
+    // debemos hacerla "segura" y saltearla en ese caso.
+
+    const [patientsTable] = await queryInterface.sequelize.query(`
+      SHOW TABLES LIKE 'Patients';
+    `);
+
+    const [statusRequestsTable] = await queryInterface.sequelize.query(`
+      SHOW TABLES LIKE 'StatusRequests';
+    `);
+
+    if (!patientsTable.length || !statusRequestsTable.length) {
+      // Si alguna de las tablas no existe, no hay nada que migrar todavía.
+      // Simplemente salimos para permitir que las migraciones de creación
+      // de tablas se ejecuten sin errores en entornos nuevos.
+      console.log(
+        '[20250120000000-remove-alta-absent-statuses] Tablas Patients/StatusRequests no existen, se omite migración de datos.'
+      );
+      return;
+    }
+
     // FASE 1: Migrar datos existentes antes de modificar ENUMs
     
     // 1.1: Migrar pacientes con status='alta' a 'active' y setear activatedAt si no existe

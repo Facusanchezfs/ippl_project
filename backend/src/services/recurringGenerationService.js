@@ -11,28 +11,32 @@ const logger = require('../utils/logger');
  * @returns {string} Fecha en formato YYYY-MM-DD
  */
 function calculateNextDate(lastDate, frequency) {
-  const date = new Date(lastDate);
-  const nextDate = new Date(date);
+  // Parsear manualmente para evitar problemas de timezone
+  const [year, month, day] = lastDate.split('-').map(Number);
+  const nextDate = new Date(year, month - 1, day);
 
   switch (frequency) {
     case 'weekly':
       nextDate.setDate(nextDate.getDate() + 7);
       break;
+
     case 'biweekly':
       nextDate.setDate(nextDate.getDate() + 14);
       break;
+
     case 'monthly':
       nextDate.setMonth(nextDate.getMonth() + 1);
       break;
+
     default:
       throw new Error(`Frecuencia no válida: ${frequency}`);
   }
 
-  // Formatear como YYYY-MM-DD
-  const year = nextDate.getFullYear();
-  const month = String(nextDate.getMonth() + 1).padStart(2, '0');
-  const day = String(nextDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const y = nextDate.getFullYear();
+  const m = String(nextDate.getMonth() + 1).padStart(2, '0');
+  const d = String(nextDate.getDate()).padStart(2, '0');
+
+  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -157,17 +161,17 @@ async function generateRecurringAppointments() {
           status: 'scheduled',
           notes: null,
           audioNote: null,
-          sessionCost: null,
+          sessionCost: baseAppointment.sessionCost,
           attended: null,
           paymentAmount: null,
-          remainingBalance: null,
+          remainingBalance: baseAppointment.sessionCost,
           recurringAppointmentId: recurrence.id,
           active: true,
         });
 
         createdCount++;
         logger.info(
-          `[RecurringGeneration] Creada cita para paciente ${recurrence.patientId} con profesional ${recurrence.professionalId} en ${nextDate} ${baseAppointment.startTime}`
+          `[RecurringGeneration] Creada cita para paciente ${recurrence.patientId} con profesional ${recurrence.professionalId} en ${nextDate} ${baseAppointment.startTime}, con id: ${newAppointment.id}`
         );
       } catch (error) {
         // Aislar errores: un fallo no detiene el procesamiento de otras recurrencias

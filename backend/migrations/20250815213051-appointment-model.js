@@ -76,6 +76,10 @@ module.exports = {
         type: Sequelize.DECIMAL(12, 2),
         allowNull: true,
       },
+      noShowPaymentAmount: {
+        type: Sequelize.DECIMAL(12, 2),
+        allowNull: true,
+      },
       remainingBalance: {
         type: Sequelize.DECIMAL(12, 2),
         allowNull: true,
