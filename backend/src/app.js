@@ -22,6 +22,8 @@ const activitiesRouter = require('./routes/activities');
 const paymentsRouter = require('./routes/payments');
 const derivationsRouter = require('./routes/derivations');
 const reportsRouter = require('./routes/reports');
+const recurringAppointmentsRouter = require('./routes/recurringAppointments');
+require('./jobs/recurringAppointmentsCron');
 
 const app = express();
 
@@ -212,6 +214,7 @@ app.use('/api/activities', activitiesRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/derivations', derivationsRouter);
 app.use('/api/admin/reports', reportsRouter);
+app.use('/api/recurring-appointments', recurringAppointmentsRouter);
 
 app.use(errorLogger);
 
