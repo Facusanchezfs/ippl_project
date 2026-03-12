@@ -9,6 +9,8 @@ import toast from 'react-hot-toast';
 import Modal from '../Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import frequencyRequestService, { FrequencyRequest } from '../../services/frequencyRequest.service';
+import appointmentsService from '../../services/appointments.service';
+import recurringAppointmentsService from '../../services/recurringAppointments.service';
 
 interface Professional {
   id: string;
@@ -350,15 +352,79 @@ interface ViewDescriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
   patient: Patient;
+  professionals: Professional[];
+  onUpdatePatient: (id: string, data: any) => Promise<void>;
 }
 
-const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({ isOpen, onClose, patient }) => {
+const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
+  isOpen,
+  onClose,
+  patient,
+  professionals,
+  onUpdatePatient,
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState<Patient['status']>(patient.status);
+  const [professionalId, setProfessionalId] = useState<string | undefined>(patient.professionalId);
+  const [sessionFrequency, setSessionFrequency] = useState<Patient['sessionFrequency'] | ''>(patient.sessionFrequency || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Mantener el estado local sincronizado cuando cambia el paciente en props
+  useEffect(() => {
+    setStatus(patient.status);
+    setProfessionalId(patient.professionalId);
+    setSessionFrequency(patient.sessionFrequency || '');
+  }, [patient]);
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setStatus(patient.status);
+    setProfessionalId(patient.professionalId);
+    setSessionFrequency(patient.sessionFrequency || '');
+  };
+
+  const handleSave = async () => {
+    const payload: any = {};
+
+    if (status !== patient.status) {
+      payload.status = status;
+    }
+
+    if (professionalId && professionalId !== patient.professionalId) {
+      const selectedProf = professionals.find((p) => String(p.id) === String(professionalId));
+      payload.professionalId = professionalId;
+      if (selectedProf) {
+        payload.professionalName = selectedProf.name;
+      }
+    }
+
+    if (sessionFrequency && sessionFrequency !== patient.sessionFrequency) {
+      payload.sessionFrequency = sessionFrequency;
+    }
+
+    // Si no hay cambios, no llamar a la API
+    if (Object.keys(payload).length === 0) {
+      setIsEditing(false);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await onUpdatePatient(patient.id, payload);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error al actualizar paciente:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900">
-            Descripción del Paciente
+            Detalle del Paciente
           </h3>
           <button
             onClick={onClose}
@@ -370,17 +436,164 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({ isOpen, onC
             </svg>
           </button>
         </div>
-        <div className="mt-4">
-          <div className="mb-4">
-            <h4 className="text-sm font-medium text-gray-700">Nombre del Paciente</h4>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Nombre
+            </label>
             <p className="mt-1 text-lg text-gray-900">{patient.name}</p>
           </div>
+
           <div>
-            <h4 className="text-sm font-medium text-gray-700">Descripción</h4>
-            <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-              <p className="text-gray-900 whitespace-pre-wrap">{patient.description || 'No hay descripción disponible.'}</p>
+            <label className="block text-sm font-medium text-gray-700">
+              Estado
+            </label>
+            {isEditing ? (
+              <select
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as 'active' | 'pending' | 'inactive')
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="active">Activo</option>
+                <option value="pending">Pendiente</option>
+                <option value="inactive">Inactivo</option>
+              </select>
+            ) : (
+              <span
+                className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  patient.status === 'active'
+                    ? 'bg-green-100 text-green-800'
+                    : patient.status === 'pending'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}
+              >
+                {patient.status === 'active'
+                  ? 'Activo'
+                  : patient.status === 'pending'
+                  ? 'Pendiente'
+                  : 'Inactivo'}
+              </span>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Profesional
+            </label>
+            {isEditing ? (
+              <select
+                value={professionalId || ''}
+                onChange={(e) =>
+                  setProfessionalId(e.target.value || undefined)
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="">No asignado</option>
+                {professionals.map((prof) => (
+                  <option key={prof.id} value={prof.id}>
+                    {prof.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {patient.professionalName || 'No asignado'}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Frecuencia de sesiones
+            </label>
+            {isEditing ? (
+              <select
+                value={sessionFrequency}
+                onChange={(e) =>
+                  setSessionFrequency(
+                    e.target.value as 'weekly' | 'biweekly' | 'monthly' | ''
+                  )
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Sin frecuencia</option>
+                <option value="weekly">Semanal</option>
+                <option value="biweekly">Quincenal</option>
+                <option value="monthly">Mensual</option>
+              </select>
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {getFrequencyLabel(patient.sessionFrequency)}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Próxima cita
+            </label>
+            <p className="mt-1 text-sm text-gray-900">
+              {patient.nextAppointment
+                ? new Date(patient.nextAppointment).toLocaleString()
+                : 'Sin próxima cita registrada'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Costo de la sesión
+            </label>
+            <p className="mt-1 text-sm text-gray-900">
+              {typeof patient.sessionCost === 'number'
+                ? `$${patient.sessionCost.toFixed(2)}`
+                : 'No informado'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Descripción
+            </label>
+            <div className="mt-2 p-4 bg-gray-50 rounded-lg max-h-48 overflow-y-auto">
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {patient.description || 'No hay descripción disponible.'}
+              </p>
             </div>
           </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            >
+              Editar
+            </button>
+          )}
         </div>
       </div>
     </Modal>
@@ -512,27 +725,112 @@ const StatusRequestModal: React.FC<StatusRequestModalProps> = ({
 interface NewPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (name: string, description: string) => Promise<void>;
+  onSubmit: (data: {
+    name: string;
+    description: string;
+    status?: 'active' | 'pending' | 'inactive';
+    professionalId?: string;
+    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    nextAppointmentDate?: string;
+    nextAppointmentStartTime?: string;
+    nextAppointmentEndTime?: string;
+    sessionCost?: number;
+  }) => Promise<void>;
   showDescription?: boolean;
+  professionals: Professional[];
 }
 
-const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSubmit, showDescription = false }) => {
+const NewPatientModal: React.FC<NewPatientModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  showDescription = false,
+  professionals,
+}) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [status, setStatus] = useState<'active' | 'pending' | 'inactive'>('pending');
+  const [professionalId, setProfessionalId] = useState('');
+  const [sessionFrequency, setSessionFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
+  const [nextAppointmentDate, setNextAppointmentDate] = useState('');
+  const [nextAppointmentStartTime, setNextAppointmentStartTime] = useState('');
+  const [nextAppointmentEndTime, setNextAppointmentEndTime] = useState('');
+  const [sessionDuration, setSessionDuration] = useState<30 | 60>(60);
+  const [sessionCost, setSessionCost] = useState<number | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
+
+  const calculateEndTime = (startTime: string, durationMinutes: number = 60): string => {
+    if (!startTime) return '';
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60) % 24;
+    const endMinutes = totalMinutes % 60;
+    return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+  };
+
+  const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const startTime = e.target.value;
+    setNextAppointmentStartTime(startTime);
+    if (startTime) {
+      setNextAppointmentEndTime(calculateEndTime(startTime, sessionDuration));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setHasTriedSubmit(true);
+
     if (!name.trim()) {
       toast.error('Por favor, ingresa el nombre del paciente');
       return;
     }
 
+    const isActiveWithFrequency = status === 'active' && !!sessionFrequency;
+
+    // Validar que si hay frecuencia para un paciente ACTIVO, también haya próxima cita completa
+    if (isActiveWithFrequency && !nextAppointmentDate) {
+      toast.error('Si defines una frecuencia de sesiones, debes especificar la fecha de la próxima cita');
+      return;
+    }
+
+    // Validar que si hay próxima cita, también haya profesional
+    if (isActiveWithFrequency && nextAppointmentDate && !professionalId) {
+      toast.error('Debes seleccionar un profesional para crear la próxima cita');
+      return;
+    }
+
+    // Validar que si hay próxima cita, también haya hora de inicio
+    if (isActiveWithFrequency && nextAppointmentDate && !nextAppointmentStartTime) {
+      toast.error('Debes especificar la hora de inicio de la próxima cita');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await onSubmit(name, description);
+      await onSubmit({
+        name,
+        description,
+        status,
+        professionalId: professionalId || undefined,
+        sessionFrequency: sessionFrequency || undefined,
+        nextAppointmentDate: nextAppointmentDate || undefined,
+        nextAppointmentStartTime: nextAppointmentStartTime || undefined,
+        nextAppointmentEndTime: nextAppointmentEndTime || undefined,
+        sessionCost: sessionCost !== '' ? Number(sessionCost) : undefined,
+      });
+      // Reset form
       setName('');
       setDescription('');
+      setStatus('pending');
+      setProfessionalId('');
+      setSessionFrequency('');
+      setNextAppointmentDate('');
+      setNextAppointmentStartTime('');
+      setNextAppointmentEndTime('');
+      setSessionDuration(60);
+      setSessionCost('');
+      setHasTriedSubmit(false);
       onClose();
     } catch (error) {
       console.error('Error al crear paciente:', error);
@@ -553,7 +851,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nombre del Paciente
+              Nombre del Paciente *
             </label>
             <input
               type="text"
@@ -565,6 +863,173 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
               required
             />
           </div>
+
+          <div>
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+              Estado
+            </label>
+            <select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'active' | 'pending' | 'inactive')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="pending">Pendiente</option>
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="professionalId" className="block text-sm font-medium text-gray-700">
+              Profesional
+            </label>
+            <select
+              id="professionalId"
+              value={professionalId}
+              onChange={(e) => setProfessionalId(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar profesional</option>
+              {professionals.map((prof) => (
+                <option key={prof.id} value={prof.id}>
+                  {prof.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="sessionFrequency" className="block text-sm font-medium text-gray-700">
+              Frecuencia de Sesiones
+            </label>
+            <select
+              id="sessionFrequency"
+              value={sessionFrequency}
+              onChange={(e) => setSessionFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly' | '')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Sin frecuencia (solo primera cita)</option>
+              <option value="weekly">Semanal</option>
+              <option value="biweekly">Quincenal</option>
+              <option value="monthly">Mensual</option>
+            </select>
+            {sessionFrequency && (
+              <p className="mt-1 text-sm text-amber-600">
+                ⚠️ Si defines una frecuencia, debes especificar la fecha de la próxima cita
+              </p>
+            )}
+          </div>
+
+          {sessionFrequency && (
+            <>
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Próxima Cita</h4>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="nextAppointmentDate" className="block text-sm font-medium text-gray-700">
+                      Fecha de la Próxima Cita *
+                    </label>
+                    <input
+                      type="date"
+                      id="nextAppointmentDate"
+                      value={nextAppointmentDate}
+                      onChange={(e) => setNextAppointmentDate(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      required={!!sessionFrequency}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    {hasTriedSubmit && status === 'active' && sessionFrequency && !nextAppointmentDate && (
+                      <p className="mt-1 text-xs text-red-600">
+                        Debes ingresar la fecha de la próxima cita.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label htmlFor="nextAppointmentStartTime" className="block text-sm font-medium text-gray-700">
+                        Hora de inicio *
+                      </label>
+                      <input
+                        type="time"
+                        id="nextAppointmentStartTime"
+                        value={nextAppointmentStartTime}
+                        onChange={handleStartTimeChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required={!!nextAppointmentDate && status === 'active' && !!sessionFrequency}
+                        step={60}
+                      />
+                      {hasTriedSubmit && status === 'active' && sessionFrequency && !nextAppointmentStartTime && (
+                        <p className="mt-1 text-xs text-red-600">
+                          Debes ingresar la hora de inicio de la próxima cita.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="sessionDuration" className="block text-sm font-medium text-gray-700">
+                        Duración
+                      </label>
+                      <select
+                        id="sessionDuration"
+                        value={sessionDuration}
+                        onChange={(e) => {
+                          const value = Number(e.target.value) as 30 | 60;
+                          setSessionDuration(value);
+                          if (nextAppointmentStartTime) {
+                            setNextAppointmentEndTime(calculateEndTime(nextAppointmentStartTime, value));
+                          }
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      >
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>60 minutos</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="nextAppointmentEndTime" className="block text-sm font-medium text-gray-700">
+                        Hora de fin
+                      </label>
+                      <input
+                        type="time"
+                        id="nextAppointmentEndTime"
+                        value={nextAppointmentEndTime}
+                        onChange={(e) => setNextAppointmentEndTime(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required={!!nextAppointmentDate && status === 'active' && !!sessionFrequency}
+                        step={60}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="sessionCost" className="block text-sm font-medium text-gray-700">
+                      Costo de la Sesión
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">$</span>
+                      </div>
+                      <input
+                        type="number"
+                        id="sessionCost"
+                        value={sessionCost}
+                        onChange={(e) => setSessionCost(e.target.value === '' ? '' : Number(e.target.value))}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {showDescription && (
           <div>
@@ -594,7 +1059,13 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <button
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting ||
+                !name.trim() ||
+                (status === 'active' &&
+                  !!sessionFrequency &&
+                  (!professionalId || !nextAppointmentDate || !nextAppointmentStartTime))
+              }
             >
               {isSubmitting ? 'Creando...' : 'Crear Paciente'}
             </button>
@@ -961,20 +1432,107 @@ const PatientManagement = () => {
     setIsAssignModalOpen(true);
   };
 
-  const handleAddPatient = async (name: string, description: string) => {
+  const handleAddPatient = async (data: {
+    name: string;
+    description: string;
+    status?: 'active' | 'pending' | 'inactive';
+    professionalId?: string;
+    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    nextAppointmentDate?: string;
+    nextAppointmentStartTime?: string;
+    nextAppointmentEndTime?: string;
+    sessionCost?: number;
+  }) => {
     try {
+      // Paso 1: Crear paciente
       const newPatient: CreatePatientDTO = {
-        name,
-        description
+        name: data.name,
+        description: data.description,
       };
-      await patientsService.addPatient(newPatient);
+      
+      const createdPatient = await patientsService.addPatient(newPatient);
+      const patientId = createdPatient.id;
+
+      // Si hay professionalId, asignar el paciente
+      if (data.professionalId) {
+        try {
+          await patientsService.assignPatient({
+            patientId,
+            professionalId: data.professionalId,
+            status: data.status,
+            sessionFrequency: data.sessionFrequency,
+          });
+        } catch (assignError) {
+          console.error('Error al asignar paciente:', assignError);
+          // Continuar aunque falle la asignación, el paciente ya está creado
+        }
+      }
+
+      // Paso 2: Crear la primera cita si hay fecha y profesional
+      let appointmentId: string | null = null;
+      if (
+        data.status === 'active' &&
+        data.nextAppointmentDate &&
+        data.professionalId &&
+        data.nextAppointmentStartTime
+      ) {
+        try {
+          const appointment = await appointmentsService.createAppointment({
+            patientId,
+            professionalId: data.professionalId,
+            date: data.nextAppointmentDate,
+            startTime: data.nextAppointmentStartTime,
+            endTime: data.nextAppointmentEndTime || calculateEndTime(data.nextAppointmentStartTime, 60),
+            type: 'regular',
+            status: 'scheduled',
+            sessionCost: data.sessionCost,
+          });
+          appointmentId = appointment.id;
+          toast.success('Paciente y primera cita creados exitosamente');
+        } catch (appointmentError) {
+          console.error('Error al crear la primera cita:', appointmentError);
+          toast.error('Paciente creado, pero hubo un error al crear la primera cita. Puedes crearla manualmente después.');
+          // No lanzar error, el paciente ya está creado
+        }
+      }
+
+      // Paso 3: Registrar recurrencia si hay sessionFrequency y appointmentId
+      if (data.status === 'active' && data.sessionFrequency && appointmentId) {
+        try {
+          await recurringAppointmentsService.createRecurringAppointment({
+            baseAppointmentId: Number(appointmentId),
+            frequency: data.sessionFrequency,
+          });
+          toast.success('Recurrencia configurada correctamente. El CRON generará las citas futuras automáticamente.');
+        } catch (recurrenceError) {
+          console.error('Error al crear recurrencia:', recurrenceError);
+          toast.error('Paciente y cita creados, pero hubo un error al configurar la recurrencia. Puedes configurarla manualmente después.');
+          // No lanzar error, el paciente y la cita ya están creados
+        }
+      } else if (data.sessionFrequency && !appointmentId) {
+        toast.error('No se pudo crear la recurrencia porque no se pudo crear la primera cita. Por favor, crea la cita manualmente y luego configura la recurrencia.');
+      }
+
       await loadData();
-      toast.success('Paciente agregado exitosamente');
+      
+      if (!data.firstAppointmentDate) {
+        toast.success('Paciente agregado exitosamente');
+      }
     } catch (error) {
       console.error('Error al agregar paciente:', error);
       toast.error('Error al agregar el paciente');
       throw error;
     }
+  };
+
+  // Helper function para calcular hora de fin
+  const calculateEndTime = (startTime: string, durationMinutes: number = 60): string => {
+    if (!startTime) return '';
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60) % 24;
+    const endMinutes = totalMinutes % 60;
+    return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
   };
 
 
@@ -1289,7 +1847,7 @@ const PatientManagement = () => {
                     <button
                       onClick={() => openViewDescriptionModal(patient)}
                       className="text-gray-600 hover:text-gray-900"
-                      title="Ver Descripción"
+                      title="Ver paciente"
                     >
                       <EyeIcon className="h-5 w-5" />
                     </button>
@@ -1400,7 +1958,7 @@ const PatientManagement = () => {
                             <button
                               onClick={() => openViewDescriptionModal(patient)}
                               className="text-gray-600 hover:text-gray-900"
-                              title="Ver Descripción"
+                              title="Ver paciente"
                             >
                               <EyeIcon className="h-5 w-5" />
                             </button>
@@ -1458,6 +2016,7 @@ const PatientManagement = () => {
         isOpen={isNewPatientModalOpen}
         onClose={() => setIsNewPatientModalOpen(false)}
         onSubmit={handleAddPatient}
+        professionals={professionals}
       />
 
       {isDeleteModalOpen && (
@@ -1530,6 +2089,20 @@ const PatientManagement = () => {
             setSelectedPatient(null);
           }}
           patient={selectedPatient}
+          professionals={professionals}
+          onUpdatePatient={async (id, data) => {
+            try {
+              const updated = await patientsService.updatePatient(id, data);
+              setPatients((prev) =>
+                prev.map((p) => (p.id === updated.id ? updated : p))
+              );
+              toast.success('Paciente actualizado correctamente');
+            } catch (error) {
+              console.error('Error al actualizar paciente:', error);
+              toast.error('Error al actualizar el paciente');
+              throw error;
+            }
+          }}
         />
       )}
 
