@@ -10,6 +10,7 @@ export type ActivityType =
   | 'FREQUENCY_CHANGE_REQUESTED'
   | 'FREQUENCY_CHANGE_APPROVED'
   | 'FREQUENCY_CHANGE_REJECTED'
+  | 'APPOINTMENT_CANCELLATION_REQUESTED'
   | 'NEW_MESSAGE';
 
 export interface Activity {
@@ -26,11 +27,15 @@ export interface Activity {
     postId?: string;
     postTitle?: string;
     appointmentId?: string;
+    cancellationRequestId?: string;
     reason?: string;
     adminResponse?: string;
     currentFrequency?: string;
     requestedFrequency?: string;
     newFrequency?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
     [k: string]: unknown;
   };
   read: boolean;

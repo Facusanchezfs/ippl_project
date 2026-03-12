@@ -92,7 +92,8 @@ async function getActivities(req, res) {
       'FREQUENCY_CHANGE_REQUEST',
       'FREQUENCY_CHANGE_REQUESTED',
       'FREQUENCY_CHANGE_APPROVED',
-      'FREQUENCY_CHANGE_REJECTED'
+      'FREQUENCY_CHANGE_REJECTED',
+      'APPOINTMENT_CANCELLATION_REQUESTED',
     ];
 
     const page = parseInt(req.query.page, 10) || 1;

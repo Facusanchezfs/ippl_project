@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import appointmentsService from '../../services/appointments.service';
+import appointmentCancellationRequestService from '../../services/appointmentCancellationRequest.service';
 import patientsService from '../../services/patients.service';
 import { Appointment, AppointmentStatus } from '../../types/Appointment';
 import { Patient } from '../../types/Patient';
@@ -44,6 +45,11 @@ const AppointmentsPage = () => {
   const [attended, setAttended] = useState<boolean>(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
+  const [pendingCancellationIds, setPendingCancellationIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<{
     page: number;
@@ -63,8 +69,6 @@ const AppointmentsPage = () => {
   useEffect(() => {
     loadAppointments();
   }, [user, page, filterStatus]);
-  
-  
 
   const loadPatients = async () => {
     try {
@@ -407,6 +411,11 @@ const AppointmentsPage = () => {
                       >
                         {status.label}
                       </span>
+                      {pendingCancellationIds.has(appointment.id) && appointment.status === 'scheduled' && (
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                          Cancelación solicitada
+                        </span>
+                      )}
                       <span className="text-xs rounded px-2 py-1 bg-gray-100 text-gray-700">
                         {appointment.type === 'regular'
                           ? 'Regular'
@@ -469,6 +478,19 @@ const AppointmentsPage = () => {
                       >
                         <TrashIcon className="h-5 w-5" />
                       </button>
+                      {appointment.status === 'scheduled' && (
+                        <button
+                          onClick={() => {
+                            setAppointmentToCancel(appointment);
+                            setCancelReason('');
+                            setShowCancelModal(true);
+                          }}
+                          className="text-orange-600 hover:text-orange-800 inline-flex items-center text-sm font-medium"
+                          title="Solicitar cancelación"
+                        >
+                          Solicitar cancelación
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -528,11 +550,18 @@ const AppointmentsPage = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.class}`}
-                            >
-                              {status.label}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span
+                                className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.class}`}
+                              >
+                                {status.label}
+                              </span>
+                              {pendingCancellationIds.has(appointment.id) && appointment.status === 'scheduled' && (
+                                <span className="px-2 py-0.5 inline-flex text-xs leading-4 font-medium rounded-full bg-orange-100 text-orange-800">
+                                  Cancelación solicitada
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {appointment.type === 'regular'
@@ -580,11 +609,24 @@ const AppointmentsPage = () => {
                             )}
                             <button
                               onClick={() => handleDeleteClick(appointment)}
-                              className="text-red-600 hover:text-red-900"
+                              className="text-red-600 hover:text-red-900 mr-4"
                               title="Eliminar cita"
                             >
                               <TrashIcon className="h-5 w-5" />
                             </button>
+                            {appointment.status === 'scheduled' && (
+                              <button
+                                onClick={() => {
+                                  setAppointmentToCancel(appointment);
+                                  setCancelReason('');
+                                  setShowCancelModal(true);
+                                }}
+                                className="text-orange-600 hover:text-orange-800 text-sm font-medium"
+                                title="Solicitar cancelación"
+                              >
+                                Solicitar cancelación
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1188,6 +1230,115 @@ const AppointmentsPage = () => {
         cancelText="Cancelar"
         type="danger"
       />
+
+      {/* Modal para solicitar cancelación de cita */}
+      {showCancelModal && appointmentToCancel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Solicitar cancelación de cita</h2>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setAppointmentToCancel(null);
+                  setCancelReason('');
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Estás solicitando la cancelación de la cita con{' '}
+              <span className="font-medium">{appointmentToCancel.patientName}</span> el{' '}
+              {formatDateTime(appointmentToCancel.date, appointmentToCancel.startTime)}.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const trimmed = cancelReason.trim();
+                if (!trimmed) {
+                  toast.error('El motivo de cancelación es obligatorio');
+                  return;
+                }
+                if (trimmed.length > 1000) {
+                  toast.error('El motivo de cancelación no puede superar los 1000 caracteres');
+                  return;
+                }
+
+                try {
+                  setIsSubmittingCancellation(true);
+                  await appointmentCancellationRequestService.create(
+                    appointmentToCancel.id,
+                    trimmed
+                  );
+
+                  // Agregar al estado local para mostrar el badge
+                  setPendingCancellationIds((prev) => {
+                    const next = new Set(prev);
+                    next.add(appointmentToCancel.id);
+                    return next;
+                  });
+
+                  setShowCancelModal(false);
+                  setAppointmentToCancel(null);
+                  setCancelReason('');
+                  toast.success('Solicitud de cancelación enviada al administrador');
+                } catch (error: any) {
+                  console.error('Error al crear solicitud de cancelación:', error);
+                  const backendMsg = error?.response?.data?.error;
+                  toast.error(
+                    backendMsg || 'Error al enviar la solicitud de cancelación'
+                  );
+                } finally {
+                  setIsSubmittingCancellation(false);
+                }
+              }}
+            >
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo de cancelación
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={4}
+                  maxLength={1000}
+                  disabled={isSubmittingCancellation}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  {cancelReason.length} / 1000 caracteres
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setAppointmentToCancel(null);
+                    setCancelReason('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  disabled={isSubmittingCancellation}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  disabled={isSubmittingCancellation}
+                >
+                  {isSubmittingCancellation ? 'Enviando...' : 'Enviar solicitud'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

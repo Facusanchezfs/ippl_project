@@ -8,6 +8,7 @@ import ConfirmationModal from '../components/common/ConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 import frequencyRequestService from '../services/frequencyRequest.service';
 import statusRequestService from '../services/statusRequest.service';
+import appointmentCancellationRequestService from '../services/appointmentCancellationRequest.service';
 
 const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
   'PATIENT_DISCHARGE_REQUEST',
@@ -17,7 +18,8 @@ const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
   'FREQUENCY_CHANGE_REQUEST',
   'FREQUENCY_CHANGE_REQUESTED',
   'FREQUENCY_CHANGE_APPROVED',
-  'FREQUENCY_CHANGE_REJECTED'
+  'FREQUENCY_CHANGE_REJECTED',
+  'APPOINTMENT_CANCELLATION_REQUESTED'
 ];
 
 const translateFrequency = (freq?: string) => {
@@ -78,6 +80,36 @@ const translateActivity = (activity: Activity): Activity => {
     };
   }
 
+  if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
+    const professionalName = activity.metadata?.professionalName || 'Un profesional';
+    const patientName = activity.metadata?.patientName || 'un paciente';
+    const date = activity.metadata?.date;
+    const startTime = activity.metadata?.startTime;
+    
+    let dateTimeStr = '';
+    if (date && startTime) {
+      try {
+        const dateObj = new Date(`${date}T${startTime}`);
+        dateTimeStr = dateObj.toLocaleDateString('es-AR', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        dateTimeStr = `${date} ${startTime}`;
+      }
+    }
+
+    return {
+      ...activity,
+      title: 'Solicitud de cancelación de cita',
+      description: `${professionalName} solicitó cancelar la cita con ${patientName}${dateTimeStr ? ` programada para el ${dateTimeStr}` : ''}`,
+    };
+  }
+
   return activity;
 };
 
@@ -89,10 +121,19 @@ const ActivityPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [disabledActivities, setDisabledActivities] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<'unread' | 'read'>('unread');
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [selectedCancellationActivity, setSelectedCancellationActivity] = useState<Activity | null>(null);
+  const [isProcessingCancellation, setIsProcessingCancellation] = useState(false);
 
   const filteredActivities = activities.filter(activity =>
     RELEVANT_ACTIVITY_TYPES.includes(activity.type)
   );
+
+  const unreadActivities = filteredActivities.filter(a => !a.read);
+  const readActivities = filteredActivities.filter(a => a.read);
+  
+  const displayedActivities = activeTab === 'unread' ? unreadActivities : readActivities;
 
   const handleActivityClick = async (activity: Activity): Promise<void> => {
     if (activity.type === 'FREQUENCY_CHANGE_REQUEST' || activity.type === 'FREQUENCY_CHANGE_REQUESTED') {
@@ -232,6 +273,118 @@ const ActivityPage: React.FC = () => {
         toast.error('No se pudo validar la solicitud');
         setDisabledActivities(prev => ({ ...prev, [activity._id]: false }));
       }
+    } else if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
+      const activityId = activity._id;
+      if (disabledActivities[activityId]) return;
+      
+      const cancellationRequestId = activity.metadata?.cancellationRequestId;
+      if (!cancellationRequestId) {
+        toast.error('No se encontró información de la solicitud de cancelación');
+        return;
+      }
+
+      // Verificar si la solicitud sigue pendiente
+      try {
+        const allRequests = await appointmentCancellationRequestService.getAll();
+        const request = allRequests.find(r => String(r.id) === String(cancellationRequestId));
+        
+        if (!request) {
+          toast.error('La solicitud de cancelación no existe');
+          setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
+          return;
+        }
+
+        if (request.status !== 'pending') {
+          toast.error('La solicitud ya fue procesada');
+          setDisabledActivities(prev => ({ ...prev, [activityId]: true }));
+          return;
+        }
+
+        // Abrir modal para aprobar/rechazar
+        setSelectedCancellationActivity(activity);
+        setShowCancellationModal(true);
+      } catch (error) {
+        console.error('Error al verificar solicitud de cancelación:', error);
+        toast.error('Error al verificar la solicitud');
+      }
+    }
+  };
+
+  const handleApproveCancellation = async () => {
+    if (!selectedCancellationActivity) return;
+    
+    const cancellationRequestId = selectedCancellationActivity.metadata?.cancellationRequestId;
+    if (!cancellationRequestId) return;
+
+    try {
+      setIsProcessingCancellation(true);
+      await appointmentCancellationRequestService.approve(String(cancellationRequestId));
+      
+      // Marcar actividad como leída
+      try {
+        await activityService.markAsRead(selectedCancellationActivity._id);
+      } catch (error) {
+        console.error('Error al marcar actividad como leída:', error);
+      }
+
+      // Actualizar actividades
+      setActivities(prev => prev.map(a => 
+        a._id === selectedCancellationActivity._id 
+          ? { ...a, read: true }
+          : a
+      ));
+      
+      setDisabledActivities(prev => ({ ...prev, [selectedCancellationActivity._id]: true }));
+      setShowCancellationModal(false);
+      setSelectedCancellationActivity(null);
+      toast.success('Solicitud de cancelación aprobada');
+      
+      // Recargar actividades para reflejar cambios
+      await loadActivities();
+    } catch (error) {
+      console.error('Error al aprobar solicitud de cancelación:', error);
+      toast.error('Error al aprobar la solicitud');
+    } finally {
+      setIsProcessingCancellation(false);
+    }
+  };
+
+  const handleRejectCancellation = async () => {
+    if (!selectedCancellationActivity) return;
+    
+    const cancellationRequestId = selectedCancellationActivity.metadata?.cancellationRequestId;
+    if (!cancellationRequestId) return;
+
+    try {
+      setIsProcessingCancellation(true);
+      await appointmentCancellationRequestService.reject(String(cancellationRequestId));
+      
+      // Marcar actividad como leída
+      try {
+        await activityService.markAsRead(selectedCancellationActivity._id);
+      } catch (error) {
+        console.error('Error al marcar actividad como leída:', error);
+      }
+
+      // Actualizar actividades
+      setActivities(prev => prev.map(a => 
+        a._id === selectedCancellationActivity._id 
+          ? { ...a, read: true }
+          : a
+      ));
+      
+      setDisabledActivities(prev => ({ ...prev, [selectedCancellationActivity._id]: true }));
+      setShowCancellationModal(false);
+      setSelectedCancellationActivity(null);
+      toast.success('Solicitud de cancelación rechazada');
+      
+      // Recargar actividades para reflejar cambios
+      await loadActivities();
+    } catch (error) {
+      console.error('Error al rechazar solicitud de cancelación:', error);
+      toast.error('Error al rechazar la solicitud');
+    } finally {
+      setIsProcessingCancellation(false);
     }
   };
 
@@ -247,11 +400,12 @@ const ActivityPage: React.FC = () => {
       setActivities(translatedActivities);
       setError(null);
 
-      // Verificar qué actividades de frecuencia y status ya están resueltas
+      // Verificar qué actividades de frecuencia, status y cancelaciones ya están resueltas
       try {
-        const [pendingFrequencyRequests, pendingStatusRequests] = await Promise.all([
+        const [pendingFrequencyRequests, pendingStatusRequests, allCancellationRequests] = await Promise.all([
           frequencyRequestService.getPendingRequests(),
-          statusRequestService.getPendingRequests()
+          statusRequestService.getPendingRequests(),
+          appointmentCancellationRequestService.getAll()
         ]);
         
         const pendingFrequencyPatientIds = new Set(
@@ -268,6 +422,12 @@ const ActivityPage: React.FC = () => {
           pendingStatusRequests
             .filter(r => r.type === 'activation' && r.requestedStatus === 'active')
             .map(r => String(r.patientId))
+        );
+
+        const pendingCancellationRequestIds = new Set(
+          allCancellationRequests
+            .filter(r => r.status === 'pending')
+            .map(r => String(r.id))
         );
         
         const resolved: Record<string, boolean> = {};
@@ -295,6 +455,16 @@ const ActivityPage: React.FC = () => {
             // Verificar actividades de activación
             if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
               if (!pendingActivationPatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
+            }
+          }
+
+          // Verificar actividades de cancelación
+          if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
+            const cancellationRequestId = activity.metadata?.cancellationRequestId;
+            if (cancellationRequestId) {
+              if (!pendingCancellationRequestIds.has(String(cancellationRequestId))) {
                 resolved[activity._id] = true;
               }
             }
@@ -414,19 +584,24 @@ const ActivityPage: React.FC = () => {
   } else {
     content = (
       <div className="divide-y divide-gray-200">
-        {filteredActivities.length === 0 ? (
+        {displayedActivities.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
             <BellIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-2">No hay notificaciones pendientes</p>
+            <p className="mt-2">
+              {activeTab === 'unread' 
+                ? 'No hay notificaciones sin leer' 
+                : 'No hay notificaciones leídas'}
+            </p>
           </div>
         ) : (
-          filteredActivities.map((activity) => {
+          displayedActivities.map((activity) => {
             const translated = translateActivity(activity);
             const isFrequencyRequest =
               translated.type === 'FREQUENCY_CHANGE_REQUEST' || translated.type === 'FREQUENCY_CHANGE_REQUESTED';
             const isStatusRequest =
               translated.type === 'PATIENT_DISCHARGE_REQUEST' || translated.type === 'PATIENT_ACTIVATION_REQUEST';
-            const isManageable = isFrequencyRequest || isStatusRequest;
+            const isCancellationRequest = translated.type === 'APPOINTMENT_CANCELLATION_REQUESTED';
+            const isManageable = isFrequencyRequest || isStatusRequest || isCancellationRequest;
 
             return (
               <div
@@ -442,12 +617,39 @@ const ActivityPage: React.FC = () => {
                     <p className="text-sm text-gray-500">
                       {translated.description}
                     </p>
-                    {translated.metadata?.reason && (
+                    {isCancellationRequest && translated.metadata && (
+                      <div className="mt-2 space-y-1 text-xs text-gray-600">
+                        {translated.metadata.patientName && (
+                          <p><span className="font-medium">Paciente:</span> {translated.metadata.patientName}</p>
+                        )}
+                        {translated.metadata.professionalName && (
+                          <p><span className="font-medium">Profesional:</span> {translated.metadata.professionalName}</p>
+                        )}
+                        {translated.metadata.date && translated.metadata.startTime && (
+                          <p>
+                            <span className="font-medium">Fecha:</span> {new Date(`${translated.metadata.date}T${translated.metadata.startTime}`).toLocaleDateString('es-AR', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        )}
+                        {translated.metadata.reason && (
+                          <p className="mt-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                            <span className="font-medium">Motivo:</span> {translated.metadata.reason}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {!isCancellationRequest && translated.metadata?.reason && (
                       <p className="mt-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
                         <span className="font-medium">Motivo:</span> {translated.metadata.reason}
                       </p>
                     )}
-                    {translated.metadata?.professionalName && (
+                    {translated.metadata?.professionalName && !isCancellationRequest && (
                       <p className="text-xs text-gray-500 mt-2">
                         Solicitado por: {translated.metadata.professionalName}
                       </p>
@@ -481,6 +683,7 @@ const ActivityPage: React.FC = () => {
             );
           })
         )}
+
       </div>
     );
   }
@@ -507,7 +710,30 @@ const ActivityPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-4 md:mt-0 flex space-x-3">
-            {activities.some(a => !a.read) && (
+            {/* Tabs para No leídas / Leídas */}
+            <div className="flex rounded-lg bg-gray-100 p-1">
+              <button
+                onClick={() => setActiveTab('unread')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'unread'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                No leídas ({unreadActivities.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('read')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'read'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Leídas ({readActivities.length})
+              </button>
+            </div>
+            {unreadActivities.length > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -531,6 +757,74 @@ const ActivityPage: React.FC = () => {
           {content}
         </div>
       </div>
+      
+      {/* Modal para aprobar/rechazar cancelación */}
+      {showCancellationModal && selectedCancellationActivity && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Gestionar solicitud de cancelación
+            </h3>
+            <div className="space-y-3 mb-6">
+              {selectedCancellationActivity.metadata?.patientName && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Paciente:</span> {selectedCancellationActivity.metadata.patientName}
+                </p>
+              )}
+              {selectedCancellationActivity.metadata?.professionalName && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Profesional:</span> {selectedCancellationActivity.metadata.professionalName}
+                </p>
+              )}
+              {selectedCancellationActivity.metadata?.date && selectedCancellationActivity.metadata?.startTime && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Fecha:</span> {new Date(`${selectedCancellationActivity.metadata.date}T${selectedCancellationActivity.metadata.startTime}`).toLocaleDateString('es-AR', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              )}
+              {selectedCancellationActivity.metadata?.reason && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Motivo:</p>
+                  <p className="text-sm text-gray-600">{selectedCancellationActivity.metadata.reason}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowCancellationModal(false);
+                  setSelectedCancellationActivity(null);
+                }}
+                disabled={isProcessingCancellation}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRejectCancellation}
+                disabled={isProcessingCancellation}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isProcessingCancellation ? 'Procesando...' : 'Rechazar'}
+              </button>
+              <button
+                onClick={handleApproveCancellation}
+                disabled={isProcessingCancellation}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {isProcessingCancellation ? 'Procesando...' : 'Aprobar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmationModal
         isOpen={showConfirm}
         onClose={() => setShowConfirm(false)}

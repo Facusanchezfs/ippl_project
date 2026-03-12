@@ -101,8 +101,8 @@ function App() {
             <Route path="medical-history/:patientId" element={<MedicalHistoryPage />} />
             <Route path="mensajes" element={<AdminMessages />} />
             <Route path="estadisticas" element={<StatsPage />} />
-            <Route path="solicitudes" element={<StatusRequestsManagement />} />
             <Route path="actividad" element={<ActivityPage />} />
+            <Route path="solicitudes" element={<StatusRequestsManagement />} />
             <Route path="reportes" element={<ReportsPage />} />
           </Route>
 

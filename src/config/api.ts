@@ -73,7 +73,10 @@ api.interceptors.response.use(
     const path = window.location.pathname;
     const inProtected = isProtectedPath(path);
 
-    if ((status === 401 || status === 403) && inProtected && path !== '/login') {
+    // Solo desloguear automáticamente en 401 (no autorizado).
+    // Los 403 (prohibido) pueden ser simplemente falta de permisos en un recurso específico
+    // y no deben forzar cierre de sesión.
+    if (status === 401 && inProtected && path !== '/login') {
       localStorage.removeItem('token');
       window.location.replace('/login');
       return; // cortar la cadena
