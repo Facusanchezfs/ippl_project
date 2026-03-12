@@ -354,6 +354,7 @@ interface ViewDescriptionModalProps {
   patient: Patient;
   professionals: Professional[];
   onUpdatePatient: (id: string, data: any) => Promise<void>;
+  onScheduleUpdated: () => Promise<void>;
 }
 
 const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
@@ -362,6 +363,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   patient,
   professionals,
   onUpdatePatient,
+  onScheduleUpdated,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [status, setStatus] = useState<Patient['status']>(patient.status);
@@ -369,12 +371,52 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   const [sessionFrequency, setSessionFrequency] = useState<Patient['sessionFrequency'] | ''>(patient.sessionFrequency || '');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Estado de agenda recurrente
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [isScheduleEditing, setIsScheduleEditing] = useState(false);
+  const [scheduleRecurringId, setScheduleRecurringId] = useState<string | null>(null);
+  const [scheduleFrequency, setScheduleFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
+  const [scheduleNextDate, setScheduleNextDate] = useState('');
+  const [scheduleStartTime, setScheduleStartTime] = useState('');
+  const [scheduleDuration, setScheduleDuration] = useState<30 | 60>(60);
+  const [scheduleSessionCost, setScheduleSessionCost] = useState<number | ''>('');
+
   // Mantener el estado local sincronizado cuando cambia el paciente en props
   useEffect(() => {
     setStatus(patient.status);
     setProfessionalId(patient.professionalId);
     setSessionFrequency(patient.sessionFrequency || '');
   }, [patient]);
+
+  // Cargar agenda recurrente al abrir modal
+  useEffect(() => {
+    const loadSchedule = async () => {
+      if (!isOpen) return;
+      setScheduleLoading(true);
+      setScheduleError(null);
+      try {
+        const data = await recurringAppointmentsService.getPatientRecurringScheduleAdmin(
+          patient.id
+        );
+        setScheduleRecurringId(String(data.recurringId));
+        setScheduleFrequency(data.frequency);
+        setScheduleNextDate(data.nextDate);
+        setScheduleStartTime(data.startTime);
+        setScheduleDuration(data.duration === 30 ? 30 : 60);
+        setScheduleSessionCost(typeof data.sessionCost === 'number' ? data.sessionCost : 0);
+      } catch (error: any) {
+        console.error('Error al cargar agenda recurrente:', error);
+        setScheduleError(
+          error?.response?.data?.message || 'No se pudo cargar la agenda recurrente del paciente'
+        );
+      } finally {
+        setScheduleLoading(false);
+      }
+    };
+
+    void loadSchedule();
+  }, [isOpen, patient.id]);
 
   const handleCancelEdit = () => {
     setIsEditing(false);
@@ -416,6 +458,61 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
       console.error('Error al actualizar paciente:', error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!scheduleRecurringId) {
+      scheduleError || setScheduleError('Este paciente no tiene una agenda recurrente activa.');
+      return;
+    }
+
+    // Validaciones frontend
+    if (scheduleDuration !== 30 && scheduleDuration !== 60) {
+      setScheduleError('La duración debe ser 30 o 60 minutos.');
+      return;
+    }
+
+    if (scheduleSessionCost === '' || Number(scheduleSessionCost) < 0) {
+      setScheduleError('El costo de sesión debe ser mayor o igual a 0.');
+      return;
+    }
+
+    if (!scheduleNextDate) {
+      setScheduleError('Debes especificar la fecha de la próxima cita.');
+      return;
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (scheduleNextDate < todayStr) {
+      setScheduleError('La fecha de la próxima cita no puede estar en el pasado.');
+      return;
+    }
+
+    if (!/^\d{2}:\d{2}$/.test(scheduleStartTime)) {
+      setScheduleError('La hora de inicio debe estar en formato HH:MM.');
+      return;
+    }
+
+    try {
+      setScheduleLoading(true);
+      await recurringAppointmentsService.updateRecurringAppointmentAdmin(scheduleRecurringId, {
+        frequency: scheduleFrequency || 'weekly',
+        nextDate: scheduleNextDate,
+        startTime: scheduleStartTime,
+        duration: scheduleDuration,
+        sessionCost: Number(scheduleSessionCost),
+      });
+
+      setIsScheduleEditing(false);
+      await onScheduleUpdated();
+    } catch (error: any) {
+      console.error('Error al actualizar agenda recurrente:', error);
+      setScheduleError(
+        error?.response?.data?.message || 'Error al actualizar la agenda recurrente'
+      );
+    } finally {
+      setScheduleLoading(false);
     }
   };
 
@@ -564,6 +661,158 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Sección de agenda recurrente */}
+        <div className="mt-8 border-t pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-800">
+              Agenda recurrente
+            </h4>
+            {scheduleRecurringId && !scheduleLoading && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScheduleEditing((prev) => !prev);
+                  setScheduleError(null);
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                {isScheduleEditing ? 'Cancelar edición' : 'Editar agenda'}
+              </button>
+            )}
+          </div>
+
+          {scheduleLoading && (
+            <p className="text-sm text-gray-500">Cargando agenda...</p>
+          )}
+
+          {scheduleError && !scheduleLoading && (
+            <p className="text-sm text-red-600 mb-2">{scheduleError}</p>
+          )}
+
+          {!scheduleLoading && scheduleRecurringId && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Frecuencia
+                </label>
+                <select
+                  disabled={!isScheduleEditing}
+                  value={scheduleFrequency}
+                  onChange={(e) =>
+                    setScheduleFrequency(
+                      e.target.value as 'weekly' | 'biweekly' | 'monthly' | ''
+                    )
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="weekly">Semanal</option>
+                  <option value="biweekly">Quincenal</option>
+                  <option value="monthly">Mensual</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Próxima fecha
+                  </label>
+                  <input
+                    type="date"
+                    disabled={!isScheduleEditing}
+                    value={scheduleNextDate}
+                    onChange={(e) => setScheduleNextDate(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Hora inicio
+                  </label>
+                  <input
+                    type="time"
+                    disabled={!isScheduleEditing}
+                    value={scheduleStartTime}
+                    onChange={(e) => setScheduleStartTime(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Duración
+                  </label>
+                  <select
+                    disabled={!isScheduleEditing}
+                    value={scheduleDuration}
+                    onChange={(e) =>
+                      setScheduleDuration(Number(e.target.value) === 30 ? 30 : 60)
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  >
+                    <option value={30}>30 minutos</option>
+                    <option value={60}>60 minutos</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Costo sesión
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    disabled={!isScheduleEditing}
+                    value={scheduleSessionCost}
+                    onChange={(e) =>
+                      setScheduleSessionCost(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              {isScheduleEditing && (
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsScheduleEditing(false);
+                      setScheduleError(null);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveSchedule}
+                    disabled={scheduleLoading}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {scheduleLoading ? 'Guardando...' : 'Guardar agenda'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!scheduleLoading && !scheduleRecurringId && !scheduleError && (
+            <p className="text-sm text-gray-500">
+              Este paciente no tiene una agenda recurrente configurada.
+            </p>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -2102,6 +2351,9 @@ const PatientManagement = () => {
               toast.error('Error al actualizar el paciente');
               throw error;
             }
+          }}
+          onScheduleUpdated={async () => {
+            await loadData();
           }}
         />
       )}

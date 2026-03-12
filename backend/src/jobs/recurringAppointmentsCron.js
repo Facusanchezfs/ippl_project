@@ -4,9 +4,8 @@ const cron = require('node-cron');
 const { generateRecurringAppointments } = require('../services/recurringGenerationService');
 const logger = require('../utils/logger');
 
-// Ejecuta la generación de citas recurrentes todos los domingos a las 22:00
-// cron.schedule('0 22 * * 0', async () => {
-  cron.schedule('* * * * *', async () => {
+// Ejecuta la generación de citas recurrentes todos los dias a las 02:00am
+  cron.schedule('0 2 * * *', async () => {
   try {
     logger.info('[RecurringCron] Starting recurring appointment generation');
 

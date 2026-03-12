@@ -2,20 +2,15 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import appointmentsService from '../../services/appointments.service';
 import appointmentCancellationRequestService from '../../services/appointmentCancellationRequest.service';
-import patientsService from '../../services/patients.service';
 import { Appointment, AppointmentStatus } from '../../types/Appointment';
-import { Patient } from '../../types/Patient';
-import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import {
   CalendarIcon,
   ClockIcon,
   UserIcon,
   ArrowPathIcon,
   ArrowLeftIcon,
-  PlusIcon,
   CurrencyDollarIcon,
   PencilIcon,
-  TrashIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   EyeIcon,
@@ -25,25 +20,22 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import ConfirmationModal from '../../components/common/ConfirmationModal';
 
 const AppointmentsPage = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [cancelFilter, setCancelFilter] = useState<'exclude' | 'include' | 'only'>('exclude');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedAppointmentForDescription, setSelectedAppointmentForDescription] = useState<Appointment | null>(null);
   const [showFinishAppointmentModal, setShowFinishAppointmentModal] = useState(false);
   const [selectedAppointmentForFinish, setSelectedAppointmentForFinish] = useState<Appointment | null>(null);
   const [attended, setAttended] = useState<boolean>(true);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -62,24 +54,9 @@ const AppointmentsPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadPatients();
-  }, [user]);
-  
-  useEffect(() => {
-    loadAppointments();
+    void loadAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, page, filterStatus]);
-
-  const loadPatients = async () => {
-    try {
-      const data = await patientsService.getProfessionalPatients(user!.id);
-      const activePatients = data.filter(patient => patient.status === 'active');
-      setPatients(activePatients);
-    } catch (error) {
-      console.error('Error al cargar pacientes:', error);
-      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.PATIENT_LOAD_FAILED);
-      toast.error(friendlyMessage);
-    }
-  };
 
   const loadAppointments = async () => {
     if (!user) return;
@@ -182,26 +159,6 @@ const AppointmentsPage = () => {
     }
   };
 
-  const handleDeleteClick = (appointment: Appointment) => {
-    setAppointmentToDelete(appointment);
-    setShowDeleteModal(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!appointmentToDelete) return;
-
-    try {
-      await appointmentsService.deleteAppointment(appointmentToDelete.id, appointmentToDelete);
-      await loadAppointments();
-      toast.success('Cita eliminada exitosamente');
-      setShowDeleteModal(false);
-      setAppointmentToDelete(null);
-    } catch (error) {
-      console.error('Error al eliminar la cita:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al eliminar la cita');
-    }
-  };
-
   const handleFinishAppointment = async (appointmentId: string, finishData: {
     attended: boolean;
     paymentAmount?: number;
@@ -236,33 +193,48 @@ const AppointmentsPage = () => {
   };
 
   const filteredAppointments = appointments
-  .filter((appointment) => {
-    const appointmentDateTime = combineLocalDateTime(
-      appointment.date,
-      appointment.startTime
-    );
-    const now = new Date();
+    .filter((appointment) => {
+      const appointmentDateTime = combineLocalDateTime(
+        appointment.date,
+        appointment.startTime
+      );
+      const now = new Date();
 
-    switch (filterStatus) {
-      case "upcoming":
-        // Solo citas futuras que estén realmente programadas
-        return appointmentDateTime >= now && appointment.status === "scheduled";
+      let keepByTime = true;
+      switch (filterStatus) {
+        case 'upcoming':
+          // Solo citas futuras realmente programadas
+          keepByTime =
+            appointment.status === 'scheduled' && appointmentDateTime >= now;
+          break;
+        case 'past':
+          // Citas cuya fecha/hora ya pasó o que ya no están programadas
+          keepByTime =
+            appointmentDateTime < now || appointment.status !== 'scheduled';
+          break;
+        case 'all':
+        default:
+          keepByTime = true;
+      }
 
-      case "past":
-        // Solo citas completadas
-        return appointment.status === "completed";
+      if (!keepByTime) return false;
 
-      case "all":
-      default:
-        return true;
-    }
-  })
-  .sort((a, b) => {
-    const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
-    const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
+      // Filtro de canceladas
+      if (cancelFilter === 'exclude' && appointment.status === 'cancelled') {
+        return false;
+      }
+      if (cancelFilter === 'only' && appointment.status !== 'cancelled') {
+        return false;
+      }
 
-    return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
+      const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
+
+      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
 
 
 
@@ -322,12 +294,27 @@ const AppointmentsPage = () => {
           <div className="flex items-center gap-4">
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'upcoming' | 'past')}
+              onChange={(e) =>
+                setFilterStatus(e.target.value as 'all' | 'upcoming' | 'past')
+              }
               className="rounded-lg border-gray-300 text-sm"
             >
               <option value="all">Todas las citas</option>
               <option value="upcoming">Citas próximas</option>
               <option value="past">Citas pasadas</option>
+            </select>
+            <select
+              value={cancelFilter}
+              onChange={(e) =>
+                setCancelFilter(
+                  e.target.value as 'exclude' | 'include' | 'only'
+                )
+              }
+              className="rounded-lg border-gray-300 text-sm"
+            >
+              <option value="exclude">Ocultar canceladas</option>
+              <option value="include">Incluir canceladas</option>
+              <option value="only">Solo canceladas</option>
             </select>
           </div>
           <button
@@ -427,25 +414,18 @@ const AppointmentsPage = () => {
                         <PencilIcon className="h-5 w-5" />
                       </button>
                       {appointment.status === 'scheduled' && (
-                      <button
-                        onClick={() => {
-                          setSelectedAppointmentForFinish(appointment);
-                          setAttended(true);
-                          setShowFinishAppointmentModal(true);
-                        }}
-                        className="text-green-600 hover:text-green-900 inline-flex items-center"
-                        title="Finalizar cita"
-                      >
-                        <CheckCircleIcon className="h-5 w-5" />
-                      </button>
+                        <button
+                          onClick={() => {
+                            setSelectedAppointmentForFinish(appointment);
+                            setAttended(true);
+                            setShowFinishAppointmentModal(true);
+                          }}
+                          className="text-green-600 hover:text-green-900 inline-flex items-center"
+                          title="Finalizar cita"
+                        >
+                          <CheckCircleIcon className="h-5 w-5" />
+                        </button>
                       )}
-                      <button
-                        onClick={() => handleDeleteClick(appointment)}
-                        className="text-red-600 hover:text-red-900 inline-flex items-center"
-                        title="Eliminar cita"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
                       {appointment.status === 'scheduled' && (
                         <button
                           onClick={() => {
@@ -563,25 +543,18 @@ const AppointmentsPage = () => {
                               <PencilIcon className="h-5 w-5" />
                             </button>
                             {appointment.status === 'scheduled' && (
-                            <button
-                              onClick={() => {
-                                setSelectedAppointmentForFinish(appointment);
-                                setAttended(true);
-                                setShowFinishAppointmentModal(true);
-                              }}
-                              className="text-green-600 hover:text-green-900 mr-4"
-                              title="Finalizar cita"
-                            >
-                              <CheckCircleIcon className="h-5 w-5" />
-                            </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedAppointmentForFinish(appointment);
+                                  setAttended(true);
+                                  setShowFinishAppointmentModal(true);
+                                }}
+                                className="text-green-600 hover:text-green-900 mr-4"
+                                title="Finalizar cita"
+                              >
+                                <CheckCircleIcon className="h-5 w-5" />
+                              </button>
                             )}
-                            <button
-                              onClick={() => handleDeleteClick(appointment)}
-                              className="text-red-600 hover:text-red-900 mr-4"
-                              title="Eliminar cita"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
                             {appointment.status === 'scheduled' && (
                               <button
                                 onClick={() => {
@@ -997,36 +970,6 @@ const AppointmentsPage = () => {
           </div>
         </div>
       )}
-
-      {/* Modal de confirmación para eliminar */}
-      <ConfirmationModal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setAppointmentToDelete(null);
-        }}
-        onConfirm={handleDeleteConfirm}
-        title="Eliminar Cita"
-        message={
-          appointmentToDelete
-            ? `¿Estás seguro de que deseas eliminar la cita con ${appointmentToDelete.patientName
-            } programada para el ${new Date(appointmentToDelete.date).toLocaleDateString(
-              'es-ES',
-              {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              }
-            )}?`
-            : ''
-        }
-        confirmText="Eliminar"
-        cancelText="Cancelar"
-        type="danger"
-      />
 
       {/* Modal para solicitar cancelación de cita */}
       {showCancelModal && appointmentToCancel && (
