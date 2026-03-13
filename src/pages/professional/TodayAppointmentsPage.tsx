@@ -1,20 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import appointmentsService from '../../services/appointments.service';
-import patientsService from '../../services/patients.service';
+import appointmentCancellationRequestService from '../../services/appointmentCancellationRequest.service';
 import { Appointment, AppointmentStatus } from '../../types/Appointment';
-import { Patient } from '../../types/Patient';
-import { getFriendlyErrorMessage, ErrorMessages } from '../../utils/errorMessages';
 import {
   CalendarIcon,
   ClockIcon,
   UserIcon,
   ArrowPathIcon,
   ArrowLeftIcon,
-  PlusIcon,
   CurrencyDollarIcon,
   PencilIcon,
-  TrashIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   EyeIcon,
@@ -24,26 +20,27 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import ConfirmationModal from '../../components/common/ConfirmationModal';
 
 const AppointmentsPage = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [cancelFilter, setCancelFilter] = useState<'exclude' | 'include' | 'only'>('exclude');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedAppointmentForDescription, setSelectedAppointmentForDescription] = useState<Appointment | null>(null);
   const [showFinishAppointmentModal, setShowFinishAppointmentModal] = useState(false);
   const [selectedAppointmentForFinish, setSelectedAppointmentForFinish] = useState<Appointment | null>(null);
   const [attended, setAttended] = useState<boolean>(true);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
+  const [pendingCancellationIds, setPendingCancellationIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<{
     page: number;
@@ -57,26 +54,9 @@ const AppointmentsPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadPatients();
-  }, [user]);
-  
-  useEffect(() => {
-    loadAppointments();
+    void loadAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, page, filterStatus]);
-  
-  
-
-  const loadPatients = async () => {
-    try {
-      const data = await patientsService.getProfessionalPatients(user!.id);
-      const activePatients = data.filter(patient => patient.status === 'active');
-      setPatients(activePatients);
-    } catch (error) {
-      console.error('Error al cargar pacientes:', error);
-      const friendlyMessage = getFriendlyErrorMessage(error, ErrorMessages.PATIENT_LOAD_FAILED);
-      toast.error(friendlyMessage);
-    }
-  };
 
   const loadAppointments = async () => {
     if (!user) return;
@@ -143,30 +123,6 @@ const AppointmentsPage = () => {
     }
   };
 
-  const handleCreateAppointment = async (appointmentData: Partial<Appointment>) => {
-    try {
-      const selectedPatient = patients.find(p => p.id === appointmentData.patientId);
-      if (!selectedPatient) {
-        toast.error('Por favor selecciona un paciente válido');
-        return;
-      }
-
-      await appointmentsService.createAppointment({
-        ...appointmentData,
-        professionalId: user!.id,
-        professionalName: user!.name,
-        patientName: selectedPatient.name,
-        status: 'scheduled'
-      });
-
-      await loadAppointments();
-      setShowNewAppointmentModal(false);
-      toast.success('Cita creada exitosamente');
-    } catch (error) {
-      console.error('Error al crear la cita:', error);
-      toast.error('Error al crear la cita');
-    }
-  };
 
   const toMinutes = (hhmm: string) => {
     const [h, m] = (hhmm || '').split(':').map(Number);
@@ -184,42 +140,21 @@ const AppointmentsPage = () => {
     return fromMinutes(total);
   };
 
-  const handleEditAppointment = async (appointmentData: Partial<Appointment>) => {
+  const handleEditAppointment = async (appointmentData: { sessionCost: number }) => {
     try {
       if (!selectedAppointment) return;
 
       await appointmentsService.updateAppointment(selectedAppointment.id, {
-        ...appointmentData,
-        status: appointmentData.status ?? selectedAppointment.status
+        sessionCost: appointmentData.sessionCost,
       });
 
       await loadAppointments();
       setShowEditAppointmentModal(false);
       setSelectedAppointment(null);
-      toast.success('Cita actualizada exitosamente');
+      toast.success('Monto de la sesión actualizado exitosamente');
     } catch (error) {
-      console.error('Error al actualizar la cita:', error);
-      toast.error('Error al actualizar la cita');
-    }
-  };
-
-  const handleDeleteClick = (appointment: Appointment) => {
-    setAppointmentToDelete(appointment);
-    setShowDeleteModal(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!appointmentToDelete) return;
-
-    try {
-      await appointmentsService.deleteAppointment(appointmentToDelete.id, appointmentToDelete);
-      await loadAppointments();
-      toast.success('Cita eliminada exitosamente');
-      setShowDeleteModal(false);
-      setAppointmentToDelete(null);
-    } catch (error) {
-      console.error('Error al eliminar la cita:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al eliminar la cita');
+      console.error('Error al actualizar el monto de la cita:', error);
+      toast.error('Error al actualizar el monto de la cita');
     }
   };
 
@@ -257,33 +192,48 @@ const AppointmentsPage = () => {
   };
 
   const filteredAppointments = appointments
-  .filter((appointment) => {
-    const appointmentDateTime = combineLocalDateTime(
-      appointment.date,
-      appointment.startTime
-    );
-    const now = new Date();
+    .filter((appointment) => {
+      const appointmentDateTime = combineLocalDateTime(
+        appointment.date,
+        appointment.startTime
+      );
+      const now = new Date();
 
-    switch (filterStatus) {
-      case "upcoming":
-        // Solo citas futuras que estén realmente programadas
-        return appointmentDateTime >= now && appointment.status === "scheduled";
+      let keepByTime = true;
+      switch (filterStatus) {
+        case 'upcoming':
+          // Solo citas futuras realmente programadas
+          keepByTime =
+            appointment.status === 'scheduled' && appointmentDateTime >= now;
+          break;
+        case 'past':
+          // Citas cuya fecha/hora ya pasó o que ya no están programadas
+          keepByTime =
+            appointmentDateTime < now || appointment.status !== 'scheduled';
+          break;
+        case 'all':
+        default:
+          keepByTime = true;
+      }
 
-      case "past":
-        // Solo citas completadas
-        return appointment.status === "completed";
+      if (!keepByTime) return false;
 
-      case "all":
-      default:
-        return true;
-    }
-  })
-  .sort((a, b) => {
-    const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
-    const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
+      // Filtro de canceladas
+      if (cancelFilter === 'exclude' && appointment.status === 'cancelled') {
+        return false;
+      }
+      if (cancelFilter === 'only' && appointment.status !== 'cancelled') {
+        return false;
+      }
 
-    return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
+      const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
+
+      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
 
 
 
@@ -317,13 +267,6 @@ const AppointmentsPage = () => {
           {/* Bloque derecha */}
           <div className="flex flex-wrap items-center gap-4 md:justify-end">
             <button
-              onClick={() => setShowNewAppointmentModal(true)}
-              className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Nueva Cita
-            </button>
-            <button
               onClick={handleRefresh}
               className={`flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
@@ -350,12 +293,27 @@ const AppointmentsPage = () => {
           <div className="flex items-center gap-4">
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'upcoming' | 'past')}
+              onChange={(e) =>
+                setFilterStatus(e.target.value as 'all' | 'upcoming' | 'past')
+              }
               className="rounded-lg border-gray-300 text-sm"
             >
               <option value="all">Todas las citas</option>
               <option value="upcoming">Citas próximas</option>
               <option value="past">Citas pasadas</option>
+            </select>
+            <select
+              value={cancelFilter}
+              onChange={(e) =>
+                setCancelFilter(
+                  e.target.value as 'exclude' | 'include' | 'only'
+                )
+              }
+              className="rounded-lg border-gray-300 text-sm"
+            >
+              <option value="exclude">Ocultar canceladas</option>
+              <option value="include">Incluir canceladas</option>
+              <option value="only">Solo canceladas</option>
             </select>
           </div>
           <button
@@ -407,6 +365,11 @@ const AppointmentsPage = () => {
                       >
                         {status.label}
                       </span>
+                      {pendingCancellationIds.has(appointment.id) && appointment.status === 'scheduled' && (
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                          Cancelación solicitada
+                        </span>
+                      )}
                       <span className="text-xs rounded px-2 py-1 bg-gray-100 text-gray-700">
                         {appointment.type === 'regular'
                           ? 'Regular'
@@ -450,25 +413,31 @@ const AppointmentsPage = () => {
                         <PencilIcon className="h-5 w-5" />
                       </button>
                       {appointment.status === 'scheduled' && (
-                      <button
-                        onClick={() => {
-                          setSelectedAppointmentForFinish(appointment);
-                          setAttended(true);
-                          setShowFinishAppointmentModal(true);
-                        }}
-                        className="text-green-600 hover:text-green-900 inline-flex items-center"
-                        title="Finalizar cita"
-                      >
-                        <CheckCircleIcon className="h-5 w-5" />
-                      </button>
+                        <button
+                          onClick={() => {
+                            setSelectedAppointmentForFinish(appointment);
+                            setAttended(true);
+                            setShowFinishAppointmentModal(true);
+                          }}
+                          className="text-green-600 hover:text-green-900 inline-flex items-center"
+                          title="Finalizar cita"
+                        >
+                          <CheckCircleIcon className="h-5 w-5" />
+                        </button>
                       )}
-                      <button
-                        onClick={() => handleDeleteClick(appointment)}
-                        className="text-red-600 hover:text-red-900 inline-flex items-center"
-                        title="Eliminar cita"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
+                      {appointment.status === 'scheduled' && (
+                        <button
+                          onClick={() => {
+                            setAppointmentToCancel(appointment);
+                            setCancelReason('');
+                            setShowCancelModal(true);
+                          }}
+                          className="text-orange-600 hover:text-orange-800 inline-flex items-center text-sm font-medium"
+                          title="Solicitar cancelación"
+                        >
+                          Solicitar cancelación
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -528,11 +497,18 @@ const AppointmentsPage = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.class}`}
-                            >
-                              {status.label}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span
+                                className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.class}`}
+                              >
+                                {status.label}
+                              </span>
+                              {pendingCancellationIds.has(appointment.id) && appointment.status === 'scheduled' && (
+                                <span className="px-2 py-0.5 inline-flex text-xs leading-4 font-medium rounded-full bg-orange-100 text-orange-800">
+                                  Cancelación solicitada
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {appointment.type === 'regular'
@@ -566,25 +542,31 @@ const AppointmentsPage = () => {
                               <PencilIcon className="h-5 w-5" />
                             </button>
                             {appointment.status === 'scheduled' && (
-                            <button
-                              onClick={() => {
-                                setSelectedAppointmentForFinish(appointment);
-                                setAttended(true);
-                                setShowFinishAppointmentModal(true);
-                              }}
-                              className="text-green-600 hover:text-green-900 mr-4"
-                              title="Finalizar cita"
-                            >
-                              <CheckCircleIcon className="h-5 w-5" />
-                            </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedAppointmentForFinish(appointment);
+                                  setAttended(true);
+                                  setShowFinishAppointmentModal(true);
+                                }}
+                                className="text-green-600 hover:text-green-900 mr-4"
+                                title="Finalizar cita"
+                              >
+                                <CheckCircleIcon className="h-5 w-5" />
+                              </button>
                             )}
-                            <button
-                              onClick={() => handleDeleteClick(appointment)}
-                              className="text-red-600 hover:text-red-900"
-                              title="Eliminar cita"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
+                            {appointment.status === 'scheduled' && (
+                              <button
+                                onClick={() => {
+                                  setAppointmentToCancel(appointment);
+                                  setCancelReason('');
+                                  setShowCancelModal(true);
+                                }}
+                                className="text-orange-600 hover:text-orange-800 text-sm font-medium"
+                                title="Solicitar cancelación"
+                              >
+                                Solicitar cancelación
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -635,182 +617,11 @@ const AppointmentsPage = () => {
             <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No hay citas</h3>
             <p className="mt-1 text-sm text-gray-500">No tienes ninguna cita registrada.</p>
-            <button
-              onClick={() => setShowNewAppointmentModal(true)}
-              className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Agendar Nueva Cita
-            </button>
           </div>
         )}
 
       </div>
 
-      {/* Modal para crear nueva cita */}
-      {showNewAppointmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Nueva Cita</h2>
-              <button
-                onClick={() => setShowNewAppointmentModal(false)}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              handleCreateAppointment({
-                patientId: formData.get('patientId') as string,
-                date: formData.get('date') as string,
-                startTime: formData.get('startTime') as string,
-                endTime: addMinutesToTime(formData.get('startTime') as string, Number(formData.get('duration') || 60)),
-                type: formData.get('type') as 'regular' | 'first_time' | 'emergency',
-                notes: formData.get('notes') as string,
-                sessionCost: Number(formData.get('sessionCost'))
-              });
-            }}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Paciente
-                  </label>
-                  {patients.length > 0 ? (
-                    <select
-                      name="patientId"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      <option value="">Selecciona un paciente</option>
-                      {patients.map(patient => (
-                        <option key={patient.id} value={patient.id}>
-                          {patient.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="mt-1 text-sm text-red-600">
-                      No tienes pacientes activos asignados. Primero debes tener pacientes asignados para crear citas.
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Fecha</label>
-                    <input
-                      type="date"
-                      name="date"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Hora de inicio</label>
-                    <input
-                      type="time"
-                      name="startTime"
-                      required
-                      step={60}
-                      min="06:00"
-                      max="22:00"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Duración</label>
-                    <select
-                      name="duration"
-                      defaultValue="60"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      <option value="30">30 min</option>
-                      <option value="45">45 min</option>
-                      <option value="60">60 min</option>
-                      <option value="90">90 min</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Tipo de Cita
-                  </label>
-                  <select
-                    name="type"
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="regular">Regular</option>
-                    <option value="first_time">Primera Vez</option>
-                    <option value="emergency">Emergencia</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Costo de la Sesión
-                  </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="number"
-                      name="sessionCost"
-                      required
-                      min="0"
-                      step="0.01"
-                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                {/*<div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Notas
-                  </label>
-                  <textarea
-                    name="notes"
-                    rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  ></textarea>
-                </div>*/}
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowNewAppointmentModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={patients.length === 0}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${patients.length > 0
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-gray-400 cursor-not-allowed'
-                    }`}
-                >
-                  Crear Cita
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Modal para editar cita */}
       {showEditAppointmentModal && selectedAppointment && (
@@ -831,18 +642,14 @@ const AppointmentsPage = () => {
               </button>
             </div>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              handleEditAppointment({
-                date: formData.get('date') as string,
-                startTime: formData.get('startTime') as string,
-                endTime: addMinutesToTime(formData.get('startTime') as string, Number(formData.get('duration') || 60)),
-                type: formData.get('type') as 'regular' | 'first_time' | 'emergency',
-                notes: formData.get('notes') as string,
-                sessionCost: Number(formData.get('sessionCost'))
-              });
-            }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const sessionCost = Number(formData.get('sessionCost') || 0);
+                handleEditAppointment({ sessionCost });
+              }}
+            >
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -856,62 +663,13 @@ const AppointmentsPage = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Fecha</label>
-                    <input
-                      type="date"
-                      name="date"
-                      required
-                      defaultValue={selectedAppointment.date}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Hora de inicio</label>
-                    <input
-                      type="time"
-                      name="startTime"
-                      required
-                      step={60}
-                      min="06:00"
-                      max="22:00"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      defaultValue={selectedAppointment.startTime}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Duración</label>
-                    <select
-                      name="duration"
-                      defaultValue="60"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      <option value="30">30 min</option>
-                      <option value="45">45 min</option>
-                      <option value="60">60 min</option>
-                      <option value="90">90 min</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
+                <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    Tipo de Cita
+                    Fecha y hora
                   </label>
-                  <select
-                    name="type"
-                    required
-                    defaultValue={selectedAppointment.type}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="regular">Regular</option>
-                    <option value="first_time">Primera Vez</option>
-                    <option value="emergency">Emergencia</option>
-                  </select>
+                  <p className="text-sm text-gray-900">
+                    {formatDateTime(selectedAppointment.date, selectedAppointment.startTime)}
+                  </p>
                 </div>
 
                 <div>
@@ -1159,35 +917,114 @@ const AppointmentsPage = () => {
         </div>
       )}
 
-      {/* Modal de confirmación para eliminar */}
-      <ConfirmationModal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setAppointmentToDelete(null);
-        }}
-        onConfirm={handleDeleteConfirm}
-        title="Eliminar Cita"
-        message={
-          appointmentToDelete
-            ? `¿Estás seguro de que deseas eliminar la cita con ${appointmentToDelete.patientName
-            } programada para el ${new Date(appointmentToDelete.date).toLocaleDateString(
-              'es-ES',
-              {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              }
-            )}?`
-            : ''
-        }
-        confirmText="Eliminar"
-        cancelText="Cancelar"
-        type="danger"
-      />
+      {/* Modal para solicitar cancelación de cita */}
+      {showCancelModal && appointmentToCancel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Solicitar cancelación de cita</h2>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setAppointmentToCancel(null);
+                  setCancelReason('');
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Estás solicitando la cancelación de la cita con{' '}
+              <span className="font-medium">{appointmentToCancel.patientName}</span> el{' '}
+              {formatDateTime(appointmentToCancel.date, appointmentToCancel.startTime)}.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const trimmed = cancelReason.trim();
+                if (!trimmed) {
+                  toast.error('El motivo de cancelación es obligatorio');
+                  return;
+                }
+                if (trimmed.length > 1000) {
+                  toast.error('El motivo de cancelación no puede superar los 1000 caracteres');
+                  return;
+                }
+
+                try {
+                  setIsSubmittingCancellation(true);
+                  await appointmentCancellationRequestService.create(
+                    appointmentToCancel.id,
+                    trimmed
+                  );
+
+                  // Agregar al estado local para mostrar el badge
+                  setPendingCancellationIds((prev) => {
+                    const next = new Set(prev);
+                    next.add(appointmentToCancel.id);
+                    return next;
+                  });
+
+                  setShowCancelModal(false);
+                  setAppointmentToCancel(null);
+                  setCancelReason('');
+                  toast.success('Solicitud de cancelación enviada al administrador');
+                } catch (error: any) {
+                  console.error('Error al crear solicitud de cancelación:', error);
+                  const backendMsg = error?.response?.data?.error;
+                  toast.error(
+                    backendMsg || 'Error al enviar la solicitud de cancelación'
+                  );
+                } finally {
+                  setIsSubmittingCancellation(false);
+                }
+              }}
+            >
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo de cancelación
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={4}
+                  maxLength={1000}
+                  disabled={isSubmittingCancellation}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  {cancelReason.length} / 1000 caracteres
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setAppointmentToCancel(null);
+                    setCancelReason('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  disabled={isSubmittingCancellation}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  disabled={isSubmittingCancellation}
+                >
+                  {isSubmittingCancellation ? 'Enviando...' : 'Enviar solicitud'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

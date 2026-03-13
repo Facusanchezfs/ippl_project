@@ -32,7 +32,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       professionalId: {
         type: DataTypes.BIGINT,
-        allowNull: false
+        allowNull: true,
       },
       textNote: {
         type: DataTypes.TEXT,

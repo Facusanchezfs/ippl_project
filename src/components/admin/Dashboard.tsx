@@ -46,7 +46,8 @@ const DASHBOARD_ACTIVITY_TYPES: Activity['type'][] = [
   'PATIENT_DISCHARGE_REQUEST',
   'PATIENT_ACTIVATION_REQUEST',
   'FREQUENCY_CHANGE_REQUEST',
-  'FREQUENCY_CHANGE_REQUESTED'
+  'FREQUENCY_CHANGE_REQUESTED',
+  'APPOINTMENT_CANCELLATION_REQUESTED'
 ];
 
 const translateFrequency = (freq?: string | null) => {
@@ -103,6 +104,36 @@ const translateActivity = (activity: Activity): Activity => {
       ...activity,
       title: `Solicitud de cambio de frecuencia ${actionText}`,
       description: `Se ${actionText} el cambio de frecuencia para ${patientName}${requestedFrequency ? ` a ${requestedFrequency}` : ''}`,
+    };
+  }
+
+  if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
+    const professionalName = activity.metadata?.professionalName || 'Un profesional';
+    const patientName = activity.metadata?.patientName || 'un paciente';
+    const date = activity.metadata?.date;
+    const startTime = activity.metadata?.startTime;
+    
+    let dateTimeStr = '';
+    if (date && startTime) {
+      try {
+        const dateObj = new Date(`${date}T${startTime}`);
+        dateTimeStr = dateObj.toLocaleDateString('es-AR', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        dateTimeStr = `${date} ${startTime}`;
+      }
+    }
+
+    return {
+      ...activity,
+      title: 'Solicitud de cancelación de cita',
+      description: `${professionalName} solicitó cancelar la cita con ${patientName}${dateTimeStr ? ` programada para el ${dateTimeStr}` : ''}`,
     };
   }
 
@@ -268,6 +299,9 @@ const Dashboard = () => {
               }
             }
           }
+
+          // Las cancelaciones se resuelven automáticamente cuando se aprueban/rechazan
+          // El backend ya marca la actividad como resuelta cuando cambia el estado
         });
         setResolvedActivities(resolved);
       } catch (error) {
@@ -465,6 +499,9 @@ const Dashboard = () => {
         console.error('Error al validar solicitud:', error);
         toast.error('No se pudo validar la solicitud');
       }
+    } else if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
+      // Navegar a la página de actividad donde se puede gestionar la cancelación
+      navigate('/admin/actividad');
     }
   };
 
@@ -732,8 +769,12 @@ const Dashboard = () => {
                       const isStatusRequest =
                         translated.type === 'PATIENT_DISCHARGE_REQUEST' ||
                         translated.type === 'PATIENT_ACTIVATION_REQUEST';
-                      const isClickable = isFrequencyRequest || isStatusRequest;
+                      const isCancellationRequest =
+                        translated.type === 'APPOINTMENT_CANCELLATION_REQUESTED';
                       const isResolved = resolvedActivities.has(translated._id);
+                      const isClickable =
+                        (isFrequencyRequest || isStatusRequest || isCancellationRequest) &&
+                        !isResolved;
 
                       return (
                         <ActivityItem

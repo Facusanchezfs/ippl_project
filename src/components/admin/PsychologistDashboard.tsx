@@ -48,7 +48,7 @@ const PsychologistDashboard = () => {
         patientsService.getProfessionalPatients(user!.id),
         appointmentsService.getCompletedAppointments(user!.id),
         appointmentsService.getScheduledAppointments(user!.id),
-        userService.getUserById(parseNumber(user?.id))
+        userService.getUserById(parseNumber(user?.id)),
       ]);
   
       setPatients(patientsData);
@@ -196,7 +196,7 @@ const PsychologistDashboard = () => {
 
         {/* Recuadros de stats normales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div 
+          <div
             onClick={() => navigate('/professional/pacientes')}
             className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 cursor-pointer hover:shadow-lg transition-all duration-200"
           >
@@ -205,8 +205,9 @@ const PsychologistDashboard = () => {
                 <UserIcon className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-4">
-                <h3 className="text-2xl font-bold text-gray-900">{activePatients.length}</h3>
-                <p className="text-sm text-gray-600">Pacientes Activos</p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {activePatients.length} Pacientes activos
+                </h3>
               </div>
             </div>
           </div>
@@ -217,8 +218,9 @@ const PsychologistDashboard = () => {
                 <ClockIcon className="h-6 w-6 text-yellow-600" />
               </div>
               <div className="ml-4">
-                <h3 className="text-2xl font-bold text-gray-900">{completedAppointments.length}</h3>
-                <p className="text-sm text-gray-600">Citas Finalizadas</p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {completedAppointments.length} Citas Finalizadas
+                </h3>
               </div>
             </div>
           </div>
@@ -229,8 +231,9 @@ const PsychologistDashboard = () => {
                 <CalendarIcon className="h-6 w-6 text-green-600" />
               </div>
               <div className="ml-4">
-                <h3 className="text-2xl font-bold text-gray-900">{todayAppointments.length} Hoy</h3>
-                <p className="text-sm text-gray-600">Citas pendientes</p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {scheduledAppointments.length} Citas pendientes
+                </h3>
               </div>
             </div>
           </div>
@@ -243,6 +246,21 @@ const PsychologistDashboard = () => {
               <div className="ml-4">
                 <h3 className="text-2xl font-bold text-gray-900">Calendario</h3>
                 <p className="text-sm text-gray-600">Ver todas las citas</p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 cursor-pointer hover:shadow-lg transition-all duration-200"
+            onClick={() => navigate('/professional/pagos')}
+          >
+            <div className="flex items-center">
+              <div className="bg-emerald-500/10 p-3 rounded-lg">
+                <CurrencyDollarIcon className="h-6 w-6 text-emerald-600" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-2xl font-bold text-gray-900">Historial de pagos</h3>
+                <p className="text-sm text-gray-600">Ver abonos de comisión</p>
               </div>
             </div>
           </div>

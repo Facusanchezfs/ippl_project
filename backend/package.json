@@ -12,7 +12,10 @@
 		"db:seed:all": "sequelize-cli --config config/config.js db:seed:all",
 		"dev": "nodemon src/index.js",
 		"setup": "node src/setup.js",
-		"db:reset": "sequelize-cli --config config/config.js db:drop && npm run db:create && npm run db:migrate && npm run db:seed:all"
+		"db:reset": "sequelize-cli --config config/config.js db:drop && npm run db:create && npm run db:migrate && npm run db:seed:all",
+		"db:backfill-recurring": "node src/scripts/backfillRecurringAppointments.js",
+		"db:backfill-recurring:apply": "node src/scripts/backfillRecurringAppointments.js --apply",
+		"db:backfill-recurring:all": "npm run db:backfill-recurring && npm run db:backfill-recurring:apply"
 	},
 	"keywords": [],
 	"author": "",
@@ -29,6 +32,7 @@
 		"jsonwebtoken": "^9.0.0",
 		"multer": "^1.4.5-lts.1",
 		"mysql2": "^3.14.3",
+		"node-cron": "^4.2.1",
 		"nodemailer": "^6.10.1",
 		"sequelize": "^6.37.7",
 		"uuid": "^11.1.0",

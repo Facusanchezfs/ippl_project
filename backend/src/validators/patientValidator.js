@@ -22,7 +22,7 @@ const assignPatientSchema = Joi.object({
   }),
   body: Joi.object({
     professionalId: Joi.number().integer().positive().optional(),
-    professionalName: Joi.string().optional(),
+    professionalName: Joi.string().allow('', null).optional(),
     status: Joi.string().valid('active', 'pending', 'inactive').optional(),
     assignedAt: Joi.date().allow(null).optional(),
     textNote: Joi.string().allow(null, '').optional(),

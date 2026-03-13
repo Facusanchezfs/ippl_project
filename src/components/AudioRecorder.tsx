@@ -103,7 +103,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
           <button
             type="button"
             onClick={startRecording}
-            className="flex items-center px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            className="w-full flex items-center justify-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200 transition-colors"
             disabled={!!audioUrl}
           >
             <MicrophoneIcon className="h-5 w-5 mr-2" />
@@ -113,7 +113,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
           <button
             type="button"
             onClick={stopRecording}
-            className="flex items-center px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+            className="w-full flex items-center justify-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium bg-red-100 text-red-700 border-red-300 hover:bg-red-200 transition-colors"
           >
             <StopIcon className="h-5 w-5 mr-2" />
             Detener Grabación

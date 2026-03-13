@@ -16,6 +16,10 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
       });
+      Appointment.belongsTo(models.RecurringAppointment, {
+        foreignKey: 'recurringAppointmentId',
+        as: 'recurringSource',
+      });
     }
   }
 
@@ -26,6 +30,11 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         autoIncrement: true,
         allowNull: false,
+      },
+
+      recurringAppointmentId: {
+        type: DataTypes.BIGINT,
+        allowNull: true,
       },
 
       patientId: {

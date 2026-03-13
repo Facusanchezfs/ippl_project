@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PlusIcon, TrashIcon, MicrophoneIcon, EyeIcon, ClockIcon, DocumentTextIcon, UserPlusIcon, BellIcon, MagnifyingGlassIcon, ArrowUpCircleIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
-import patientsService, { AssignPatientDTO, CreatePatientDTO } from '../../services/patients.service';
+import React, { useState, useEffect, useCallback } from 'react';
+import { PlusIcon, TrashIcon, EyeIcon, ClockIcon, DocumentTextIcon, BellIcon, MagnifyingGlassIcon, ArrowUpCircleIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import patientsService, { CreatePatientDTO } from '../../services/patients.service';
 import { Patient } from '../../types/Patient';
 import userService from '../../services/user.service';
 import statusRequestService from '../../services/statusRequest.service';
@@ -9,378 +9,648 @@ import toast from 'react-hot-toast';
 import Modal from '../Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import frequencyRequestService, { FrequencyRequest } from '../../services/frequencyRequest.service';
+import appointmentsService from '../../services/appointments.service';
+import recurringAppointmentsService from '../../services/recurringAppointments.service';
+import AudioRecorder from '../AudioRecorder';
 
 interface Professional {
   id: string;
   name: string;
 }
 
-interface AssignModalProps {
+// AssignModal eliminado: la asignación y notas se gestionan ahora desde ViewDescriptionModal y NewPatientModal.
+
+interface ViewDescriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAssign: (data: AssignPatientDTO) => Promise<void>;
-  patient: Patient | null;
+  patient: Patient;
   professionals: Professional[];
+  onUpdatePatient: (id: string, data: any) => Promise<void>;
+  onScheduleUpdated: () => Promise<void>;
 }
 
-const AssignModal: React.FC<AssignModalProps> = ({ isOpen, onClose, onAssign, patient, professionals }) => {
-  const [selectedProfessional, setSelectedProfessional] = useState('');
-  const [status, setStatus] = useState<'active' | 'pending' | 'inactive'>(patient?.status || 'active');
-  const [sessionFrequency, setSessionFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
-  const [textNote, setTextNote] = useState('');
+const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
+  isOpen,
+  onClose,
+  patient,
+  professionals,
+  onUpdatePatient,
+  onScheduleUpdated,
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState<Patient['status']>(patient.status);
+  const [professionalId, setProfessionalId] = useState<string | undefined>(patient.professionalId);
+  const [sessionFrequency, setSessionFrequency] = useState<Patient['sessionFrequency'] | ''>(patient.sessionFrequency || '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [textNote, setTextNote] = useState(patient.textNote || '');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [hasExistingAudioNote, setHasExistingAudioNote] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
+  const [hasExistingAudioNote, setHasExistingAudioNote] = useState(!!patient.audioNote);
 
+  // Estado de agenda recurrente
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [isScheduleEditing, setIsScheduleEditing] = useState(false);
+  const [scheduleRecurringId, setScheduleRecurringId] = useState<string | null>(null);
+  const [scheduleFrequency, setScheduleFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
+  const [scheduleNextDate, setScheduleNextDate] = useState('');
+  const [scheduleStartTime, setScheduleStartTime] = useState('');
+  const [scheduleDuration, setScheduleDuration] = useState<30 | 60>(60);
+  const [scheduleSessionCost, setScheduleSessionCost] = useState<number | ''>('');
+
+  // Mantener el estado local sincronizado cuando cambia el paciente en props
   useEffect(() => {
-    if (isOpen && patient) {
-      if (patient.professionalId) {
-        setSelectedProfessional(patient.professionalId);
-      } else {
-        setSelectedProfessional('');
-      }
+    setStatus(patient.status);
+    setProfessionalId(patient.professionalId);
+    setSessionFrequency(patient.sessionFrequency || '');
+    setTextNote(patient.textNote || '');
+    setHasExistingAudioNote(!!patient.audioNote);
+    setAudioBlob(null);
+  }, [patient]);
 
-      if (patient.status) {
-        setStatus(patient.status);
-      }
+  // Cargar agenda recurrente al abrir modal
+  useEffect(() => {
+    const loadSchedule = async () => {
+      if (!isOpen) return;
+      setScheduleLoading(true);
+      setScheduleError(null);
+      try {
+        const data =
+          await recurringAppointmentsService.getPatientRecurringScheduleAdmin(
+            patient.id
+          );
 
-      if (patient.sessionFrequency) {
-        setSessionFrequency(patient.sessionFrequency);
-      } else {
-        setSessionFrequency('weekly');
-      }
-
-      if (patient.textNote) {
-        setTextNote(patient.textNote);
-      } else {
-        setTextNote('');
-      }
-
-      if (patient.audioNote) {
-        setHasExistingAudioNote(true);
-      } else {
-        setHasExistingAudioNote(false);
-      }
-
-      setAudioBlob(null);
-    } else if (!isOpen) {
-      setSelectedProfessional('');
-      setStatus('active');
-      setSessionFrequency('weekly');
-      setTextNote('');
-      setAudioBlob(null);
-      setHasExistingAudioNote(false);
-      chunksRef.current = [];
-    }
-  }, [isOpen, patient]);
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
+        if (data) {
+          setScheduleRecurringId(String(data.recurringId));
+          setScheduleFrequency(data.frequency);
+          setScheduleNextDate(data.nextDate);
+          setScheduleStartTime(data.startTime);
+          setScheduleDuration(data.duration === 30 ? 30 : 60);
+          setScheduleSessionCost(
+            typeof data.sessionCost === 'number' ? data.sessionCost : 0
+          );
+        } else {
+          // El paciente no tiene agenda recurrente configurada todavía
+          setScheduleRecurringId(null);
+          setScheduleFrequency('');
+          setScheduleNextDate('');
+          setScheduleStartTime('');
+          setScheduleDuration(60);
+          setScheduleSessionCost('');
         }
-      };
+      } catch (error: any) {
+        console.error('Error al cargar agenda recurrente:', error);
+        setScheduleError(
+          error?.response?.data?.message ||
+            'No se pudo cargar la agenda recurrente del paciente'
+        );
+      } finally {
+        setScheduleLoading(false);
+      }
+    };
 
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        chunksRef.current = [];
-      };
+    void loadSchedule();
+  }, [isOpen, patient.id]);
 
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      toast.error('No se pudo acceder al micrófono. Verifica los permisos del navegador.');
-    }
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setStatus(patient.status);
+    setProfessionalId(patient.professionalId);
+    setSessionFrequency(patient.sessionFrequency || '');
+    setTextNote(patient.textNote || '');
+    setHasExistingAudioNote(!!patient.audioNote);
+    setAudioBlob(null);
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-    }
-  };
+  const handleSave = async () => {
+    const payload: any = {};
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+    if (status !== patient.status) {
+      payload.status = status;
+    }
+
+    if (professionalId && professionalId !== patient.professionalId) {
+      const selectedProf = professionals.find((p) => String(p.id) === String(professionalId));
+      payload.professionalId = professionalId;
+      if (selectedProf) {
+        payload.professionalName = selectedProf.name;
+      }
+    }
+
+    if (sessionFrequency && sessionFrequency !== patient.sessionFrequency) {
+      payload.sessionFrequency = sessionFrequency;
+    }
+
+    const trimmedTextNote = textNote.trim();
+    if (trimmedTextNote !== (patient.textNote || '')) {
+      payload.textNote = trimmedTextNote || null;
+    }
+
+    // Manejar nota de audio
+    if (audioBlob) {
+      if (audioBlob.size === 0) {
+        toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
+        return;
+      }
+      try {
+        const audioFile = new File([audioBlob], 'note.webm', {
+          type: 'audio/webm',
+        });
+        const audioNoteUrl = await patientsService.uploadAudio(audioFile);
+        payload.audioNote = audioNoteUrl;
+      } catch (error: any) {
+        console.error('Error al subir el audio:', error);
+        const errorMessage = error?.message || 'Error al subir el audio';
+        toast.error(errorMessage);
+        return;
+      }
+    } else if (patient.audioNote && hasExistingAudioNote) {
+      // Preservar audio existente si no se grabó uno nuevo
+      payload.audioNote = patient.audioNote;
+    } else if (!hasExistingAudioNote && patient.audioNote) {
+      // Si se indicó eliminar el audio existente
+      payload.audioNote = null;
+    }
+
+    // Si no hay cambios, no llamar a la API
+    if (Object.keys(payload).length === 0) {
+      setIsEditing(false);
+      return;
+    }
+
     try {
-      if (!patient) {
-        toast.error('No se encontró el paciente');
-        return;
-      }
+      setIsSaving(true);
+      await onUpdatePatient(patient.id, payload);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error al actualizar paciente:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-      const selectedProf = professionals.find(p => p.id == selectedProfessional);
-      if (!selectedProf) {
-        toast.error('Por favor selecciona un profesional');
-        return;
-      }
+  const handleSaveSchedule = async () => {
+    // Validaciones frontend
+    if (scheduleDuration !== 30 && scheduleDuration !== 60) {
+      setScheduleError('La duración debe ser 30 o 60 minutos.');
+      return;
+    }
 
-      const assignData: any = {
-        patientId: patient.id,
-        professionalId: selectedProfessional,
-        professionalName: selectedProf.name,
-      };
+    if (scheduleSessionCost === '' || Number(scheduleSessionCost) < 0) {
+      setScheduleError('El costo de sesión debe ser mayor o igual a 0.');
+      return;
+    }
 
-      if (status !== patient.status) {
-        assignData.status = status;
-      }
+    if (!scheduleNextDate) {
+      setScheduleError('Debes especificar la fecha de la próxima cita.');
+      return;
+    }
 
-      if (sessionFrequency !== patient.sessionFrequency) {
-        assignData.sessionFrequency = sessionFrequency;
-      }
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (scheduleNextDate < todayStr) {
+      setScheduleError('La fecha de la próxima cita no puede estar en el pasado.');
+      return;
+    }
 
-      const trimmedTextNote = textNote.trim();
-      
-      // Agregar nota de texto si tiene contenido
-      if (trimmedTextNote) {
-        assignData.textNote = trimmedTextNote;
-      }
-      
-      // Manejar nota de audio
-      if (audioBlob) {
-        // Si hay un audio nuevo grabado, subirlo y usarlo
-        try {
-          if (audioBlob.size === 0) {
-            toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
-            return;
+    if (!/^\d{2}:\d{2}$/.test(scheduleStartTime)) {
+      setScheduleError('La hora de inicio debe estar en formato HH:MM.');
+      return;
+    }
+
+    try {
+      setScheduleLoading(true);
+
+      if (!scheduleRecurringId) {
+        // Crear nueva agenda recurrente para el paciente
+        await recurringAppointmentsService.createPatientRecurringScheduleAdmin(
+          patient.id,
+          {
+            frequency: scheduleFrequency || 'weekly',
+            nextDate: scheduleNextDate,
+            startTime: scheduleStartTime,
+            duration: scheduleDuration,
+            sessionCost: Number(scheduleSessionCost),
           }
-          
-          const audioFile = new File([audioBlob], 'note.webm', { 
-            type: 'audio/webm'
-          });
-          
-          const audioNoteUrl = await patientsService.uploadAudio(audioFile);
-          assignData.audioNote = audioNoteUrl;
-        } catch (error: any) {
-          console.error('Error al subir el audio:', error);
-          const errorMessage = error?.message || 'Error al subir el audio';
-          toast.error(errorMessage);
-          return;
-        }
-      } else if (patient.audioNote && hasExistingAudioNote) {
-        // Si no hay audio nuevo pero hay uno existente, preservarlo
-        assignData.audioNote = patient.audioNote;
+        );
+      } else {
+        // Actualizar agenda existente
+        await recurringAppointmentsService.updateRecurringAppointmentAdmin(
+          scheduleRecurringId,
+          {
+            frequency: scheduleFrequency || 'weekly',
+            nextDate: scheduleNextDate,
+            startTime: scheduleStartTime,
+            duration: scheduleDuration,
+            sessionCost: Number(scheduleSessionCost),
+          }
+        );
       }
 
-      if (!patient.professionalId && selectedProfessional) {
-        assignData.assignedAt = new Date().toISOString();
-      }
-
-      await onAssign(assignData as AssignPatientDTO);
-      onClose();
-      toast.success(patient.professionalId ? 'Asignación actualizada exitosamente' : 'Paciente asignado exitosamente');
-    } catch (error) {
-      console.error('Error al asignar paciente:', error);
-      toast.error('Error al asignar el paciente');
+      setIsScheduleEditing(false);
+      await onScheduleUpdated();
+    } catch (error: any) {
+      console.error('Error al actualizar agenda recurrente:', error);
+      setScheduleError(
+        error?.response?.data?.message || 'Error al actualizar la agenda recurrente'
+      );
+    } finally {
+      setScheduleLoading(false);
     }
   };
-
-  if (!isOpen) return null;
-
-  const hasProfessional = patient?.professionalId ? true : false;
-  const modalTitle = hasProfessional 
-    ? `Editar asignación de ${patient?.name}`
-    : `Asignar profesional a ${patient?.name}`;
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <div className="p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900">
-            {modalTitle}
+          <h3 className="text-lg font-semibold text-gray-900">
+            Detalle del Paciente
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
-            <span className="sr-only">Cerrar</span>
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="mt-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Profesional
+              Nombre
             </label>
-            <select
-              value={selectedProfessional}
-              onChange={(e) => setSelectedProfessional(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              required
-            >
-              <option value="">Seleccionar profesional</option>
-              {professionals.map((prof) => (
-                <option key={prof.id} value={prof.id}>
-                  {prof.name}
-                </option>
-              ))}
-            </select>
+            <p className="mt-1 text-lg text-gray-900">{patient.name}</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Estado
             </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'active' | 'pending' | 'inactive')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              required
-            >
-              <option value="active">Activo</option>
-              <option value="pending">Pendiente</option>
-              <option value="inactive">Inactivo</option>
-            </select>
+            {isEditing ? (
+              <select
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as 'active' | 'pending' | 'inactive')
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="active">Activo</option>
+                <option value="pending">Pendiente</option>
+                <option value="inactive">Inactivo</option>
+              </select>
+            ) : (
+              <span
+                className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  patient.status === 'active'
+                    ? 'bg-green-100 text-green-800'
+                    : patient.status === 'pending'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}
+              >
+                {patient.status === 'active'
+                  ? 'Activo'
+                  : patient.status === 'pending'
+                  ? 'Pendiente'
+                  : 'Inactivo'}
+              </span>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Frecuencia de Sesiones
+              Profesional
             </label>
-            <select
-              value={sessionFrequency}
-              onChange={(e) => setSessionFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              required
-            >
-              <option value="weekly">Semanal</option>
-              <option value="biweekly">Quincenal</option>
-              <option value="monthly">Mensual</option>
-            </select>
+            {isEditing ? (
+              <select
+                value={professionalId || ''}
+                onChange={(e) =>
+                  setProfessionalId(e.target.value || undefined)
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="">No asignado</option>
+                {professionals.map((prof) => (
+                  <option key={prof.id} value={prof.id}>
+                    {prof.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {patient.professionalName || 'No asignado'}
+              </p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Nota de Texto
+              Frecuencia de sesiones
             </label>
-            <textarea
-              value={textNote}
-              onChange={(e) => setTextNote(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 resize-none"
-              rows={4}
-              placeholder="Escribe una nota sobre el paciente..."
-            />
+            {isEditing ? (
+              <select
+                value={sessionFrequency}
+                onChange={(e) =>
+                  setSessionFrequency(
+                    e.target.value as 'weekly' | 'biweekly' | 'monthly' | ''
+                  )
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Sin frecuencia</option>
+                <option value="weekly">Semanal</option>
+                <option value="biweekly">Quincenal</option>
+                <option value="monthly">Mensual</option>
+              </select>
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {getFrequencyLabel(patient.sessionFrequency)}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Próxima cita
+            </label>
+            <p className="mt-1 text-sm text-gray-900">
+              {patient.nextAppointment
+                ? new Date(patient.nextAppointment).toLocaleString()
+                : 'Sin próxima cita registrada'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Costo de la sesión
+            </label>
+            <p className="mt-1 text-sm text-gray-900">
+              {typeof patient.sessionCost === 'number'
+                ? `$${patient.sessionCost.toFixed(2)}`
+                : 'No informado'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Descripción
+            </label>
+            <div className="mt-2 p-4 bg-gray-50 rounded-lg max-h-48 overflow-y-auto">
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {patient.description || 'No hay descripción disponible.'}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Nota de texto
+            </label>
+            {isEditing ? (
+              <textarea
+                value={textNote}
+                onChange={(e) => setTextNote(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm resize-none"
+                rows={4}
+                placeholder="Escribe una nota sobre el paciente..."
+              />
+            ) : (
+              <div className="mt-1 p-3 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">
+                <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                  {patient.textNote || 'Sin nota de texto.'}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Nota de Audio
+              Nota de audio
             </label>
-            {hasExistingAudioNote && !audioBlob && (
+
+            {hasExistingAudioNote && patient.audioNote && !audioBlob && (
               <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-800">
-                  ℹ️ Este paciente ya tiene una nota de voz cargada. Solo se reemplazará si grabas una nueva.
+                <p className="text-xs text-blue-800">
+                  ℹ️ Este paciente ya tiene una nota de voz cargada. Solo se reemplazará si
+                  grabas una nueva.
                 </p>
               </div>
             )}
-            {!audioBlob ? (
+
+            {isEditing ? (
+              <AudioRecorder
+                showLabel={false}
+                existingAudioUrl={patient.audioNote || undefined}
+                onRecordingComplete={(blob) => {
+                  setAudioBlob(blob);
+                  setHasExistingAudioNote(false);
+                }}
+              />
+            ) : patient.audioNote ? (
+              <audio
+                controls
+                src={patient.audioNote}
+                className="w-full mt-1"
+                preload="metadata"
+              >
+                Tu navegador no soporta el elemento de audio.
+              </audio>
+            ) : (
+              <p className="text-sm text-gray-500">Sin nota de audio.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Sección de agenda recurrente */}
+        <div className="mt-8 border-t pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-800">
+              Agenda recurrente
+            </h4>
+            {!scheduleLoading && (
               <button
                 type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`w-full flex items-center justify-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium ${
-                  isRecording
-                    ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
-                    : 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200'
-                }`}
+                onClick={() => {
+                  if (!scheduleRecurringId) {
+                    setScheduleFrequency(
+                      (patient.sessionFrequency as
+                        | 'weekly'
+                        | 'biweekly'
+                        | 'monthly') || 'weekly'
+                    );
+                    setScheduleNextDate('');
+                    setScheduleStartTime('');
+                    setScheduleDuration(60);
+                    setScheduleSessionCost('');
+                  }
+                  setIsScheduleEditing((prev) => !prev);
+                  setScheduleError(null);
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
               >
-                <MicrophoneIcon className="h-5 w-5 mr-2" />
-                {isRecording ? 'Detener Grabación' : 'Iniciar Grabación'}
+                {isScheduleEditing
+                  ? 'Cancelar edición'
+                  : scheduleRecurringId
+                  ? 'Editar agenda'
+                  : 'Crear agenda'}
               </button>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-md">
-                  <span className="text-sm text-gray-600">Audio grabado</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAudioBlob(null);
-                      chunksRef.current = [];
-                    }}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-                {audioBlob && (
-                  <audio
-                    controls
-                    src={URL.createObjectURL(audioBlob)}
-                    className="w-full mt-2"
-                    preload="metadata"
-                  >
-                    Tu navegador no soporta el elemento de audio.
-                  </audio>
-                )}
-              </div>
             )}
           </div>
 
-          <div className="flex justify-end space-x-2">
+          {scheduleLoading && (
+            <p className="text-sm text-gray-500">Cargando agenda...</p>
+          )}
+
+          {scheduleError && !scheduleLoading && (
+            <p className="text-sm text-red-600 mb-2">{scheduleError}</p>
+          )}
+
+          {!scheduleLoading && (scheduleRecurringId || isScheduleEditing) && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Frecuencia
+                </label>
+                <select
+                  disabled={!isScheduleEditing}
+                  value={scheduleFrequency}
+                  onChange={(e) =>
+                    setScheduleFrequency(
+                      e.target.value as 'weekly' | 'biweekly' | 'monthly' | ''
+                    )
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="weekly">Semanal</option>
+                  <option value="biweekly">Quincenal</option>
+                  <option value="monthly">Mensual</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Próxima fecha
+                  </label>
+                  <input
+                    type="date"
+                    disabled={!isScheduleEditing}
+                    value={scheduleNextDate}
+                    onChange={(e) => setScheduleNextDate(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Hora inicio
+                  </label>
+                  <input
+                    type="time"
+                    disabled={!isScheduleEditing}
+                    value={scheduleStartTime}
+                    onChange={(e) => setScheduleStartTime(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Duración
+                  </label>
+                  <select
+                    disabled={!isScheduleEditing}
+                    value={scheduleDuration}
+                    onChange={(e) =>
+                      setScheduleDuration(Number(e.target.value) === 30 ? 30 : 60)
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  >
+                    <option value={30}>30 minutos</option>
+                    <option value={60}>60 minutos</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Costo sesión
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    disabled={!isScheduleEditing}
+                    value={scheduleSessionCost}
+                    onChange={(e) =>
+                      setScheduleSessionCost(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              {isScheduleEditing && (
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsScheduleEditing(false);
+                      setScheduleError(null);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveSchedule}
+                    disabled={scheduleLoading}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {scheduleLoading ? 'Guardando...' : 'Guardar agenda'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!scheduleLoading && !scheduleRecurringId && !scheduleError && (
+            <p className="text-sm text-gray-500">
+              Este paciente no tiene una agenda recurrente configurada. Usa el botón
+              &quot;Crear agenda&quot; para configurarla cuando tenga frecuencia y
+              profesional asignados.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </>
+          ) : (
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
             >
-              Cancelar
+              Editar
             </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-            >
-              {hasProfessional ? 'Guardar Cambios' : 'Asignar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-interface ViewDescriptionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  patient: Patient;
-}
-
-const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({ isOpen, onClose, patient }) => {
-  return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Descripción del Paciente
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
-          >
-            <span className="sr-only">Cerrar</span>
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="mt-4">
-          <div className="mb-4">
-            <h4 className="text-sm font-medium text-gray-700">Nombre del Paciente</h4>
-            <p className="mt-1 text-lg text-gray-900">{patient.name}</p>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium text-gray-700">Descripción</h4>
-            <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-              <p className="text-gray-900 whitespace-pre-wrap">{patient.description || 'No hay descripción disponible.'}</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </Modal>
@@ -512,27 +782,145 @@ const StatusRequestModal: React.FC<StatusRequestModalProps> = ({
 interface NewPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (name: string, description: string) => Promise<void>;
+  onSubmit: (data: {
+    name: string;
+    description: string;
+    status?: 'active' | 'pending' | 'inactive';
+    professionalId?: string;
+    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    nextAppointmentDate?: string;
+    nextAppointmentStartTime?: string;
+    nextAppointmentEndTime?: string;
+    sessionCost?: number;
+    textNote?: string;
+    audioNote?: string;
+  }) => Promise<void>;
   showDescription?: boolean;
+  professionals: Professional[];
 }
 
-const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSubmit, showDescription = false }) => {
+const NewPatientModal: React.FC<NewPatientModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  showDescription = false,
+  professionals,
+}) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [status, setStatus] = useState<'active' | 'pending' | 'inactive'>('pending');
+  const [professionalId, setProfessionalId] = useState('');
+  const [sessionFrequency, setSessionFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
+  const [nextAppointmentDate, setNextAppointmentDate] = useState('');
+  const [nextAppointmentStartTime, setNextAppointmentStartTime] = useState('');
+  const [nextAppointmentEndTime, setNextAppointmentEndTime] = useState('');
+  const [sessionDuration, setSessionDuration] = useState<30 | 60>(60);
+  const [sessionCost, setSessionCost] = useState<number | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
+  const [textNote, setTextNote] = useState('');
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+
+  const calculateEndTime = (startTime: string, durationMinutes: number = 60): string => {
+    if (!startTime) return '';
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60) % 24;
+    const endMinutes = totalMinutes % 60;
+    return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+  };
+
+  const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const startTime = e.target.value;
+    setNextAppointmentStartTime(startTime);
+    if (startTime) {
+      setNextAppointmentEndTime(calculateEndTime(startTime, sessionDuration));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setHasTriedSubmit(true);
+
     if (!name.trim()) {
       toast.error('Por favor, ingresa el nombre del paciente');
       return;
     }
 
+    const isActiveWithFrequency = status === 'active' && !!sessionFrequency;
+
+    // Validar que si hay frecuencia para un paciente ACTIVO, también haya próxima cita completa
+    if (isActiveWithFrequency && !nextAppointmentDate) {
+      toast.error('Si defines una frecuencia de sesiones, debes especificar la fecha de la próxima cita');
+      return;
+    }
+
+    // Validar que si hay próxima cita, también haya profesional
+    if (isActiveWithFrequency && nextAppointmentDate && !professionalId) {
+      toast.error('Debes seleccionar un profesional para crear la próxima cita');
+      return;
+    }
+
+    // Validar que si hay próxima cita, también haya hora de inicio
+    if (isActiveWithFrequency && nextAppointmentDate && !nextAppointmentStartTime) {
+      toast.error('Debes especificar la hora de inicio de la próxima cita');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await onSubmit(name, description);
+      let audioNoteUrl: string | undefined;
+      const trimmedTextNote = textNote.trim();
+
+      if (audioBlob) {
+        if (audioBlob.size === 0) {
+          toast.error('El audio grabado está vacío. Por favor, graba nuevamente.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const audioFile = new File([audioBlob], 'note.webm', {
+          type: 'audio/webm',
+        });
+
+        try {
+          audioNoteUrl = await patientsService.uploadAudio(audioFile);
+        } catch (error: any) {
+          console.error('Error al subir el audio:', error);
+          const errorMessage = error?.message || 'Error al subir el audio';
+          toast.error(errorMessage);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      await onSubmit({
+        name,
+        description,
+        status,
+        professionalId: professionalId || undefined,
+        sessionFrequency: sessionFrequency || undefined,
+        nextAppointmentDate: nextAppointmentDate || undefined,
+        nextAppointmentStartTime: nextAppointmentStartTime || undefined,
+        nextAppointmentEndTime: nextAppointmentEndTime || undefined,
+        sessionCost: sessionCost !== '' ? Number(sessionCost) : undefined,
+        textNote: trimmedTextNote || undefined,
+        audioNote: audioNoteUrl,
+      });
+      // Reset form
       setName('');
       setDescription('');
+      setStatus('pending');
+      setProfessionalId('');
+      setSessionFrequency('');
+      setNextAppointmentDate('');
+      setNextAppointmentStartTime('');
+      setNextAppointmentEndTime('');
+      setSessionDuration(60);
+      setSessionCost('');
+      setHasTriedSubmit(false);
+      setTextNote('');
+      setAudioBlob(null);
       onClose();
     } catch (error) {
       console.error('Error al crear paciente:', error);
@@ -553,7 +941,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nombre del Paciente
+              Nombre del Paciente *
             </label>
             <input
               type="text"
@@ -566,21 +954,213 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             />
           </div>
 
-          {showDescription && (
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-              Descripción
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+              Estado
+            </label>
+            <select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'active' | 'pending' | 'inactive')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="pending">Pendiente</option>
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="professionalId" className="block text-sm font-medium text-gray-700">
+              Profesional
+            </label>
+            <select
+              id="professionalId"
+              value={professionalId}
+              onChange={(e) => setProfessionalId(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar profesional</option>
+              {professionals.map((prof) => (
+                <option key={prof.id} value={prof.id}>
+                  {prof.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="sessionFrequency" className="block text-sm font-medium text-gray-700">
+              Frecuencia de Sesiones
+            </label>
+            <select
+              id="sessionFrequency"
+              value={sessionFrequency}
+              onChange={(e) => setSessionFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly' | '')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Sin frecuencia (solo primera cita)</option>
+              <option value="weekly">Semanal</option>
+              <option value="biweekly">Quincenal</option>
+              <option value="monthly">Mensual</option>
+            </select>
+            {sessionFrequency && (
+              <p className="mt-1 text-sm text-amber-600">
+                ⚠️ Si defines una frecuencia, debes especificar la fecha de la próxima cita
+              </p>
+            )}
+          </div>
+
+          {sessionFrequency && (
+            <>
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Próxima Cita</h4>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="nextAppointmentDate" className="block text-sm font-medium text-gray-700">
+                      Fecha de la Próxima Cita *
+                    </label>
+                    <input
+                      type="date"
+                      id="nextAppointmentDate"
+                      value={nextAppointmentDate}
+                      onChange={(e) => setNextAppointmentDate(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      required={!!sessionFrequency}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    {hasTriedSubmit && status === 'active' && sessionFrequency && !nextAppointmentDate && (
+                      <p className="mt-1 text-xs text-red-600">
+                        Debes ingresar la fecha de la próxima cita.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label htmlFor="nextAppointmentStartTime" className="block text-sm font-medium text-gray-700">
+                        Hora de inicio *
+                      </label>
+                      <input
+                        type="time"
+                        id="nextAppointmentStartTime"
+                        value={nextAppointmentStartTime}
+                        onChange={handleStartTimeChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required={!!nextAppointmentDate && status === 'active' && !!sessionFrequency}
+                        step={60}
+                      />
+                      {hasTriedSubmit && status === 'active' && sessionFrequency && !nextAppointmentStartTime && (
+                        <p className="mt-1 text-xs text-red-600">
+                          Debes ingresar la hora de inicio de la próxima cita.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="sessionDuration" className="block text-sm font-medium text-gray-700">
+                        Duración
+                      </label>
+                      <select
+                        id="sessionDuration"
+                        value={sessionDuration}
+                        onChange={(e) => {
+                          const value = Number(e.target.value) as 30 | 60;
+                          setSessionDuration(value);
+                          if (nextAppointmentStartTime) {
+                            setNextAppointmentEndTime(calculateEndTime(nextAppointmentStartTime, value));
+                          }
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      >
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>60 minutos</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="nextAppointmentEndTime" className="block text-sm font-medium text-gray-700">
+                        Hora de fin
+                      </label>
+                      <input
+                        type="time"
+                        id="nextAppointmentEndTime"
+                        value={nextAppointmentEndTime}
+                        onChange={(e) => setNextAppointmentEndTime(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required={!!nextAppointmentDate && status === 'active' && !!sessionFrequency}
+                        step={60}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="sessionCost" className="block text-sm font-medium text-gray-700">
+                      Costo de la Sesión
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">$</span>
+                      </div>
+                      <input
+                        type="number"
+                        id="sessionCost"
+                        value={sessionCost}
+                        onChange={(e) => setSessionCost(e.target.value === '' ? '' : Number(e.target.value))}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {showDescription && (
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Descripción
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="Ingresa una descripción opcional"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Nota de Texto
             </label>
             <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              value={textNote}
+              onChange={(e) => setTextNote(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 resize-none"
               rows={4}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              placeholder="Ingresa una descripción opcional"
+              placeholder="Escribe una nota sobre el paciente..."
             />
           </div>
-          )}
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Nota de Audio
+            </label>
+            <AudioRecorder
+              showLabel={false}
+              onRecordingComplete={(blob) => {
+                setAudioBlob(blob);
+              }}
+            />
+          </div>
 
           <div className="flex justify-end space-x-3">
             <button
@@ -594,7 +1174,13 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <button
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting ||
+                !name.trim() ||
+                (status === 'active' &&
+                  !!sessionFrequency &&
+                  (!professionalId || !nextAppointmentDate || !nextAppointmentStartTime))
+              }
             >
               {isSubmitting ? 'Creando...' : 'Crear Paciente'}
             </button>
@@ -733,7 +1319,6 @@ const PatientManagement = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isNewPatientModalOpen, setIsNewPatientModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isViewDescriptionModalOpen, setIsViewDescriptionModalOpen] = useState(false);
@@ -943,38 +1528,115 @@ const PatientManagement = () => {
     }
   };
 
-  const handleAssign = async (assignData: AssignPatientDTO) => {
+  const handleAddPatient = async (data: {
+    name: string;
+    description: string;
+    status?: 'active' | 'pending' | 'inactive';
+    professionalId?: string;
+    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    nextAppointmentDate?: string;
+    nextAppointmentStartTime?: string;
+    nextAppointmentEndTime?: string;
+    sessionCost?: number;
+    textNote?: string;
+    audioNote?: string;
+  }) => {
     try {
-      const updatedPatient = await patientsService.assignPatient(assignData);
-      setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
-      setIsAssignModalOpen(false);
-      setSelectedPatient(null);
-      toast.success('Paciente asignado correctamente');
-    } catch (error) {
-      console.error('Error al asignar paciente:', error);
-      toast.error('Error al asignar el paciente');
-    }
-  };
-
-  const openAssignModal = (patient: Patient) => {
-    setSelectedPatient(patient);
-    setIsAssignModalOpen(true);
-  };
-
-  const handleAddPatient = async (name: string, description: string) => {
-    try {
+      // Paso 1: Crear paciente
       const newPatient: CreatePatientDTO = {
-        name,
-        description
+        name: data.name,
+        description: data.description,
       };
-      await patientsService.addPatient(newPatient);
+      
+      const createdPatient = await patientsService.addPatient(newPatient);
+      const patientId = createdPatient.id;
+
+      // Si hay professionalId, asignar el paciente
+      if (data.professionalId) {
+        try {
+          await patientsService.assignPatient({
+            patientId,
+            professionalId: data.professionalId,
+            status: data.status,
+            sessionFrequency: data.sessionFrequency as any,
+            textNote: data.textNote,
+            audioNote: data.audioNote,
+            professionalName: '',
+          });
+        } catch (assignError) {
+          console.error('Error al asignar paciente:', assignError);
+          // Continuar aunque falle la asignación, el paciente ya está creado
+        }
+      }
+
+      // Paso 2: Crear la primera cita si hay fecha y profesional
+      let appointmentId: string | null = null;
+      if (
+        data.status === 'active' &&
+        data.nextAppointmentDate &&
+        data.professionalId &&
+        data.nextAppointmentStartTime
+      ) {
+        try {
+          const appointment = await appointmentsService.createAppointment({
+            patientId,
+            professionalId: data.professionalId,
+            date: data.nextAppointmentDate,
+            startTime: data.nextAppointmentStartTime,
+            endTime: data.nextAppointmentEndTime || calculateEndTime(data.nextAppointmentStartTime, 60),
+            type: 'regular',
+            status: 'scheduled',
+            sessionCost: data.sessionCost,
+          });
+          appointmentId = appointment.id;
+          toast.success('Paciente y primera cita creados exitosamente');
+        } catch (appointmentError) {
+          console.error('Error al crear la primera cita:', appointmentError);
+          toast.error('Paciente creado, pero hubo un error al crear la primera cita. Puedes crearla manualmente después.');
+          // No lanzar error, el paciente ya está creado
+        }
+      }
+
+      // Paso 3: Registrar recurrencia si hay sessionFrequency y appointmentId
+      if (
+        data.status === 'active' &&
+        data.sessionFrequency &&
+        appointmentId &&
+        (data.sessionFrequency === 'weekly' ||
+          data.sessionFrequency === 'biweekly' ||
+          data.sessionFrequency === 'monthly')
+      ) {
+        try {
+          await recurringAppointmentsService.createRecurringAppointment({
+            baseAppointmentId: Number(appointmentId),
+            frequency: data.sessionFrequency,
+          });
+          toast.success('Recurrencia configurada correctamente. El CRON generará las citas futuras automáticamente.');
+        } catch (recurrenceError) {
+          console.error('Error al crear recurrencia:', recurrenceError);
+          toast.error('Paciente y cita creados, pero hubo un error al configurar la recurrencia. Puedes configurarla manualmente después.');
+          // No lanzar error, el paciente y la cita ya están creados
+        }
+      } else if (data.sessionFrequency && !appointmentId) {
+        toast.error('No se pudo crear la recurrencia porque no se pudo crear la primera cita. Por favor, crea la cita manualmente y luego configura la recurrencia.');
+      }
+
       await loadData();
-      toast.success('Paciente agregado exitosamente');
     } catch (error) {
       console.error('Error al agregar paciente:', error);
       toast.error('Error al agregar el paciente');
       throw error;
     }
+  };
+
+  // Helper function para calcular hora de fin
+  const calculateEndTime = (startTime: string, durationMinutes: number = 60): string => {
+    if (!startTime) return '';
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60) % 24;
+    const endMinutes = totalMinutes % 60;
+    return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
   };
 
 
@@ -1289,16 +1951,9 @@ const PatientManagement = () => {
                     <button
                       onClick={() => openViewDescriptionModal(patient)}
                       className="text-gray-600 hover:text-gray-900"
-                      title="Ver Descripción"
+                      title="Ver paciente"
                     >
                       <EyeIcon className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => openAssignModal(patient)}
-                      className="text-green-600 hover:text-green-900"
-                      title="Asignar Profesional"
-                    >
-                      <UserPlusIcon className="h-5 w-5" />
                     </button>
                     <button
                       onClick={() => handleViewStatusRequest(patient)}
@@ -1400,16 +2055,9 @@ const PatientManagement = () => {
                             <button
                               onClick={() => openViewDescriptionModal(patient)}
                               className="text-gray-600 hover:text-gray-900"
-                              title="Ver Descripción"
+                              title="Ver paciente"
                             >
                               <EyeIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              onClick={() => openAssignModal(patient)}
-                              className="text-green-600 hover:text-green-900"
-                              title="Asignar Profesional"
-                            >
-                              <UserPlusIcon className="h-5 w-5" />
                             </button>
                             <button
                               onClick={() => handleViewStatusRequest(patient)}
@@ -1458,6 +2106,7 @@ const PatientManagement = () => {
         isOpen={isNewPatientModalOpen}
         onClose={() => setIsNewPatientModalOpen(false)}
         onSubmit={handleAddPatient}
+        professionals={professionals}
       />
 
       {isDeleteModalOpen && (
@@ -1509,19 +2158,6 @@ const PatientManagement = () => {
         </div>
       )}
 
-      {isAssignModalOpen && selectedPatient && (
-        <AssignModal
-          isOpen={isAssignModalOpen}
-          onClose={() => {
-            setIsAssignModalOpen(false);
-            setSelectedPatient(null);
-          }}
-          onAssign={handleAssign}
-          patient={selectedPatient}
-          professionals={professionals}
-        />
-      )}
-
       {isViewDescriptionModalOpen && selectedPatient && (
         <ViewDescriptionModal
           isOpen={isViewDescriptionModalOpen}
@@ -1530,6 +2166,23 @@ const PatientManagement = () => {
             setSelectedPatient(null);
           }}
           patient={selectedPatient}
+          professionals={professionals}
+          onUpdatePatient={async (id, data) => {
+            try {
+              const updated = await patientsService.updatePatient(id, data);
+              setPatients((prev) =>
+                prev.map((p) => (p.id === updated.id ? updated : p))
+              );
+              toast.success('Paciente actualizado correctamente');
+            } catch (error) {
+              console.error('Error al actualizar paciente:', error);
+              toast.error('Error al actualizar el paciente');
+              throw error;
+            }
+          }}
+          onScheduleUpdated={async () => {
+            await loadData();
+          }}
         />
       )}
 
