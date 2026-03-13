@@ -94,6 +94,8 @@ async function getActivities(req, res) {
       'FREQUENCY_CHANGE_APPROVED',
       'FREQUENCY_CHANGE_REJECTED',
       'APPOINTMENT_CANCELLATION_REQUESTED',
+      'APPOINTMENT_CANCELLATION_APPROVED',
+      'APPOINTMENT_CANCELLATION_REJECTED',
     ];
 
     const page = parseInt(req.query.page, 10) || 1;
@@ -139,6 +141,50 @@ async function getActivities(req, res) {
       }
       return plain;
     });
+
+    // Asegurar que las actividades de cancelación de cita tengan el motivo
+    // incluso para registros antiguos creados antes de guardar reason en metadata
+    const cancellationIds = normalizedActivities
+      .filter(
+        (a) =>
+          a.type === 'APPOINTMENT_CANCELLATION_REQUESTED' &&
+          a.metadata &&
+          !a.metadata.reason &&
+          a.metadata.cancellationRequestId
+      )
+      .map((a) => String(a.metadata.cancellationRequestId));
+
+    if (cancellationIds.length > 0) {
+      try {
+        const { AppointmentCancellationRequest } = require('../../models');
+        const requests = await AppointmentCancellationRequest.findAll({
+          where: { id: { [Op.in]: cancellationIds } },
+          attributes: ['id', 'reason'],
+        });
+        const reasonMap = new Map(
+          requests.map((r) => [String(r.id), r.reason || ''])
+        );
+
+        normalizedActivities.forEach((a) => {
+          if (
+            a.type === 'APPOINTMENT_CANCELLATION_REQUESTED' &&
+            a.metadata &&
+            !a.metadata.reason &&
+            a.metadata.cancellationRequestId
+          ) {
+            const rId = String(a.metadata.cancellationRequestId);
+            if (reasonMap.has(rId)) {
+              a.metadata.reason = reasonMap.get(rId);
+            }
+          }
+        });
+      } catch (err) {
+        logger.warn(
+          '[getActivities] No se pudo enriquecer reason de cancelaciones antiguas:',
+          err
+        );
+      }
+    }
 
     const totalPages = Math.ceil(count / limit);
 

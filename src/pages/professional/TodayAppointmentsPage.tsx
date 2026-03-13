@@ -140,22 +140,21 @@ const AppointmentsPage = () => {
     return fromMinutes(total);
   };
 
-  const handleEditAppointment = async (appointmentData: Partial<Appointment>) => {
+  const handleEditAppointment = async (appointmentData: { sessionCost: number }) => {
     try {
       if (!selectedAppointment) return;
 
       await appointmentsService.updateAppointment(selectedAppointment.id, {
-        ...appointmentData,
-        status: appointmentData.status ?? selectedAppointment.status
+        sessionCost: appointmentData.sessionCost,
       });
 
       await loadAppointments();
       setShowEditAppointmentModal(false);
       setSelectedAppointment(null);
-      toast.success('Cita actualizada exitosamente');
+      toast.success('Monto de la sesión actualizado exitosamente');
     } catch (error) {
-      console.error('Error al actualizar la cita:', error);
-      toast.error('Error al actualizar la cita');
+      console.error('Error al actualizar el monto de la cita:', error);
+      toast.error('Error al actualizar el monto de la cita');
     }
   };
 
@@ -643,18 +642,14 @@ const AppointmentsPage = () => {
               </button>
             </div>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              handleEditAppointment({
-                date: formData.get('date') as string,
-                startTime: formData.get('startTime') as string,
-                endTime: addMinutesToTime(formData.get('startTime') as string, Number(formData.get('duration') || 60)),
-                type: formData.get('type') as 'regular' | 'first_time' | 'emergency',
-                notes: formData.get('notes') as string,
-                sessionCost: Number(formData.get('sessionCost'))
-              });
-            }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const sessionCost = Number(formData.get('sessionCost') || 0);
+                handleEditAppointment({ sessionCost });
+              }}
+            >
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -668,62 +663,13 @@ const AppointmentsPage = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Fecha</label>
-                    <input
-                      type="date"
-                      name="date"
-                      required
-                      defaultValue={selectedAppointment.date}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Hora de inicio</label>
-                    <input
-                      type="time"
-                      name="startTime"
-                      required
-                      step={60}
-                      min="06:00"
-                      max="22:00"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      defaultValue={selectedAppointment.startTime}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Duración</label>
-                    <select
-                      name="duration"
-                      defaultValue="60"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      <option value="30">30 min</option>
-                      <option value="45">45 min</option>
-                      <option value="60">60 min</option>
-                      <option value="90">90 min</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
+                <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    Tipo de Cita
+                    Fecha y hora
                   </label>
-                  <select
-                    name="type"
-                    required
-                    defaultValue={selectedAppointment.type}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="regular">Regular</option>
-                    <option value="first_time">Primera Vez</option>
-                    <option value="emergency">Emergencia</option>
-                  </select>
+                  <p className="text-sm text-gray-900">
+                    {formatDateTime(selectedAppointment.date, selectedAppointment.startTime)}
+                  </p>
                 </div>
 
                 <div>

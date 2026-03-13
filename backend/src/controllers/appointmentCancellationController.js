@@ -85,6 +85,7 @@ const createCancellationRequest = async (req, res) => {
           date: appointment.date,
           startTime: appointment.startTime,
           endTime: appointment.endTime,
+          reason,
         }
       );
     } catch (logErr) {
@@ -242,7 +243,43 @@ const approveCancellationRequest = async (req, res) => {
       );
     }
 
-    const dto = toAppointmentCancellationRequestDTO(result.request);
+    const request = result.request;
+
+    // Registrar actividad para admin y profesional
+    try {
+      const appointment = await Appointment.findByPk(request.appointmentId);
+      if (appointment) {
+        await createActivity(
+          'APPOINTMENT_CANCELLATION_APPROVED',
+          'Cancelación de cita aprobada',
+          `Se aprobó la cancelación de la cita con ${appointment.patientName}.`,
+          {
+            cancellationRequestId: request.id,
+            appointmentId: appointment.id,
+            patientId:
+              appointment.patientId != null ? String(appointment.patientId) : undefined,
+            patientName: appointment.patientName,
+            professionalId:
+              appointment.professionalId != null
+                ? String(appointment.professionalId)
+                : undefined,
+            professionalName: appointment.professionalName,
+            date: appointment.date,
+            startTime: appointment.startTime,
+            endTime: appointment.endTime,
+            reason: request.reason,
+            decision: 'approved',
+          }
+        );
+      }
+    } catch (logErr) {
+      logger.warn(
+        '[approveCancellationRequest] No se pudo registrar la actividad de aprobación de cancelación:',
+        logErr
+      );
+    }
+
+    const dto = toAppointmentCancellationRequestDTO(request);
     return sendSuccess(
       res,
       dto,
@@ -296,6 +333,40 @@ const rejectCancellationRequest = async (req, res) => {
     request.reviewedBy = reviewerId;
     request.reviewedAt = new Date();
     await request.save();
+
+    // Registrar actividad para admin y profesional
+    try {
+      const appointment = await Appointment.findByPk(request.appointmentId);
+      if (appointment) {
+        await createActivity(
+          'APPOINTMENT_CANCELLATION_REJECTED',
+          'Cancelación de cita rechazada',
+          `Se rechazó la cancelación de la cita con ${appointment.patientName}.`,
+          {
+            cancellationRequestId: request.id,
+            appointmentId: appointment.id,
+            patientId:
+              appointment.patientId != null ? String(appointment.patientId) : undefined,
+            patientName: appointment.patientName,
+            professionalId:
+              appointment.professionalId != null
+                ? String(appointment.professionalId)
+                : undefined,
+            professionalName: appointment.professionalName,
+            date: appointment.date,
+            startTime: appointment.startTime,
+            endTime: appointment.endTime,
+            reason: request.reason,
+            decision: 'rejected',
+          }
+        );
+      }
+    } catch (logErr) {
+      logger.warn(
+        '[rejectCancellationRequest] No se pudo registrar la actividad de rechazo de cancelación:',
+        logErr
+      );
+    }
 
     const dto = toAppointmentCancellationRequestDTO(request);
     return sendSuccess(

@@ -1,5 +1,6 @@
 'use strict';
-const { Patient, Derivation, User, StatusRequest } = require('../../models');
+const { Op } = require('sequelize');
+const { Patient, Derivation, User, StatusRequest, Appointment, RecurringAppointment, sequelize } = require('../../models');
 const { toPatientDTO } = require('../../mappers/PatientMapper');
 const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
@@ -189,11 +190,19 @@ async function assignPatient(req, res) {
 
     const originalProfessionalId = patient.professionalId;
 
-    if (professionalId !== undefined) patient.professionalId = professionalId;
+    if (professionalId !== undefined) {
+      patient.professionalId = professionalId;
+    }
 
-    if (professionalName !== undefined) {
-      patient.professionalName = professionalName;
-    } else if (professionalId && !patient.professionalName) {
+    // Normalizar nombre de profesional: si viene vacío o null, se ignora y se busca por ID
+    const normalizedProfessionalName =
+      typeof professionalName === 'string' && professionalName.trim().length > 0
+        ? professionalName.trim()
+        : null;
+
+    if (normalizedProfessionalName) {
+      patient.professionalName = normalizedProfessionalName;
+    } else if (professionalId) {
       const prof = await User.findByPk(professionalId, { attributes: ['name'] });
       patient.professionalName = prof?.name || null;
     }
@@ -313,6 +322,7 @@ async function deletePatient(req, res) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
+    // Versión simple: solo marcar como inactivo y registrar actividad
     patient.active = false;
     await patient.save();
 

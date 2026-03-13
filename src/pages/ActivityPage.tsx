@@ -100,6 +100,7 @@ const translateActivity = (activity: Activity): Activity => {
         });
       } catch (e) {
         dateTimeStr = `${date} ${startTime}`;
+        console.error(e);
       }
     }
 
@@ -596,6 +597,7 @@ const ActivityPage: React.FC = () => {
         ) : (
           displayedActivities.map((activity) => {
             const translated = translateActivity(activity);
+            console.log(translated);
             const isFrequencyRequest =
               translated.type === 'FREQUENCY_CHANGE_REQUEST' || translated.type === 'FREQUENCY_CHANGE_REQUESTED';
             const isStatusRequest =

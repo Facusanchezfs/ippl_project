@@ -41,6 +41,7 @@ import FinancialSolicitudesPage from './pages/FinancialSolicitudesPage';
 import TodayAppointmentsPage from './pages/professional/TodayAppointmentsPage';
 import AllActivitiesPage from './pages/professional/AllActivitiesPage';
 import CompletedAppointmentsPage from './pages/professional/CompletedAppointmentsPage';
+import ProfessionalPaymentsPage from './pages/professional/ProfessionalPaymentsPage';
 import NotFoundPage from './pages/404';
 
 interface ProtectedRouteProps {
@@ -164,6 +165,11 @@ function App() {
           <Route path="/professional/actividades" element={
             <ProtectedRoute allowedRoles={['professional', 'admin']}>
               <AllActivitiesPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/professional/pagos" element={
+            <ProtectedRoute allowedRoles={['professional', 'admin']}>
+              <ProfessionalPaymentsPage />
             </ProtectedRoute>
           } />
           

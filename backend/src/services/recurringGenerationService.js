@@ -66,6 +66,19 @@ async function generateRecurringAppointments() {
     // 2) Procesar cada recurrencia de forma aislada
     for (const recurrence of recurrences) {
       try {
+        // Verificar que el paciente siga activo
+        const patient = await Patient.findByPk(recurrence.patientId, {
+          attributes: ['id', 'name', 'active'],
+        });
+
+        if (!patient || patient.active === false) {
+          logger.info(
+            `[RecurringGeneration] Paciente ${recurrence.patientId} inactivo o no encontrado para recurrencia ${recurrence.id}, saltando`
+          );
+          skippedCount++;
+          continue;
+        }
+
         // Obtener la cita base para copiar sus datos
         const baseAppointment = recurrence.baseAppointment;
 
@@ -139,10 +152,8 @@ async function generateRecurringAppointments() {
         }
 
         // 7) Obtener nombres actualizados del paciente y profesional
-        const [patient, professional] = await Promise.all([
-          Patient.findByPk(recurrence.patientId, {
-            attributes: ['id', 'name'],
-          }),
+        const [, professional] = await Promise.all([
+          // patient ya fue cargado arriba
           User.findByPk(recurrence.professionalId, {
             attributes: ['id', 'name'],
           }),

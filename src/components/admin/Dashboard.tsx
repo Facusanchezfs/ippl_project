@@ -769,9 +769,12 @@ const Dashboard = () => {
                       const isStatusRequest =
                         translated.type === 'PATIENT_DISCHARGE_REQUEST' ||
                         translated.type === 'PATIENT_ACTIVATION_REQUEST';
-                      const isCancellationRequest = translated.type === 'APPOINTMENT_CANCELLATION_REQUESTED';
-                      const isClickable = isFrequencyRequest || isStatusRequest || isCancellationRequest;
+                      const isCancellationRequest =
+                        translated.type === 'APPOINTMENT_CANCELLATION_REQUESTED';
                       const isResolved = resolvedActivities.has(translated._id);
+                      const isClickable =
+                        (isFrequencyRequest || isStatusRequest || isCancellationRequest) &&
+                        !isResolved;
 
                       return (
                         <ActivityItem
