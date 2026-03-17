@@ -96,6 +96,9 @@ async function getActivities(req, res) {
       'APPOINTMENT_CANCELLATION_REQUESTED',
       'APPOINTMENT_CANCELLATION_APPROVED',
       'APPOINTMENT_CANCELLATION_REJECTED',
+      'VACATION_REQUESTED',
+      'VACATION_APPROVED',
+      'VACATION_REJECTED',
     ];
 
     const page = parseInt(req.query.page, 10) || 1;

@@ -21,6 +21,7 @@ import RecentActivityProfessional from '../professional/RecentActivityProfession
 import {Patient} from "../../types/Patient.ts";
 import userService, {User, UpdateUserData} from '../../services/user.service.ts';
 import ChangePasswordModal from '../professional/ChangePassword.tsx';
+import vacationRequestService from '../../services/vacationRequest.service';
 
 const PsychologistDashboard = () => {
   const { user, logout } = useAuth();
@@ -32,6 +33,10 @@ const PsychologistDashboard = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showPatientsModal, setShowPatientsModal] = useState(false);
+  const [showVacationModal, setShowVacationModal] = useState(false);
+  const [vacationStartDate, setVacationStartDate] = useState('');
+  const [vacationWeeks, setVacationWeeks] = useState<number>(1);
+  const [vacationReason, setVacationReason] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -94,6 +99,31 @@ const PsychologistDashboard = () => {
     }
   }
 
+  const handleCreateVacationRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vacationStartDate) {
+      toast.error('La fecha de inicio es obligatoria');
+      return;
+    }
+    if (![1, 2, 3, 4].includes(vacationWeeks)) {
+      toast.error('Las semanas deben ser 1, 2, 3 o 4');
+      return;
+    }
+
+    try {
+      await vacationRequestService.create(vacationStartDate, vacationWeeks, vacationReason.trim() || undefined);
+      toast.success('Solicitud de vacaciones enviada');
+      setShowVacationModal(false);
+      setVacationStartDate('');
+      setVacationWeeks(1);
+      setVacationReason('');
+    } catch (error: any) {
+      console.error('Error al crear solicitud de vacaciones:', error);
+      const backendMsg = error?.response?.data?.error;
+      toast.error(backendMsg || 'Error al crear la solicitud de vacaciones');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -149,6 +179,16 @@ const PsychologistDashboard = () => {
               >
                 <AdjustmentsHorizontalIcon className="h-5 w-5 mr-2" />
                 Cambiar contraseña
+              </button>
+            )}
+
+            {user?.role === 'professional' && (
+              <button
+                onClick={() => setShowVacationModal(true)}
+                className="flex items-center px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+              >
+                <CalendarIcon className="h-5 w-5 mr-2" />
+                Solicitar vacaciones
               </button>
             )}
 
@@ -269,6 +309,96 @@ const PsychologistDashboard = () => {
 
       {/* Actividad Reciente */}
       <RecentActivityProfessional />
+
+      {/* Modal de solicitud de vacaciones */}
+      {showVacationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Solicitar vacaciones</h2>
+              <button
+                onClick={() => {
+                  setShowVacationModal(false);
+                  setVacationStartDate('');
+                  setVacationWeeks(1);
+                  setVacationReason('');
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <ArrowPathIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateVacationRequest} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Fecha de inicio
+                </label>
+                <input
+                  type="date"
+                  value={vacationStartDate}
+                  onChange={(e) => setVacationStartDate(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Semanas de vacaciones
+                </label>
+                <select
+                  value={vacationWeeks}
+                  onChange={(e) => setVacationWeeks(Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                >
+                  <option value={1}>1 semana</option>
+                  <option value={2}>2 semanas</option>
+                  <option value={3}>3 semanas</option>
+                  <option value={4}>4 semanas</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Motivo (opcional)
+                </label>
+                <textarea
+                  value={vacationReason}
+                  onChange={(e) => setVacationReason(e.target.value)}
+                  rows={4}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                  maxLength={1000}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  {vacationReason.length} / 1000 caracteres
+                </p>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVacationModal(false);
+                    setVacationStartDate('');
+                    setVacationWeeks(1);
+                    setVacationReason('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Enviar solicitud
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Pacientes Activos */}
       <Modal isOpen={showPatientsModal} onClose={() => setShowPatientsModal(false)}>

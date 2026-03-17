@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import frequencyRequestService from '../services/frequencyRequest.service';
 import statusRequestService from '../services/statusRequest.service';
 import appointmentCancellationRequestService from '../services/appointmentCancellationRequest.service';
+import vacationRequestService from '../services/vacationRequest.service';
 
 const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
   'PATIENT_DISCHARGE_REQUEST',
@@ -19,7 +20,10 @@ const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
   'FREQUENCY_CHANGE_REQUESTED',
   'FREQUENCY_CHANGE_APPROVED',
   'FREQUENCY_CHANGE_REJECTED',
-  'APPOINTMENT_CANCELLATION_REQUESTED'
+  'APPOINTMENT_CANCELLATION_REQUESTED',
+  'VACATION_REQUESTED',
+  'VACATION_APPROVED',
+  'VACATION_REJECTED',
 ];
 
 const translateFrequency = (freq?: string) => {
@@ -111,6 +115,56 @@ const translateActivity = (activity: Activity): Activity => {
     };
   }
 
+  if (activity.type === 'VACATION_REQUESTED') {
+    const professionalName = activity.metadata?.professionalName || 'Un profesional';
+    const startDate = activity.metadata?.startDate;
+    const endDate = activity.metadata?.endDate;
+    const weeksRequested = activity.metadata?.weeksRequested;
+
+    let rangeStr = '';
+    if (startDate && endDate) {
+      try {
+        const start = new Date(`${startDate}T00:00`);
+        const end = new Date(`${endDate}T00:00`);
+        rangeStr = `${start.toLocaleDateString('es-AR')} - ${end.toLocaleDateString('es-AR')}`;
+      } catch {
+        rangeStr = `${startDate} - ${endDate}`;
+      }
+    }
+
+    return {
+      ...activity,
+      title: 'Solicitud de vacaciones',
+      description: `${professionalName} solicitó vacaciones${rangeStr ? ` (${rangeStr})` : ''}${
+        weeksRequested ? ` por ${weeksRequested} semana(s)` : ''
+      }`,
+    };
+  }
+
+  if (activity.type === 'VACATION_APPROVED' || activity.type === 'VACATION_REJECTED') {
+    const approved = activity.type === 'VACATION_APPROVED';
+    const startDate = activity.metadata?.startDate;
+    const endDate = activity.metadata?.endDate;
+    let rangeStr = '';
+    if (startDate && endDate) {
+      try {
+        const start = new Date(`${startDate}T00:00`);
+        const end = new Date(`${endDate}T00:00`);
+        rangeStr = `${start.toLocaleDateString('es-AR')} - ${end.toLocaleDateString('es-AR')}`;
+      } catch {
+        rangeStr = `${startDate} - ${endDate}`;
+      }
+    }
+
+    return {
+      ...activity,
+      title: `Solicitud de vacaciones ${approved ? 'aprobada' : 'rechazada'}`,
+      description: `${approved ? 'Se aprobaron' : 'Se rechazaron'} las vacaciones${
+        rangeStr ? ` para el período ${rangeStr}` : ''
+      }`,
+    };
+  }
+
   return activity;
 };
 
@@ -126,6 +180,9 @@ const ActivityPage: React.FC = () => {
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [selectedCancellationActivity, setSelectedCancellationActivity] = useState<Activity | null>(null);
   const [isProcessingCancellation, setIsProcessingCancellation] = useState(false);
+  const [showVacationModal, setShowVacationModal] = useState(false);
+  const [selectedVacationActivity, setSelectedVacationActivity] = useState<Activity | null>(null);
+  const [isProcessingVacation, setIsProcessingVacation] = useState(false);
 
   const filteredActivities = activities.filter(activity =>
     RELEVANT_ACTIVITY_TYPES.includes(activity.type)
@@ -308,6 +365,40 @@ const ActivityPage: React.FC = () => {
         console.error('Error al verificar solicitud de cancelación:', error);
         toast.error('Error al verificar la solicitud');
       }
+    } else if (activity.type === 'VACATION_REQUESTED') {
+      const activityId = activity._id;
+      if (disabledActivities[activityId]) return;
+
+      const vacationRequestId = activity.metadata?.vacationRequestId;
+      if (!vacationRequestId) {
+        toast.error('No se encontró información de la solicitud de vacaciones');
+        return;
+      }
+
+      try {
+        const allRequests = await vacationRequestService.getAll();
+        const request = allRequests.find(
+          (r) => String(r.id) === String(vacationRequestId)
+        );
+
+        if (!request) {
+          toast.error('La solicitud de vacaciones no existe');
+          setDisabledActivities((prev) => ({ ...prev, [activityId]: true }));
+          return;
+        }
+
+        if (request.status !== 'pending') {
+          toast.error('La solicitud de vacaciones ya fue procesada');
+          setDisabledActivities((prev) => ({ ...prev, [activityId]: true }));
+          return;
+        }
+
+        setSelectedVacationActivity(activity);
+        setShowVacationModal(true);
+      } catch (error) {
+        console.error('Error al verificar solicitud de vacaciones:', error);
+        toast.error('Error al verificar la solicitud de vacaciones');
+      }
     }
   };
 
@@ -389,6 +480,84 @@ const ActivityPage: React.FC = () => {
     }
   };
 
+  const handleApproveVacation = async () => {
+    if (!selectedVacationActivity) return;
+
+    const vacationRequestId = selectedVacationActivity.metadata?.vacationRequestId;
+    if (!vacationRequestId) return;
+
+    try {
+      setIsProcessingVacation(true);
+      await vacationRequestService.approve(String(vacationRequestId));
+
+      try {
+        await activityService.markAsRead(selectedVacationActivity._id);
+      } catch (error) {
+        console.error('Error al marcar actividad como leída:', error);
+      }
+
+      setActivities((prev) =>
+        prev.map((a) =>
+          a._id === selectedVacationActivity._id ? { ...a, read: true } : a
+        )
+      );
+
+      setDisabledActivities((prev) => ({
+        ...prev,
+        [selectedVacationActivity._id]: true,
+      }));
+      setShowVacationModal(false);
+      setSelectedVacationActivity(null);
+      toast.success('Solicitud de vacaciones aprobada');
+
+      await loadActivities();
+    } catch (error) {
+      console.error('Error al aprobar solicitud de vacaciones:', error);
+      toast.error('Error al aprobar la solicitud de vacaciones');
+    } finally {
+      setIsProcessingVacation(false);
+    }
+  };
+
+  const handleRejectVacation = async () => {
+    if (!selectedVacationActivity) return;
+
+    const vacationRequestId = selectedVacationActivity.metadata?.vacationRequestId;
+    if (!vacationRequestId) return;
+
+    try {
+      setIsProcessingVacation(true);
+      await vacationRequestService.reject(String(vacationRequestId));
+
+      try {
+        await activityService.markAsRead(selectedVacationActivity._id);
+      } catch (error) {
+        console.error('Error al marcar actividad como leída:', error);
+      }
+
+      setActivities((prev) =>
+        prev.map((a) =>
+          a._id === selectedVacationActivity._id ? { ...a, read: true } : a
+        )
+      );
+
+      setDisabledActivities((prev) => ({
+        ...prev,
+        [selectedVacationActivity._id]: true,
+      }));
+      setShowVacationModal(false);
+      setSelectedVacationActivity(null);
+      toast.success('Solicitud de vacaciones rechazada');
+
+      await loadActivities();
+    } catch (error) {
+      console.error('Error al rechazar solicitud de vacaciones:', error);
+      toast.error('Error al rechazar la solicitud de vacaciones');
+    } finally {
+      setIsProcessingVacation(false);
+    }
+  };
+
   useEffect(() => {
     loadActivities();
   }, []);
@@ -403,10 +572,11 @@ const ActivityPage: React.FC = () => {
 
       // Verificar qué actividades de frecuencia, status y cancelaciones ya están resueltas
       try {
-        const [pendingFrequencyRequests, pendingStatusRequests, allCancellationRequests] = await Promise.all([
+        const [pendingFrequencyRequests, pendingStatusRequests, allCancellationRequests, allVacationRequests] = await Promise.all([
           frequencyRequestService.getPendingRequests(),
           statusRequestService.getPendingRequests(),
-          appointmentCancellationRequestService.getAll()
+          appointmentCancellationRequestService.getAll(),
+          vacationRequestService.getAll()
         ]);
         
         const pendingFrequencyPatientIds = new Set(
@@ -429,6 +599,12 @@ const ActivityPage: React.FC = () => {
           allCancellationRequests
             .filter(r => r.status === 'pending')
             .map(r => String(r.id))
+        );
+
+        const pendingVacationRequestIds = new Set(
+          allVacationRequests
+            .filter((r) => r.status === 'pending')
+            .map((r) => String(r.id))
         );
         
         const resolved: Record<string, boolean> = {};
@@ -466,6 +642,16 @@ const ActivityPage: React.FC = () => {
             const cancellationRequestId = activity.metadata?.cancellationRequestId;
             if (cancellationRequestId) {
               if (!pendingCancellationRequestIds.has(String(cancellationRequestId))) {
+                resolved[activity._id] = true;
+              }
+            }
+          }
+
+          // Verificar actividades de vacaciones
+          if (activity.type === 'VACATION_REQUESTED') {
+            const vacationRequestId = activity.metadata?.vacationRequestId;
+            if (vacationRequestId) {
+              if (!pendingVacationRequestIds.has(String(vacationRequestId))) {
                 resolved[activity._id] = true;
               }
             }
@@ -603,7 +789,8 @@ const ActivityPage: React.FC = () => {
             const isStatusRequest =
               translated.type === 'PATIENT_DISCHARGE_REQUEST' || translated.type === 'PATIENT_ACTIVATION_REQUEST';
             const isCancellationRequest = translated.type === 'APPOINTMENT_CANCELLATION_REQUESTED';
-            const isManageable = isFrequencyRequest || isStatusRequest || isCancellationRequest;
+            const isVacationRequest = translated.type === 'VACATION_REQUESTED';
+            const isManageable = isFrequencyRequest || isStatusRequest || isCancellationRequest || isVacationRequest;
 
             return (
               <div
@@ -821,6 +1008,80 @@ const ActivityPage: React.FC = () => {
                 className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
               >
                 {isProcessingCancellation ? 'Procesando...' : 'Aprobar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para aprobar/rechazar vacaciones */}
+      {showVacationModal && selectedVacationActivity && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Gestionar solicitud de vacaciones
+            </h3>
+            <div className="space-y-3 mb-6">
+              {selectedVacationActivity.metadata?.professionalName && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Profesional:</span>{' '}
+                  {selectedVacationActivity.metadata.professionalName}
+                </p>
+              )}
+              {selectedVacationActivity.metadata?.startDate &&
+                selectedVacationActivity.metadata?.endDate && (
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">Período:</span>{' '}
+                    {new Date(
+                      `${selectedVacationActivity.metadata.startDate}T00:00`
+                    ).toLocaleDateString('es-AR')}{' '}
+                    -{' '}
+                    {new Date(
+                      `${selectedVacationActivity.metadata.endDate}T00:00`
+                    ).toLocaleDateString('es-AR')}
+                  </p>
+                )}
+              {selectedVacationActivity.metadata?.weeksRequested && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Semanas solicitadas:</span>{' '}
+                  {selectedVacationActivity.metadata.weeksRequested}
+                </p>
+              )}
+              {selectedVacationActivity.metadata?.reason && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                  <p className="text-sm font-medium text-gray-700 mb-1">
+                    Motivo:
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {selectedVacationActivity.metadata.reason}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowVacationModal(false);
+                  setSelectedVacationActivity(null);
+                }}
+                disabled={isProcessingVacation}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRejectVacation}
+                disabled={isProcessingVacation}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isProcessingVacation ? 'Procesando...' : 'Rechazar'}
+              </button>
+              <button
+                onClick={handleApproveVacation}
+                disabled={isProcessingVacation}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {isProcessingVacation ? 'Procesando...' : 'Aprobar'}
               </button>
             </div>
           </div>
