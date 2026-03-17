@@ -15,7 +15,10 @@
 		"db:reset": "sequelize-cli --config config/config.js db:drop && npm run db:create && npm run db:migrate && npm run db:seed:all",
 		"db:backfill-recurring": "node src/scripts/backfillRecurringAppointments.js",
 		"db:backfill-recurring:apply": "node src/scripts/backfillRecurringAppointments.js --apply",
-		"db:backfill-recurring:all": "npm run db:backfill-recurring && npm run db:backfill-recurring:apply"
+		"db:backfill-recurring:all": "npm run db:backfill-recurring && npm run db:backfill-recurring:apply",
+		"db:clear-abonos": "node src/scripts/clearAbonosTable.js",
+		"db:clear-abonos:apply": "node src/scripts/clearAbonosTable.js --apply",
+		"db:clear-abonos:all": "npm run db:clear-abonos && npm run db:clear-abonos:apply"
 	},
 	"keywords": [],
 	"author": "",
