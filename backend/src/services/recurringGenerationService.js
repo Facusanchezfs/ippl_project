@@ -1,7 +1,7 @@
 'use strict';
 
 const { Op } = require('sequelize');
-const { RecurringAppointment, Appointment, Patient, User } = require('../../models');
+const { RecurringAppointment, Appointment, Patient, User, VacationRequest } = require('../../models');
 const logger = require('../utils/logger');
 
 /**
@@ -45,6 +45,28 @@ function calculateNextDate(lastDate, frequency) {
  */
 async function generateRecurringAppointments() {
   try {
+    const today = new Date().toISOString().split('T')[0];
+
+    const vacations = await VacationRequest.findAll({
+      where: {
+        status: 'approved',
+        endDate: { [Op.gte]: today },
+      },
+      attributes: ['professionalId', 'startDate', 'endDate'],
+    });
+
+    const vacationsByProfessional = new Map();
+    for (const v of vacations) {
+      const key = String(v.professionalId);
+      if (!vacationsByProfessional.has(key)) {
+        vacationsByProfessional.set(key, []);
+      }
+      vacationsByProfessional.get(key).push({
+        startDate: v.startDate,
+        endDate: v.endDate,
+      });
+    }
+
     // 1) Obtener todas las configuraciones de recurrencia activas
     const recurrences = await RecurringAppointment.findAll({
       where: { active: true },
@@ -92,7 +114,6 @@ async function generateRecurringAppointments() {
 
         // 3) Verificar si ya existe una cita futura programada para esta recurrencia
         // Solo debe existir UNA cita futura programada por recurrencia (comportamiento de lista enlazada)
-        const today = new Date().toISOString().split('T')[0];
         const existingFutureAppointment = await Appointment.findOne({
           where: {
             recurringAppointmentId: recurrence.id,
@@ -134,7 +155,22 @@ async function generateRecurringAppointments() {
           continue;
         }
 
-        // 6) Verificar que no exista ya una cita de esta recurrencia en esa fecha
+        // 6) Verificar si la fecha cae dentro de vacaciones aprobadas
+        const vKey = String(recurrence.professionalId);
+        const professionalVacations = vacationsByProfessional.get(vKey) || [];
+        const isOnVacation = professionalVacations.some(
+          (v) => v.startDate <= nextDate && v.endDate >= nextDate
+        );
+
+        if (isOnVacation) {
+          logger.debug(
+            `[RecurringGeneration] Fecha ${nextDate} está dentro de un rango de vacaciones para profesional ${recurrence.professionalId}, saltando`
+          );
+          skippedCount++;
+          continue;
+        }
+
+        // 7) Verificar que no exista ya una cita de esta recurrencia en esa fecha
         const existingAppointment = await Appointment.findOne({
           where: {
             recurringAppointmentId: recurrence.id,

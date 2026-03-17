@@ -47,7 +47,10 @@ const DASHBOARD_ACTIVITY_TYPES: Activity['type'][] = [
   'PATIENT_ACTIVATION_REQUEST',
   'FREQUENCY_CHANGE_REQUEST',
   'FREQUENCY_CHANGE_REQUESTED',
-  'APPOINTMENT_CANCELLATION_REQUESTED'
+  'APPOINTMENT_CANCELLATION_REQUESTED',
+  'VACATION_REQUESTED',
+  'VACATION_APPROVED',
+  'VACATION_REJECTED',
 ];
 
 const translateFrequency = (freq?: string | null) => {
@@ -134,6 +137,56 @@ const translateActivity = (activity: Activity): Activity => {
       ...activity,
       title: 'Solicitud de cancelación de cita',
       description: `${professionalName} solicitó cancelar la cita con ${patientName}${dateTimeStr ? ` programada para el ${dateTimeStr}` : ''}`,
+    };
+  }
+
+  if (activity.type === 'VACATION_REQUESTED') {
+    const professionalName = activity.metadata?.professionalName || 'Un profesional';
+    const startDate = activity.metadata?.startDate;
+    const endDate = activity.metadata?.endDate;
+    const weeksRequested = activity.metadata?.weeksRequested;
+
+    let rangeStr = '';
+    if (startDate && endDate) {
+      try {
+        const start = new Date(`${startDate}T00:00`);
+        const end = new Date(`${endDate}T00:00`);
+        rangeStr = `${start.toLocaleDateString('es-AR')} - ${end.toLocaleDateString('es-AR')}`;
+      } catch {
+        rangeStr = `${startDate} - ${endDate}`;
+      }
+    }
+
+    return {
+      ...activity,
+      title: 'Solicitud de vacaciones',
+      description: `${professionalName} solicitó vacaciones${
+        rangeStr ? ` (${rangeStr})` : ''
+      }${weeksRequested ? ` por ${weeksRequested} semana(s)` : ''}`,
+    };
+  }
+
+  if (activity.type === 'VACATION_APPROVED' || activity.type === 'VACATION_REJECTED') {
+    const approved = activity.type === 'VACATION_APPROVED';
+    const startDate = activity.metadata?.startDate;
+    const endDate = activity.metadata?.endDate;
+    let rangeStr = '';
+    if (startDate && endDate) {
+      try {
+        const start = new Date(`${startDate}T00:00`);
+        const end = new Date(`${endDate}T00:00`);
+        rangeStr = `${start.toLocaleDateString('es-AR')} - ${end.toLocaleDateString('es-AR')}`;
+      } catch {
+        rangeStr = `${startDate} - ${endDate}`;
+      }
+    }
+
+    return {
+      ...activity,
+      title: `Solicitud de vacaciones ${approved ? 'aprobada' : 'rechazada'}`,
+      description: `${approved ? 'Se aprobaron' : 'Se rechazaron'} las vacaciones${
+        rangeStr ? ` para el período ${rangeStr}` : ''
+      }`,
     };
   }
 
@@ -502,6 +555,9 @@ const Dashboard = () => {
     } else if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
       // Navegar a la página de actividad donde se puede gestionar la cancelación
       navigate('/admin/actividad');
+    } else if (activity.type === 'VACATION_REQUESTED') {
+      // Gestionar vacaciones desde la página de Actividad (mismo patrón que cancelación)
+      navigate('/admin/actividad');
     }
   };
 
@@ -771,9 +827,11 @@ const Dashboard = () => {
                         translated.type === 'PATIENT_ACTIVATION_REQUEST';
                       const isCancellationRequest =
                         translated.type === 'APPOINTMENT_CANCELLATION_REQUESTED';
+                      const isVacationRequest =
+                        translated.type === 'VACATION_REQUESTED';
                       const isResolved = resolvedActivities.has(translated._id);
                       const isClickable =
-                        (isFrequencyRequest || isStatusRequest || isCancellationRequest) &&
+                        (isFrequencyRequest || isStatusRequest || isCancellationRequest || isVacationRequest) &&
                         !isResolved;
 
                       return (

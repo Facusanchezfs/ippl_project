@@ -44,6 +44,8 @@ const RecentActivityProfessional = () => {
             'STATUS_CHANGE_REJECTED',
             'APPOINTMENT_CANCELLATION_APPROVED',
             'APPOINTMENT_CANCELLATION_REJECTED',
+            'VACATION_APPROVED',
+            'VACATION_REJECTED',
           ].includes(activity.type);
         })
         .map(normalizeFrequencyActivity)
@@ -67,10 +69,12 @@ const RecentActivityProfessional = () => {
       case 'FREQUENCY_CHANGE_APPROVED':
       case 'STATUS_CHANGE_APPROVED':
       case 'APPOINTMENT_CANCELLATION_APPROVED':
+      case 'VACATION_APPROVED':
         return <CheckCircleIcon className="h-6 w-6 text-green-500" />;
       case 'FREQUENCY_CHANGE_REJECTED':
       case 'STATUS_CHANGE_REJECTED':
       case 'APPOINTMENT_CANCELLATION_REJECTED':
+      case 'VACATION_REJECTED':
         return <XCircleIcon className="h-6 w-6 text-red-500" />;
       default:
         return <BellIcon className="h-6 w-6 text-gray-500" />;
@@ -85,10 +89,12 @@ const RecentActivityProfessional = () => {
       case 'FREQUENCY_CHANGE_APPROVED':
       case 'STATUS_CHANGE_APPROVED':
       case 'APPOINTMENT_CANCELLATION_APPROVED':
+      case 'VACATION_APPROVED':
         return 'bg-green-100';
       case 'FREQUENCY_CHANGE_REJECTED':
       case 'STATUS_CHANGE_REJECTED':
       case 'APPOINTMENT_CANCELLATION_REJECTED':
+      case 'VACATION_REJECTED':
         return 'bg-red-100';
       default:
         return 'bg-gray-100';

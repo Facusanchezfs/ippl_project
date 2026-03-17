@@ -195,6 +195,8 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
         professionalId: nextScheduled.professionalId,
         date: nextDate,
         status: { [Op.eq]: 'scheduled' },
+        // Ignorar citas de esta misma recurrencia; se cancelan más adelante
+        recurringAppointmentId: { [Op.ne]: recurrence.id },
       },
       attributes: ['id', 'startTime', 'endTime'],
       transaction: t,
@@ -261,6 +263,9 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
           date: { [Op.gte]: nextScheduled.date },
         },
         transaction: t,
+        // Al cancelar en bloque no necesitamos validar timeOrder ni disparar hooks
+        validate: false,
+        hooks: false,
       }
     );
 

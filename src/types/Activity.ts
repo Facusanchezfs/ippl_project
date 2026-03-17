@@ -13,6 +13,9 @@ export type ActivityType =
   | 'APPOINTMENT_CANCELLATION_REQUESTED'
   | 'APPOINTMENT_CANCELLATION_APPROVED'
   | 'APPOINTMENT_CANCELLATION_REJECTED'
+  | 'VACATION_REQUESTED'
+  | 'VACATION_APPROVED'
+  | 'VACATION_REJECTED'
   | 'NEW_MESSAGE';
 
 export interface Activity {
@@ -30,6 +33,7 @@ export interface Activity {
     postTitle?: string;
     appointmentId?: string;
     cancellationRequestId?: string;
+    vacationRequestId?: string;
     reason?: string;
     adminResponse?: string;
     currentFrequency?: string;
@@ -38,6 +42,9 @@ export interface Activity {
     date?: string;
     startTime?: string;
     endTime?: string;
+    startDate?: string;
+    endDate?: string;
+    weeksRequested?: number;
     [k: string]: unknown;
   };
   read: boolean;

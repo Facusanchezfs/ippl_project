@@ -40,7 +40,6 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [status, setStatus] = useState<Patient['status']>(patient.status);
   const [professionalId, setProfessionalId] = useState<string | undefined>(patient.professionalId);
-  const [sessionFrequency, setSessionFrequency] = useState<Patient['sessionFrequency'] | ''>(patient.sessionFrequency || '');
   const [isSaving, setIsSaving] = useState(false);
   const [textNote, setTextNote] = useState(patient.textNote || '');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -61,7 +60,6 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   useEffect(() => {
     setStatus(patient.status);
     setProfessionalId(patient.professionalId);
-    setSessionFrequency(patient.sessionFrequency || '');
     setTextNote(patient.textNote || '');
     setHasExistingAudioNote(!!patient.audioNote);
     setAudioBlob(null);
@@ -115,7 +113,6 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
     setIsEditing(false);
     setStatus(patient.status);
     setProfessionalId(patient.professionalId);
-    setSessionFrequency(patient.sessionFrequency || '');
     setTextNote(patient.textNote || '');
     setHasExistingAudioNote(!!patient.audioNote);
     setAudioBlob(null);
@@ -134,10 +131,6 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
       if (selectedProf) {
         payload.professionalName = selectedProf.name;
       }
-    }
-
-    if (sessionFrequency && sessionFrequency !== patient.sessionFrequency) {
-      payload.sessionFrequency = sessionFrequency;
     }
 
     const trimmedTextNote = textNote.trim();
@@ -335,42 +328,6 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Frecuencia de sesiones
-            </label>
-            {isEditing ? (
-              <select
-                value={sessionFrequency}
-                onChange={(e) =>
-                  setSessionFrequency(
-                    e.target.value as 'weekly' | 'biweekly' | 'monthly' | ''
-                  )
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-              >
-                <option value="">Sin frecuencia</option>
-                <option value="weekly">Semanal</option>
-                <option value="biweekly">Quincenal</option>
-                <option value="monthly">Mensual</option>
-              </select>
-            ) : (
-              <p className="mt-1 text-sm text-gray-900">
-                {getFrequencyLabel(patient.sessionFrequency)}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Próxima cita
-            </label>
-            <p className="mt-1 text-sm text-gray-900">
-              {patient.nextAppointment
-                ? new Date(patient.nextAppointment).toLocaleString()
-                : 'Sin próxima cita registrada'}
-            </p>
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -381,17 +338,6 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                 ? `$${patient.sessionCost.toFixed(2)}`
                 : 'No informado'}
             </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Descripción
-            </label>
-            <div className="mt-2 p-4 bg-gray-50 rounded-lg max-h-48 overflow-y-auto">
-              <p className="text-gray-900 whitespace-pre-wrap">
-                {patient.description || 'No hay descripción disponible.'}
-              </p>
-            </div>
           </div>
 
           <div>
@@ -459,7 +405,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
             <h4 className="text-sm font-semibold text-gray-800">
               Agenda recurrente
             </h4>
-            {!scheduleLoading && (
+            {!scheduleLoading && !isScheduleEditing && (
               <button
                 type="button"
                 onClick={() => {
@@ -475,16 +421,12 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                     setScheduleDuration(60);
                     setScheduleSessionCost('');
                   }
-                  setIsScheduleEditing((prev) => !prev);
+                  setIsScheduleEditing(true);
                   setScheduleError(null);
                 }}
                 className="text-xs font-medium text-blue-600 hover:text-blue-700"
               >
-                {isScheduleEditing
-                  ? 'Cancelar edición'
-                  : scheduleRecurringId
-                  ? 'Editar agenda'
-                  : 'Crear agenda'}
+                {scheduleRecurringId ? 'Editar agenda' : 'Crear agenda'}
               </button>
             )}
           </div>
