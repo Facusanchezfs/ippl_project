@@ -94,7 +94,7 @@ const statusRequestService = {
 	): Promise<StatusRequest> => {
 		const response = await api.post<{data: StatusRequest}>(
 			`/status-requests/${requestId}/approve`,
-			{ adminResponse }
+			{ adminResponse: adminResponse || 'Aprobado por el administrador' }
 		);
 		// Invalidar cache al aprobar una solicitud
 		pendingRequestsCache = null;
@@ -109,7 +109,7 @@ const statusRequestService = {
 			reason: '',
 			status: 'approved',
 			createdAt: new Date().toISOString(),
-			adminResponse
+			adminResponse: adminResponse || 'Aprobado por el administrador'
 		};
 	},
 

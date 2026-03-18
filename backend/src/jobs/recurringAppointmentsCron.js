@@ -7,7 +7,7 @@ const { Appointment } = require('../../models');
 const { Op } = require('sequelize');
 
 // Ejecuta la generación de citas recurrentes todos los dias (cron configurado externamente)
-cron.schedule('0 2 * * *', async () => {
+cron.schedule('* * * * *', async () => {
   try {
     const todayStr = new Date().toISOString().slice(0, 10);
 

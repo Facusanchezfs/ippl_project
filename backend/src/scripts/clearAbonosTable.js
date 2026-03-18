@@ -1,4 +1,4 @@
-/**
+npm/**
  * Script de utilidad para vaciar la tabla `abonos` (pagos a profesionales).
  *
  * ATENCIÓN - OPERACIÓN IRREVERSIBLE:

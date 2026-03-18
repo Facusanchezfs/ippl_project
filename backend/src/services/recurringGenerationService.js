@@ -7,7 +7,7 @@ const logger = require('../utils/logger');
 /**
  * Calcula la próxima fecha basada en la frecuencia de recurrencia.
  * @param {Date|string} lastDate - Fecha de la última cita (Date o string YYYY-MM-DD)
- * @param {string} frequency - Frecuencia: 'weekly', 'biweekly', 'monthly'
+ * @param {string} frequency - Frecuencia: 'weekly', 'biweekly', 'monthly', 'twice_weekly'
  * @returns {string} Fecha en formato YYYY-MM-DD
  */
 function calculateNextDate(lastDate, frequency) {
@@ -17,6 +17,7 @@ function calculateNextDate(lastDate, frequency) {
 
   switch (frequency) {
     case 'weekly':
+    case 'twice_weekly':
       nextDate.setDate(nextDate.getDate() + 7);
       break;
 
@@ -90,12 +91,12 @@ async function generateRecurringAppointments() {
       try {
         // Verificar que el paciente siga activo
         const patient = await Patient.findByPk(recurrence.patientId, {
-          attributes: ['id', 'name', 'active'],
+          attributes: ['id', 'name', 'active', 'status'],
         });
 
-        if (!patient || patient.active === false) {
+        if (!patient || patient.active === false || patient.status === 'inactive') {
           logger.info(
-            `[RecurringGeneration] Paciente ${recurrence.patientId} inactivo o no encontrado para recurrencia ${recurrence.id}, saltando`
+            `[RecurringGeneration] Paciente ${recurrence.patientId} inactive/no encontrado para recurrencia ${recurrence.id}, saltando`
           );
           skippedCount++;
           continue;
@@ -112,114 +113,131 @@ async function generateRecurringAppointments() {
           continue;
         }
 
-        // 3) Verificar si ya existe una cita futura programada para esta recurrencia
-        // Solo debe existir UNA cita futura programada por recurrencia (comportamiento de lista enlazada)
-        const existingFutureAppointment = await Appointment.findOne({
+        // 3) Contar cuántas citas FUTURAS scheduled existen para esta recurrencia.
+        // Contrato esperado: mantener SIEMPRE 2 citas futuras en estado 'scheduled' por recurrencia activa.
+        const futureScheduledCount = await Appointment.count({
           where: {
             recurringAppointmentId: recurrence.id,
-            active: 1,
+            active: true,
             status: 'scheduled',
             date: { [Op.gte]: today },
           },
         });
 
-        if (existingFutureAppointment) {
+        if (futureScheduledCount >= 2) {
           logger.debug(
-            `[RecurringGeneration] Ya existe una cita futura programada para recurrencia ${recurrence.id} (fecha: ${existingFutureAppointment.date}), saltando`
+            `[RecurringGeneration] Ya hay ${futureScheduledCount} citas futuras scheduled para recurrencia ${recurrence.id}, saltando`
           );
           skippedCount++;
           continue;
         }
 
-        // 4) Encontrar la cita más reciente que pertenece a esta recurrencia
-        const lastAppointment = await Appointment.findOne({
-          where: {
-            recurringAppointmentId: recurrence.id,
-            active: true,
-          },
-          order: [['date', 'DESC'], ['startTime', 'DESC']],
-        });
+        // Preparar referencias:
+        // - Si hay 1 cita futura scheduled, generar la siguiente a partir de esa última existente.
+        // - Si hay 0, usar la baseAppointment como punto de partida.
+        let referenceDate = baseAppointment?.date ?? today;
 
-        // Si no hay citas previas para esta recurrencia, usar la cita base como referencia
-        const referenceDate = lastAppointment
-          ? lastAppointment.date
-          : baseAppointment.date;
+        if (futureScheduledCount === 1) {
+          const lastFutureScheduled = await Appointment.findOne({
+            where: {
+              recurringAppointmentId: recurrence.id,
+              active: true,
+              status: 'scheduled',
+              date: { [Op.gte]: today },
+            },
+            order: [['date', 'DESC'], ['startTime', 'DESC']],
+          });
 
-        // 5) Calcular la próxima fecha según la frecuencia
-        const nextDate = calculateNextDate(referenceDate, recurrence.frequency);
-        if (nextDate < today) {
-          logger.debug(
-            `[RecurringGeneration] Fecha calculada ${nextDate} está en el pasado para recurrencia ${recurrence.id}, saltando`
-          );
-          skippedCount++;
-          continue;
+          if (lastFutureScheduled?.date) {
+            referenceDate = lastFutureScheduled.date;
+          }
         }
 
-        // 6) Verificar si la fecha cae dentro de vacaciones aprobadas
         const vKey = String(recurrence.professionalId);
         const professionalVacations = vacationsByProfessional.get(vKey) || [];
-        const isOnVacation = professionalVacations.some(
-          (v) => v.startDate <= nextDate && v.endDate >= nextDate
-        );
 
-        if (isOnVacation) {
-          logger.debug(
-            `[RecurringGeneration] Fecha ${nextDate} está dentro de un rango de vacaciones para profesional ${recurrence.professionalId}, saltando`
+        // Cargar una vez el profesional (para múltiples creations)
+        const professional = await User.findByPk(recurrence.professionalId, {
+          attributes: ['id', 'name'],
+        });
+
+        let futureCreated = 0;
+        let attempts = 0;
+
+        // Generar hasta completar (2 - futureScheduledCount) citas futuras scheduled.
+        // attempts evita loops infinitos en caso de que muchas fechas caigan en vacaciones o haya duplicados.
+        while (futureScheduledCount + futureCreated < 2 && attempts < 30) {
+          attempts++;
+
+          let candidateDate = calculateNextDate(referenceDate, recurrence.frequency);
+
+          // Asegurar que sea >= hoy (contrato "future").
+          while (candidateDate < today) {
+            referenceDate = candidateDate;
+            candidateDate = calculateNextDate(referenceDate, recurrence.frequency);
+          }
+
+          // Vacaciones: si cae en vacaciones, avanzar y seguir buscando.
+          const isOnVacation = professionalVacations.some(
+            (v) => v.startDate <= candidateDate && v.endDate >= candidateDate
           );
-          skippedCount++;
-          continue;
-        }
+          if (isOnVacation) {
+            referenceDate = candidateDate;
+            continue;
+          }
 
-        // 7) Verificar que no exista ya una cita de esta recurrencia en esa fecha
-        const existingAppointment = await Appointment.findOne({
-          where: {
+          // Duplicados: si ya existe una cita scheduled para esa fecha, avanzar y seguir.
+          const existingAppointment = await Appointment.findOne({
+            where: {
+              recurringAppointmentId: recurrence.id,
+              date: candidateDate,
+              active: true,
+              status: 'scheduled',
+            },
+          });
+          if (existingAppointment) {
+            referenceDate = candidateDate;
+            continue;
+          }
+
+          const newAppointment = await Appointment.create({
+            patientId: recurrence.patientId,
+            patientName:
+              patient?.name || baseAppointment.patientName || 'Paciente no encontrado',
+            professionalId: recurrence.professionalId,
+            professionalName:
+              professional?.name ||
+              baseAppointment.professionalName ||
+              'Profesional no encontrado',
+            date: candidateDate,
+            startTime: baseAppointment.startTime,
+            endTime: baseAppointment.endTime,
+            type: baseAppointment.type || 'regular',
+            status: 'scheduled',
+            notes: null,
+            audioNote: null,
+            sessionCost: baseAppointment.sessionCost,
+            attended: null,
+            paymentAmount: null,
+            remainingBalance: baseAppointment.sessionCost,
             recurringAppointmentId: recurrence.id,
-            date: nextDate,
             active: true,
-          },
-        });
+          });
 
-        if (existingAppointment) {
-          logger.debug(
-            `[RecurringGeneration] Cita ya existe para recurrencia ${recurrence.id} en ${nextDate}, saltando`
+          createdCount++;
+          futureCreated++;
+          referenceDate = candidateDate;
+
+          logger.info(
+            `[RecurringGeneration] Creada cita futura #${futureScheduledCount + futureCreated} para paciente ${recurrence.patientId} con profesional ${recurrence.professionalId} en ${candidateDate} ${baseAppointment.startTime}, con id: ${newAppointment.id}`
           );
-          skippedCount++;
-          continue;
         }
 
-        // 7) Obtener nombres actualizados del paciente y profesional
-        const [, professional] = await Promise.all([
-          // patient ya fue cargado arriba
-          User.findByPk(recurrence.professionalId, {
-            attributes: ['id', 'name'],
-          }),
-        ]);
-
-        // 8) Crear la nueva cita
-        const newAppointment = await Appointment.create({
-          patientId: recurrence.patientId,
-          patientName: patient?.name || baseAppointment.patientName || 'Paciente no encontrado',
-          professionalId: recurrence.professionalId,
-          professionalName: professional?.name || baseAppointment.professionalName || 'Profesional no encontrado',
-          date: nextDate,
-          startTime: baseAppointment.startTime,
-          endTime: baseAppointment.endTime,
-          type: baseAppointment.type || 'regular',
-          status: 'scheduled',
-          notes: null,
-          audioNote: null,
-          sessionCost: baseAppointment.sessionCost,
-          attended: null,
-          paymentAmount: null,
-          remainingBalance: baseAppointment.sessionCost,
-          recurringAppointmentId: recurrence.id,
-          active: true,
-        });
-
-        createdCount++;
-        logger.info(
-          `[RecurringGeneration] Creada cita para paciente ${recurrence.patientId} con profesional ${recurrence.professionalId} en ${nextDate} ${baseAppointment.startTime}, con id: ${newAppointment.id}`
-        );
+        if (futureScheduledCount + futureCreated < 2) {
+          logger.warn(
+            `[RecurringGeneration] No se pudo completar 2 citas futuras scheduled para recurrencia ${recurrence.id}. Existentes=${futureScheduledCount}, creadas=${futureCreated}, attempts=${attempts}`
+          );
+        }
       } catch (error) {
         // Aislar errores: un fallo no detiene el procesamiento de otras recurrencias
         errorCount++;

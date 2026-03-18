@@ -50,11 +50,29 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [isScheduleEditing, setIsScheduleEditing] = useState(false);
   const [scheduleRecurringId, setScheduleRecurringId] = useState<string | null>(null);
-  const [scheduleFrequency, setScheduleFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
-  const [scheduleNextDate, setScheduleNextDate] = useState('');
-  const [scheduleStartTime, setScheduleStartTime] = useState('');
-  const [scheduleDuration, setScheduleDuration] = useState<30 | 60>(60);
-  const [scheduleSessionCost, setScheduleSessionCost] = useState<number | ''>('');
+  const [scheduleGroupId, setScheduleGroupId] = useState<string | null>(null);
+  const [scheduleMode, setScheduleMode] = useState<'single' | 'group' | ''>('');
+  const [scheduleFrequency, setScheduleFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'twice_weekly' | ''>('');
+  const [scheduleSingle, setScheduleSingle] = useState<{
+    nextDate: string;
+    startTime: string;
+    duration: 30 | 60;
+    sessionCost: number | '';
+  }>({
+    nextDate: '',
+    startTime: '',
+    duration: 60,
+    sessionCost: '',
+  });
+  const [scheduleEntries, setScheduleEntries] = useState<
+    Array<{
+      recurringId: string | null;
+      nextDate: string;
+      startTime: string;
+      duration: 30 | 60;
+      sessionCost: number | '';
+    }>
+  >([]);
 
   // Mantener el estado local sincronizado cuando cambia el paciente en props
   useEffect(() => {
@@ -78,22 +96,47 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
           );
 
         if (data) {
-          setScheduleRecurringId(String(data.recurringId));
+          setScheduleMode(data.mode);
           setScheduleFrequency(data.frequency);
-          setScheduleNextDate(data.nextDate);
-          setScheduleStartTime(data.startTime);
-          setScheduleDuration(data.duration === 30 ? 30 : 60);
-          setScheduleSessionCost(
-            typeof data.sessionCost === 'number' ? data.sessionCost : 0
-          );
+
+          if (data.mode === 'single') {
+            setScheduleRecurringId(String(data.recurringId));
+            setScheduleGroupId(null);
+            setScheduleSingle({
+              nextDate: data.nextDate,
+              startTime: data.startTime,
+              duration: data.duration === 30 ? 30 : 60,
+              sessionCost:
+                typeof data.sessionCost === 'number' ? data.sessionCost : 0,
+            });
+            setScheduleEntries([]);
+          } else {
+            setScheduleRecurringId(null);
+            setScheduleGroupId(data.groupId);
+            setScheduleEntries(
+              data.entries.map((entry) => ({
+                recurringId: String(entry.recurringId),
+                nextDate: entry.nextDate,
+                startTime: entry.startTime,
+                duration: entry.duration === 30 ? 30 : 60,
+                sessionCost:
+                  typeof entry.sessionCost === 'number' ? entry.sessionCost : 0,
+              }))
+            );
+          }
         } else {
           // El paciente no tiene agenda recurrente configurada todavía
           setScheduleRecurringId(null);
+          setScheduleGroupId(null);
+          setScheduleMode('');
           setScheduleFrequency('');
-          setScheduleNextDate('');
-          setScheduleStartTime('');
-          setScheduleDuration(60);
-          setScheduleSessionCost('');
+          setScheduleSingle({
+            nextDate: '',
+            startTime: '',
+            duration: 60,
+            sessionCost: '',
+          });
+          setScheduleEntries([]);
         }
       } catch (error: any) {
         console.error('Error al cargar agenda recurrente:', error);
@@ -182,29 +225,83 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   };
 
   const handleSaveSchedule = async () => {
-    // Validaciones frontend
-    if (scheduleDuration !== 30 && scheduleDuration !== 60) {
+    // Caso grupo twice_weekly
+    if (scheduleMode === 'group') {
+      if (scheduleEntries.length !== 2) {
+        setScheduleError('Debes completar ambos bloques de la agenda.');
+        return;
+      }
+
+      for (const entry of scheduleEntries) {
+        if (
+          !entry.nextDate ||
+          !entry.startTime ||
+          !entry.duration ||
+          entry.sessionCost === ''
+        ) {
+          setScheduleError(
+            'Debes completar fecha, hora, duración y costo en ambos bloques.'
+          );
+          return;
+        }
+      }
+
+      try {
+        setScheduleLoading(true);
+        await recurringAppointmentsService.updateRecurringAppointmentGroupAdmin(
+          scheduleGroupId!,
+          {
+            entries: scheduleEntries.map((entry) => ({
+              recurringId: entry.recurringId!,
+              nextDate: entry.nextDate,
+              startTime: entry.startTime,
+              duration: entry.duration,
+              sessionCost: Number(entry.sessionCost),
+            })),
+          }
+        );
+        setIsScheduleEditing(false);
+        await onScheduleUpdated();
+      } catch (error: any) {
+        console.error('Error al actualizar agenda recurrente (grupo):', error);
+        setScheduleError(
+          error?.response?.data?.message ||
+            'Error al actualizar la agenda recurrente'
+        );
+      } finally {
+        setScheduleLoading(false);
+      }
+      return;
+    }
+
+    // Validaciones frontend para modo single
+    if (scheduleSingle.duration !== 30 && scheduleSingle.duration !== 60) {
       setScheduleError('La duración debe ser 30 o 60 minutos.');
       return;
     }
 
-    if (scheduleSessionCost === '' || Number(scheduleSessionCost) < 0) {
+    if (
+      scheduleSingle.sessionCost === '' ||
+      Number(scheduleSingle.sessionCost) < 0
+    ) {
       setScheduleError('El costo de sesión debe ser mayor o igual a 0.');
       return;
     }
 
-    if (!scheduleNextDate) {
+    if (!scheduleSingle.nextDate) {
       setScheduleError('Debes especificar la fecha de la próxima cita.');
       return;
     }
 
     const todayStr = new Date().toISOString().slice(0, 10);
-    if (scheduleNextDate < todayStr) {
-      setScheduleError('La fecha de la próxima cita no puede estar en el pasado.');
+    if (scheduleSingle.nextDate < todayStr) {
+      setScheduleError(
+        'La fecha de la próxima cita no puede estar en el pasado.'
+      );
       return;
     }
 
-    if (!/^\d{2}:\d{2}$/.test(scheduleStartTime)) {
+    if (!/^\d{2}:\d{2}$/.test(scheduleSingle.startTime)) {
       setScheduleError('La hora de inicio debe estar en formato HH:MM.');
       return;
     }
@@ -217,11 +314,12 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
         await recurringAppointmentsService.createPatientRecurringScheduleAdmin(
           patient.id,
           {
-            frequency: scheduleFrequency || 'weekly',
-            nextDate: scheduleNextDate,
-            startTime: scheduleStartTime,
-            duration: scheduleDuration,
-            sessionCost: Number(scheduleSessionCost),
+            frequency: (scheduleFrequency ||
+              'weekly') as 'weekly' | 'biweekly' | 'monthly',
+            nextDate: scheduleSingle.nextDate,
+            startTime: scheduleSingle.startTime,
+            duration: scheduleSingle.duration,
+            sessionCost: Number(scheduleSingle.sessionCost),
           }
         );
       } else {
@@ -229,11 +327,12 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
         await recurringAppointmentsService.updateRecurringAppointmentAdmin(
           scheduleRecurringId,
           {
-            frequency: scheduleFrequency || 'weekly',
-            nextDate: scheduleNextDate,
-            startTime: scheduleStartTime,
-            duration: scheduleDuration,
-            sessionCost: Number(scheduleSessionCost),
+            frequency: (scheduleFrequency ||
+              'weekly') as 'weekly' | 'biweekly' | 'monthly',
+            nextDate: scheduleSingle.nextDate,
+            startTime: scheduleSingle.startTime,
+            duration: scheduleSingle.duration,
+            sessionCost: Number(scheduleSingle.sessionCost),
           }
         );
       }
@@ -243,7 +342,8 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
     } catch (error: any) {
       console.error('Error al actualizar agenda recurrente:', error);
       setScheduleError(
-        error?.response?.data?.message || 'Error al actualizar la agenda recurrente'
+        error?.response?.data?.message ||
+          'Error al actualizar la agenda recurrente'
       );
     } finally {
       setScheduleLoading(false);
@@ -409,17 +509,22 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (!scheduleRecurringId) {
+                  if (!scheduleRecurringId && !scheduleGroupId) {
                     setScheduleFrequency(
                       (patient.sessionFrequency as
                         | 'weekly'
                         | 'biweekly'
-                        | 'monthly') || 'weekly'
+                        | 'monthly'
+                        | 'twice_weekly') || 'weekly'
                     );
-                    setScheduleNextDate('');
-                    setScheduleStartTime('');
-                    setScheduleDuration(60);
-                    setScheduleSessionCost('');
+                    setScheduleSingle({
+                      nextDate: '',
+                      startTime: '',
+                      duration: 60,
+                      sessionCost: '',
+                    });
+                    setScheduleEntries([]);
+                    setScheduleMode('');
                   }
                   setIsScheduleEditing(true);
                   setScheduleError(null);
@@ -439,7 +544,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
             <p className="text-sm text-red-600 mb-2">{scheduleError}</p>
           )}
 
-          {!scheduleLoading && (scheduleRecurringId || isScheduleEditing) && (
+          {!scheduleLoading && (scheduleRecurringId || scheduleGroupId || isScheduleEditing) && (
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -450,7 +555,12 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                   value={scheduleFrequency}
                   onChange={(e) =>
                     setScheduleFrequency(
-                      e.target.value as 'weekly' | 'biweekly' | 'monthly' | ''
+                      e.target.value as
+                        | 'weekly'
+                        | 'biweekly'
+                        | 'monthly'
+                        | 'twice_weekly'
+                        | ''
                     )
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
@@ -458,78 +568,385 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                   <option value="weekly">Semanal</option>
                   <option value="biweekly">Quincenal</option>
                   <option value="monthly">Mensual</option>
+                  <option value="twice_weekly">2 veces por semana</option>
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Próxima fecha
-                  </label>
-                  <input
-                    type="date"
-                    disabled={!isScheduleEditing}
-                    value={scheduleNextDate}
-                    onChange={(e) => setScheduleNextDate(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                  />
-                </div>
+              {scheduleMode !== 'group' && (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Próxima fecha
+                      </label>
+                      <input
+                        type="date"
+                        disabled={!isScheduleEditing}
+                        value={scheduleSingle.nextDate}
+                        onChange={(e) =>
+                          setScheduleSingle((prev) => ({
+                            ...prev,
+                            nextDate: e.target.value,
+                          }))
+                        }
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Hora inicio
-                  </label>
-                  <input
-                    type="time"
-                    disabled={!isScheduleEditing}
-                    value={scheduleStartTime}
-                    onChange={(e) => setScheduleStartTime(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Hora inicio
+                      </label>
+                      <input
+                        type="time"
+                        disabled={!isScheduleEditing}
+                        value={scheduleSingle.startTime}
+                        onChange={(e) =>
+                          setScheduleSingle((prev) => ({
+                            ...prev,
+                            startTime: e.target.value,
+                          }))
+                        }
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Duración
-                  </label>
-                  <select
-                    disabled={!isScheduleEditing}
-                    value={scheduleDuration}
-                    onChange={(e) =>
-                      setScheduleDuration(Number(e.target.value) === 30 ? 30 : 60)
-                    }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                  >
-                    <option value={30}>30 minutos</option>
-                    <option value={60}>60 minutos</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Costo sesión
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Duración
+                      </label>
+                      <select
+                        disabled={!isScheduleEditing}
+                        value={scheduleSingle.duration}
+                        onChange={(e) =>
+                          setScheduleSingle((prev) => ({
+                            ...prev,
+                            duration:
+                              Number(e.target.value) === 30 ? 30 : 60,
+                          }))
+                        }
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                      >
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>60 minutos</option>
+                      </select>
+                    </div>
                   </div>
-                  <input
-                    type="number"
-                    disabled={!isScheduleEditing}
-                    value={scheduleSessionCost}
-                    onChange={(e) =>
-                      setScheduleSessionCost(
-                        e.target.value === '' ? '' : Number(e.target.value)
-                      )
-                    }
-                    onWheel={(e) => e.currentTarget.blur()}
-                    className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                    min="0"
-                    step="0.01"
-                  />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Costo sesión
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">$</span>
+                      </div>
+                      <input
+                        type="number"
+                        disabled={!isScheduleEditing}
+                        value={scheduleSingle.sessionCost}
+                        onChange={(e) =>
+                          setScheduleSingle((prev) => ({
+                            ...prev,
+                            sessionCost:
+                              e.target.value === ''
+                                ? ''
+                                : Number(e.target.value),
+                          }))
+                        }
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {scheduleMode === 'group' && (
+                <div className="space-y-4">
+                  {/* Bloque A */}
+                  <div className="border rounded-lg p-3">
+                    <h5 className="text-xs font-semibold text-gray-600 mb-2">
+                      Bloque A
+                    </h5>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Próxima fecha
+                        </label>
+                        <input
+                          type="date"
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[0]?.nextDate || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[0] = {
+                                ...(next[0] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                nextDate: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Hora inicio
+                        </label>
+                        <input
+                          type="time"
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[0]?.startTime || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[0] = {
+                                ...(next[0] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                startTime: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Duración
+                        </label>
+                        <select
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[0]?.duration ?? 60}
+                          onChange={(e) => {
+                            const value =
+                              Number(e.target.value) === 30 ? 30 : 60;
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[0] = {
+                                ...(next[0] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                duration: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        >
+                          <option value={30}>30 minutos</option>
+                          <option value={60}>60 minutos</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Costo sesión
+                      </label>
+                      <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">
+                            $
+                          </span>
+                        </div>
+                        <input
+                          type="number"
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[0]?.sessionCost ?? ''}
+                          onChange={(e) => {
+                            const value =
+                              e.target.value === ''
+                                ? ''
+                                : Number(e.target.value);
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[0] = {
+                                ...(next[0] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                sessionCost: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bloque B */}
+                  <div className="border rounded-lg p-3">
+                    <h5 className="text-xs font-semibold text-gray-600 mb-2">
+                      Bloque B
+                    </h5>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Próxima fecha
+                        </label>
+                        <input
+                          type="date"
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[1]?.nextDate || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[1] = {
+                                ...(next[1] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                nextDate: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Hora inicio
+                        </label>
+                        <input
+                          type="time"
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[1]?.startTime || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[1] = {
+                                ...(next[1] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                startTime: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Duración
+                        </label>
+                        <select
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[1]?.duration ?? 60}
+                          onChange={(e) => {
+                            const value =
+                              Number(e.target.value) === 30 ? 30 : 60;
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[1] = {
+                                ...(next[1] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                duration: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                        >
+                          <option value={30}>30 minutos</option>
+                          <option value={60}>60 minutos</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Costo sesión
+                      </label>
+                      <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">
+                            $
+                          </span>
+                        </div>
+                        <input
+                          type="number"
+                          disabled={!isScheduleEditing}
+                          value={scheduleEntries[1]?.sessionCost ?? ''}
+                          onChange={(e) => {
+                            const value =
+                              e.target.value === ''
+                                ? ''
+                                : Number(e.target.value);
+                            setScheduleEntries((prev) => {
+                              const next = [...prev];
+                              next[1] = {
+                                ...(next[1] || {
+                                  recurringId: null,
+                                  nextDate: '',
+                                  startTime: '',
+                                  duration: 60 as 30 | 60,
+                                  sessionCost: '',
+                                }),
+                                sessionCost: value,
+                              };
+                              return next;
+                            });
+                          }}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {isScheduleEditing && (
                 <div className="mt-3 flex justify-end gap-2">
@@ -556,7 +973,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
             </div>
           )}
 
-          {!scheduleLoading && !scheduleRecurringId && !scheduleError && (
+          {!scheduleLoading && !scheduleRecurringId && !scheduleGroupId && !scheduleError && (
             <p className="text-sm text-gray-500">
               Este paciente no tiene una agenda recurrente configurada. Usa el botón
               &quot;Crear agenda&quot; para configurarla cuando tenga frecuencia y
@@ -650,15 +1067,6 @@ const StatusRequestModal: React.FC<StatusRequestModalProps> = ({
                   : 'El profesional ha solicitado reactivar a este paciente'}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
-          >
-            <span className="sr-only">Cerrar</span>
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
         <div className="mb-6">
@@ -729,13 +1137,27 @@ interface NewPatientModalProps {
     description: string;
     status?: 'active' | 'pending' | 'inactive';
     professionalId?: string;
-    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly';
     nextAppointmentDate?: string;
     nextAppointmentStartTime?: string;
     nextAppointmentEndTime?: string;
     sessionCost?: number;
     textNote?: string;
     audioNote?: string;
+    entriesA?: {
+      nextAppointmentDate: string;
+      nextAppointmentStartTime: string;
+      nextAppointmentEndTime: string;
+      sessionDuration: 30 | 60;
+      sessionCost: number | '';
+    };
+    entriesB?: {
+      nextAppointmentDate: string;
+      nextAppointmentStartTime: string;
+      nextAppointmentEndTime: string;
+      sessionDuration: 30 | 60;
+      sessionCost: number | '';
+    };
   }) => Promise<void>;
   showDescription?: boolean;
   professionals: Professional[];
@@ -752,7 +1174,9 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'pending' | 'inactive'>('pending');
   const [professionalId, setProfessionalId] = useState('');
-  const [sessionFrequency, setSessionFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
+  const [sessionFrequency, setSessionFrequency] = useState<
+    'weekly' | 'biweekly' | 'monthly' | 'twice_weekly' | ''
+  >('');
   const [nextAppointmentDate, setNextAppointmentDate] = useState('');
   const [nextAppointmentStartTime, setNextAppointmentStartTime] = useState('');
   const [nextAppointmentEndTime, setNextAppointmentEndTime] = useState('');
@@ -762,6 +1186,65 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
   const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
   const [textNote, setTextNote] = useState('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [entryA, setEntryA] = useState<{
+    nextAppointmentDate: string;
+    nextAppointmentStartTime: string;
+    nextAppointmentEndTime: string;
+    sessionDuration: 30 | 60;
+    sessionCost: number | '';
+  }>({
+    nextAppointmentDate: '',
+    nextAppointmentStartTime: '',
+    nextAppointmentEndTime: '',
+    sessionDuration: 60,
+    sessionCost: '',
+  });
+
+  // Resetear formulario al cerrar el modal
+  useEffect(() => {
+    if (!isOpen) {
+      setName('');
+      setDescription('');
+      setStatus('pending');
+      setProfessionalId('');
+      setSessionFrequency('');
+      setNextAppointmentDate('');
+      setNextAppointmentStartTime('');
+      setNextAppointmentEndTime('');
+      setSessionDuration(60);
+      setSessionCost('');
+      setHasTriedSubmit(false);
+      setTextNote('');
+      setAudioBlob(null);
+      setEntryA({
+        nextAppointmentDate: '',
+        nextAppointmentStartTime: '',
+        nextAppointmentEndTime: '',
+        sessionDuration: 60,
+        sessionCost: '',
+      });
+      setEntryB({
+        nextAppointmentDate: '',
+        nextAppointmentStartTime: '',
+        nextAppointmentEndTime: '',
+        sessionDuration: 60,
+        sessionCost: '',
+      });
+    }
+  }, [isOpen]);
+  const [entryB, setEntryB] = useState<{
+    nextAppointmentDate: string;
+    nextAppointmentStartTime: string;
+    nextAppointmentEndTime: string;
+    sessionDuration: 30 | 60;
+    sessionCost: number | '';
+  }>({
+    nextAppointmentDate: '',
+    nextAppointmentStartTime: '',
+    nextAppointmentEndTime: '',
+    sessionDuration: 60,
+    sessionCost: '',
+  });
 
   const calculateEndTime = (startTime: string, durationMinutes: number = 60): string => {
     if (!startTime) return '';
@@ -789,7 +1272,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
       return;
     }
 
-    const isActiveWithFrequency = status === 'active' && !!sessionFrequency;
+    const isActiveWithFrequency =
+      status === 'active' &&
+      !!sessionFrequency &&
+      sessionFrequency !== 'twice_weekly';
 
     // Validar que si hay frecuencia para un paciente ACTIVO, también haya próxima cita completa
     if (isActiveWithFrequency && !nextAppointmentDate) {
@@ -842,12 +1328,28 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
         status,
         professionalId: professionalId || undefined,
         sessionFrequency: sessionFrequency || undefined,
-        nextAppointmentDate: nextAppointmentDate || undefined,
-        nextAppointmentStartTime: nextAppointmentStartTime || undefined,
-        nextAppointmentEndTime: nextAppointmentEndTime || undefined,
-        sessionCost: sessionCost !== '' ? Number(sessionCost) : undefined,
+        nextAppointmentDate:
+          sessionFrequency === 'twice_weekly'
+            ? undefined
+            : nextAppointmentDate || undefined,
+        nextAppointmentStartTime:
+          sessionFrequency === 'twice_weekly'
+            ? undefined
+            : nextAppointmentStartTime || undefined,
+        nextAppointmentEndTime:
+          sessionFrequency === 'twice_weekly'
+            ? undefined
+            : nextAppointmentEndTime || undefined,
+        sessionCost:
+          sessionFrequency === 'twice_weekly'
+            ? undefined
+            : sessionCost !== ''
+            ? Number(sessionCost)
+            : undefined,
         textNote: trimmedTextNote || undefined,
         audioNote: audioNoteUrl,
+        entriesA: sessionFrequency === 'twice_weekly' ? entryA : undefined,
+        entriesB: sessionFrequency === 'twice_weekly' ? entryB : undefined,
       });
       // Reset form
       setName('');
@@ -938,22 +1440,32 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
             <select
               id="sessionFrequency"
               value={sessionFrequency}
-              onChange={(e) => setSessionFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly' | '')}
+              onChange={(e) =>
+                setSessionFrequency(
+                  e.target.value as
+                    | 'weekly'
+                    | 'biweekly'
+                    | 'monthly'
+                    | 'twice_weekly'
+                    | ''
+                )
+              }
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
               <option value="">Sin frecuencia (solo primera cita)</option>
               <option value="weekly">Semanal</option>
               <option value="biweekly">Quincenal</option>
               <option value="monthly">Mensual</option>
+              <option value="twice_weekly">2 veces por semana</option>
             </select>
-            {sessionFrequency && (
+            {sessionFrequency && sessionFrequency !== 'twice_weekly' && (
               <p className="mt-1 text-sm text-amber-600">
                 ⚠️ Si defines una frecuencia, debes especificar la fecha de la próxima cita
               </p>
             )}
           </div>
 
-          {sessionFrequency && (
+          {sessionFrequency && sessionFrequency !== 'twice_weekly' && (
             <>
               <div className="border-t pt-4">
                 <h4 className="text-sm font-semibold text-gray-700 mb-3">Próxima Cita</h4>
@@ -1063,6 +1575,310 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
             </>
           )}
 
+          {sessionFrequency === 'twice_weekly' && (
+            <div className="border-t pt-4 space-y-6">
+              <h4 className="text-sm font-semibold text-gray-700 mb-1">
+                Próximas Citas (2 veces por semana)
+              </h4>
+
+              {/* Bloque A */}
+              <div className="border rounded-lg p-3">
+                <h5 className="text-xs font-semibold text-gray-600 mb-2">
+                  Bloque A
+                </h5>
+
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="entryADate"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Fecha de la Próxima Cita A *
+                    </label>
+                    <input
+                      type="date"
+                      id="entryADate"
+                      value={entryA.nextAppointmentDate}
+                      onChange={(e) =>
+                        setEntryA((prev) => ({
+                          ...prev,
+                          nextAppointmentDate: e.target.value,
+                        }))
+                      }
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label
+                        htmlFor="entryAStartTime"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Hora de inicio A *
+                      </label>
+                      <input
+                        type="time"
+                        id="entryAStartTime"
+                        value={entryA.nextAppointmentStartTime}
+                        onChange={(e) => {
+                          const startTime = e.target.value;
+                          setEntryA((prev) => ({
+                            ...prev,
+                            nextAppointmentStartTime: startTime,
+                            nextAppointmentEndTime: calculateEndTime(
+                              startTime,
+                              prev.sessionDuration
+                            ),
+                          }));
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        step={60}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="entryADuration"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Duración A
+                      </label>
+                      <select
+                        id="entryADuration"
+                        value={entryA.sessionDuration}
+                        onChange={(e) => {
+                          const value =
+                            Number(e.target.value) as 30 | 60;
+                          setEntryA((prev) => ({
+                            ...prev,
+                            sessionDuration: value,
+                            nextAppointmentEndTime:
+                              prev.nextAppointmentStartTime
+                                ? calculateEndTime(
+                                    prev.nextAppointmentStartTime,
+                                    value
+                                  )
+                                : prev.nextAppointmentEndTime,
+                          }));
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      >
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>60 minutos</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="entryAEndTime"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Hora de fin A
+                      </label>
+                      <input
+                        type="time"
+                        id="entryAEndTime"
+                        value={entryA.nextAppointmentEndTime}
+                        onChange={(e) =>
+                          setEntryA((prev) => ({
+                            ...prev,
+                            nextAppointmentEndTime: e.target.value,
+                          }))
+                        }
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        step={60}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="entryACost"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Costo de la Sesión A
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">
+                          $
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        id="entryACost"
+                        value={entryA.sessionCost}
+                        onChange={(e) =>
+                          setEntryA((prev) => ({
+                            ...prev,
+                            sessionCost:
+                              e.target.value === ''
+                                ? ''
+                                : Number(e.target.value),
+                          }))
+                        }
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque B */}
+              <div className="border rounded-lg p-3">
+                <h5 className="text-xs font-semibold text-gray-600 mb-2">
+                  Bloque B
+                </h5>
+
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="entryBDate"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Fecha de la Próxima Cita B *
+                    </label>
+                    <input
+                      type="date"
+                      id="entryBDate"
+                      value={entryB.nextAppointmentDate}
+                      onChange={(e) =>
+                        setEntryB((prev) => ({
+                          ...prev,
+                          nextAppointmentDate: e.target.value,
+                        }))
+                      }
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label
+                        htmlFor="entryBStartTime"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Hora de inicio B *
+                      </label>
+                      <input
+                        type="time"
+                        id="entryBStartTime"
+                        value={entryB.nextAppointmentStartTime}
+                        onChange={(e) => {
+                          const startTime = e.target.value;
+                          setEntryB((prev) => ({
+                            ...prev,
+                            nextAppointmentStartTime: startTime,
+                            nextAppointmentEndTime: calculateEndTime(
+                              startTime,
+                              prev.sessionDuration
+                            ),
+                          }));
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        step={60}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="entryBDuration"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Duración B
+                      </label>
+                      <select
+                        id="entryBDuration"
+                        value={entryB.sessionDuration}
+                        onChange={(e) => {
+                          const value =
+                            Number(e.target.value) as 30 | 60;
+                          setEntryB((prev) => ({
+                            ...prev,
+                            sessionDuration: value,
+                            nextAppointmentEndTime:
+                              prev.nextAppointmentStartTime
+                                ? calculateEndTime(
+                                    prev.nextAppointmentStartTime,
+                                    value
+                                  )
+                                : prev.nextAppointmentEndTime,
+                          }));
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      >
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>60 minutos</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="entryBEndTime"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Hora de fin B
+                      </label>
+                      <input
+                        type="time"
+                        id="entryBEndTime"
+                        value={entryB.nextAppointmentEndTime}
+                        onChange={(e) =>
+                          setEntryB((prev) => ({
+                            ...prev,
+                            nextAppointmentEndTime: e.target.value,
+                          }))
+                        }
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        step={60}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="entryBCost"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Costo de la Sesión B
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">
+                          $
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        id="entryBCost"
+                        value={entryB.sessionCost}
+                        onChange={(e) =>
+                          setEntryB((prev) => ({
+                            ...prev,
+                            sessionCost:
+                              e.target.value === ''
+                                ? ''
+                                : Number(e.target.value),
+                          }))
+                        }
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showDescription && (
             <div>
               <label htmlFor="description" className="block text-sm font-medium text-gray-700">
@@ -1121,7 +1937,17 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({
                 !name.trim() ||
                 (status === 'active' &&
                   !!sessionFrequency &&
-                  (!professionalId || !nextAppointmentDate || !nextAppointmentStartTime))
+                  sessionFrequency !== 'twice_weekly' &&
+                  (!professionalId ||
+                    !nextAppointmentDate ||
+                    !nextAppointmentStartTime)) ||
+                (status === 'active' &&
+                  sessionFrequency === 'twice_weekly' &&
+                  (!professionalId ||
+                    !entryA.nextAppointmentDate ||
+                    !entryA.nextAppointmentStartTime ||
+                    !entryB.nextAppointmentDate ||
+                    !entryB.nextAppointmentStartTime))
               }
             >
               {isSubmitting ? 'Creando...' : 'Crear Paciente'}
@@ -1271,7 +2097,9 @@ const PatientManagement = () => {
   const [professionalFilter, setProfessionalFilter] = useState<string>('all');
   const [isStatusRequestModalOpen, setIsStatusRequestModalOpen] = useState(false);
   const [selectedStatusRequest, setSelectedStatusRequest] = useState<StatusRequest | null>(null);
-  const [frequencyFilter, setFrequencyFilter] = useState<'all' | 'weekly' | 'biweekly' | 'monthly'>('all');
+  const [frequencyFilter, setFrequencyFilter] = useState<
+    'all' | 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly'
+  >('all');
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [selectedFrequencyRequest, setSelectedFrequencyRequest] = useState<FrequencyRequest | null>(null);
   const [isActivationRequestModalOpen, setIsActivationRequestModalOpen] = useState(false);
@@ -1475,13 +2303,27 @@ const PatientManagement = () => {
     description: string;
     status?: 'active' | 'pending' | 'inactive';
     professionalId?: string;
-    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    sessionFrequency?: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly';
     nextAppointmentDate?: string;
     nextAppointmentStartTime?: string;
     nextAppointmentEndTime?: string;
     sessionCost?: number;
     textNote?: string;
     audioNote?: string;
+    entriesA?: {
+      nextAppointmentDate: string;
+      nextAppointmentStartTime: string;
+      nextAppointmentEndTime: string;
+      sessionDuration: 30 | 60;
+      sessionCost: number | '';
+    };
+    entriesB?: {
+      nextAppointmentDate: string;
+      nextAppointmentStartTime: string;
+      nextAppointmentEndTime: string;
+      sessionDuration: 30 | 60;
+      sessionCost: number | '';
+    };
   }) => {
     try {
       // Paso 1: Crear paciente
@@ -1511,7 +2353,49 @@ const PatientManagement = () => {
         }
       }
 
-      // Paso 2: Crear la primera cita si hay fecha y profesional
+      // Paso 2 (especial): crear agenda twice_weekly directamente
+      if (
+        data.status === 'active' &&
+        data.sessionFrequency === 'twice_weekly' &&
+        data.professionalId &&
+        data.entriesA?.nextAppointmentDate &&
+        data.entriesB?.nextAppointmentDate
+      ) {
+        try {
+          await recurringAppointmentsService.createPatientRecurringScheduleAdmin(
+            patientId,
+            {
+              frequency: 'twice_weekly',
+              entries: [
+                {
+                  nextDate: data.entriesA.nextAppointmentDate,
+                  startTime: data.entriesA.nextAppointmentStartTime,
+                  duration: data.entriesA.sessionDuration,
+                  sessionCost: Number(data.entriesA.sessionCost),
+                },
+                {
+                  nextDate: data.entriesB.nextAppointmentDate,
+                  startTime: data.entriesB.nextAppointmentStartTime,
+                  duration: data.entriesB.sessionDuration,
+                  sessionCost: Number(data.entriesB.sessionCost),
+                },
+              ],
+            }
+          );
+          toast.success(
+            'Paciente y agenda (2 veces por semana) creados correctamente.'
+          );
+        } catch (err) {
+          console.error('Error al crear agenda twice_weekly:', err);
+          toast.error(
+            'Paciente creado, pero hubo un error al configurar la agenda. Podés configurarla manualmente después.'
+          );
+        }
+        await loadData();
+        return; // No continuar con el flujo de cita simple
+      }
+
+      // Paso 2: Crear la primera cita si hay fecha y profesional (frecuencias simples)
       let appointmentId: string | null = null;
       if (
         data.status === 'active' &&
@@ -1539,7 +2423,7 @@ const PatientManagement = () => {
         }
       }
 
-      // Paso 3: Registrar recurrencia si hay sessionFrequency y appointmentId
+      // Paso 3: Registrar recurrencia si hay sessionFrequency y appointmentId (frecuencias simples)
       if (
         data.status === 'active' &&
         data.sessionFrequency &&
@@ -1796,13 +2680,23 @@ const PatientManagement = () => {
           <div>
             <select
               value={frequencyFilter}
-              onChange={(e) => setFrequencyFilter(e.target.value as 'all' | 'weekly' | 'biweekly' | 'monthly')}
+              onChange={(e) =>
+                setFrequencyFilter(
+                  e.target.value as
+                    | 'all'
+                    | 'weekly'
+                    | 'biweekly'
+                    | 'monthly'
+                    | 'twice_weekly'
+                )
+              }
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
             >
               <option value="all">Todas las frecuencias</option>
               <option value="weekly">Semanal</option>
               <option value="biweekly">Quincenal</option>
               <option value="monthly">Mensual</option>
+              <option value="twice_weekly">2 veces por semana</option>
             </select>
           </div>
         </div>

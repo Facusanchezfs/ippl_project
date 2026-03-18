@@ -87,7 +87,7 @@ module.exports = (sequelize, DataTypes) => {
       },
 
       sessionFrequency: {
-        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly'),
+        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly', 'twice_weekly'),
         allowNull: true,
       },
 

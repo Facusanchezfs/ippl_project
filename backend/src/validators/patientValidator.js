@@ -12,7 +12,10 @@ const createPatientSchema = Joi.object({
     phone: Joi.string().allow(null, '').optional(),
     status: Joi.string().valid('active', 'pending', 'inactive').optional(),
     assignedAt: Joi.date().allow(null).optional(),
-    sessionFrequency: Joi.string().valid('weekly', 'biweekly', 'monthly').allow(null, '').optional(),
+    sessionFrequency: Joi.string()
+      .valid('weekly', 'biweekly', 'monthly', 'twice_weekly')
+      .allow(null, '')
+      .optional(),
   }),
 });
 
@@ -27,7 +30,10 @@ const assignPatientSchema = Joi.object({
     assignedAt: Joi.date().allow(null).optional(),
     textNote: Joi.string().allow(null, '').optional(),
     audioNote: Joi.string().allow(null, '').optional(),
-    sessionFrequency: Joi.string().valid('weekly', 'biweekly', 'monthly').allow(null, '').optional(),
+    sessionFrequency: Joi.string()
+      .valid('weekly', 'biweekly', 'monthly', 'twice_weekly')
+      .allow(null, '')
+      .optional(),
     statusChangeReason: Joi.string().allow(null, '').optional(),
   }),
 });
