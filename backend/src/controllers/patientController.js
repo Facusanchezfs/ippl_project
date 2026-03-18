@@ -322,9 +322,43 @@ async function deletePatient(req, res) {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    // Versión simple: solo marcar como inactivo y registrar actividad
-    patient.active = false;
-    await patient.save();
+    const t = await sequelize.transaction();
+    try {
+      // Versión simple: solo marcar como inactivo y registrar actividad
+      patient.active = false;
+      await patient.save({ transaction: t });
+
+      // Cancelar citas futuras scheduled y desactivar recurrencias
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      await Appointment.update(
+        { status: 'cancelled' },
+        {
+          where: {
+            patientId: patient.id,
+            status: 'scheduled',
+            active: true,
+            date: { [Op.gte]: todayStr },
+          },
+          transaction: t,
+          // Al cancelar, no necesitamos validar timeOrder (startTime/endTime pueden venir inválidos históricamente)
+          validate: false,
+        }
+      );
+
+      await RecurringAppointment.update(
+        { active: false },
+        {
+          where: { patientId: patient.id, active: true },
+          transaction: t,
+        }
+      );
+
+      await t.commit();
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
 
     await createActivity(
       'PATIENT_SOFT_DELETED',

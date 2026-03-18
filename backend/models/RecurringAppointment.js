@@ -41,6 +41,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
+      groupId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+
       patientId: {
         type: DataTypes.BIGINT,
         allowNull: false,
@@ -57,7 +62,7 @@ module.exports = (sequelize, DataTypes) => {
       },
 
       frequency: {
-        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly'),
+        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly', 'twice_weekly'),
         allowNull: false,
       },
 

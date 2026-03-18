@@ -1,27 +1,32 @@
 const express = require('express');
 const router = express.Router();
-
 const { verifyToken } = require('../controllers/authController');
 const {
   updateRecurringAppointmentAdmin,
+  updateRecurringAppointmentGroupAdmin,
 } = require('../controllers/recurringAppointmentsController');
 const validate = require('../middleware/validate');
-const recurringAppointmentsValidators = require('../validators/recurringAppointmentsValidator');
+const recurringAppointmentsValidators =
+  require('../validators/recurringAppointmentsValidator');
 
-// Todas las rutas requieren token válido
 router.use(verifyToken);
 
-// Solo ADMIN
 router.use((req, res, next) => {
   if (req.user?.role !== 'admin') {
-    return res
-      .status(403)
-      .json({ success: false, message: 'Acceso denegado. Solo administradores.' });
+    return res.status(403).json({
+      success: false,
+      message: 'Acceso denegado. Solo administradores.',
+    });
   }
   next();
 });
 
-// PATCH /admin/recurring-appointments/:id
+// IMPORTANTE: /group/:groupId ANTES que /:id
+router.patch(
+  '/group/:groupId',
+  updateRecurringAppointmentGroupAdmin
+);
+
 router.patch(
   '/:id',
   validate(recurringAppointmentsValidators.adminUpdate),

@@ -9,7 +9,7 @@ const createRecurringAppointmentSchema = Joi.object({
       'number.positive': 'baseAppointmentId debe ser un entero positivo',
     }),
     frequency: Joi.string()
-      .valid('weekly', 'biweekly', 'monthly')
+      .valid('weekly', 'biweekly', 'monthly', 'twice_weekly')
       .required()
       .messages({
         'any.only': 'frequency debe ser uno de: weekly, biweekly, monthly',
@@ -23,7 +23,9 @@ const adminUpdateRecurringAppointmentSchema = Joi.object({
     id: Joi.number().integer().positive().required(),
   }),
   body: Joi.object({
-    frequency: Joi.string().valid('weekly', 'biweekly', 'monthly').required(),
+    frequency: Joi.string()
+      .valid('weekly', 'biweekly', 'monthly', 'twice_weekly')
+      .required(),
     nextDate: Joi.string()
       .pattern(/^\d{4}-\d{2}-\d{2}$/)
       .required()

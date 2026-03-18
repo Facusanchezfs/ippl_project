@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, StatusRequest, Patient } = require('../../models');
+const { sequelize, StatusRequest, Patient, Appointment, RecurringAppointment } = require('../../models');
 const { toStatusRequestDTO, toStatusRequestDTOList } = require('../../mappers/StatusRequestMapper');
 const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
@@ -171,7 +171,20 @@ const approveRequest = async (req, res) => {
       }
 
       const oldStatus = patient.status;
-      const newStatus = request.requestedStatus;
+      // Alguns registros pueden traer requestedStatus históricos fuera del ENUM de Patient.
+      // Normalizamos para evitar que patient.save() falle en approve.
+      const statusMap = {
+        absent: 'inactive',
+        alta: 'active',
+      };
+
+      const newStatusRaw = request.requestedStatus;
+      const newStatus = statusMap[newStatusRaw] ?? newStatusRaw;
+      const patientAllowedStatuses = ['active', 'pending', 'inactive'];
+
+      if (!patientAllowedStatuses.includes(newStatus)) {
+        return { kind: 'invalid_requested_status', requestedStatus: newStatusRaw };
+      }
 
       patient.status = newStatus;
       
@@ -180,6 +193,38 @@ const approveRequest = async (req, res) => {
       }
       
       await patient.save({ transaction: t });
+
+      // Al desactivar por status => cancelar futuras citas scheduled y desactivar recurrencias
+      if (newStatus === 'inactive') {
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        await Appointment.update(
+          { status: 'cancelled' },
+          {
+            where: {
+              patientId: patient.id,
+              status: 'scheduled',
+              active: true,
+              date: { [Op.gte]: todayStr },
+            },
+            transaction: t,
+            // Al cancelar, no necesitamos validar timeOrder (startTime/endTime pueden venir inválidos históricamente)
+            // y no queremos que el approve falle por ese motivo.
+            validate: false,
+          }
+        );
+
+        await RecurringAppointment.update(
+          { active: false },
+          {
+            where: {
+              patientId: patient.id,
+              active: true,
+            },
+            transaction: t,
+          }
+        );
+      }
 
       request.status = 'approved';
       request.adminResponse = adminResponse ?? null;
@@ -199,7 +244,15 @@ const approveRequest = async (req, res) => {
       return sendError(res, 404, 'Paciente no encontrado');
     }
 
-    const { request, patient, oldStatus, newStatus } = result;
+    if (result.kind === 'invalid_requested_status') {
+      return sendError(
+        res,
+        400,
+        'requestedStatus no es compatible con el estado permitido de pacientes'
+      );
+    }
+
+    const { request, oldStatus, newStatus } = result;
 
     try {
       const activityType =
