@@ -345,6 +345,21 @@ const updateAppointment = async (req, res) => {
     const appt = req.appointment;
     const body = req.body;
 
+    // Regla de negocio: la finalización automática se controla desde cron,
+    // por lo que no se permite setear `status='completed'` desde updates manuales.
+    if (body?.status === 'completed') {
+      return sendError(res, 403, 'La finalización de citas es automática');
+    }
+
+    // Regla de negocio: no permitir edición de citas finalizadas o canceladas.
+    if (appt.status === 'completed' || appt.status === 'cancelled') {
+      return sendError(
+        res,
+        403,
+        'No se puede editar una cita finalizada o cancelada'
+      );
+    }
+
     const updates = {};
     const fields = [
       'date', 'startTime', 'endTime',
@@ -356,6 +371,19 @@ const updateAppointment = async (req, res) => {
       'patientId', 'professionalId',
     ];
     for (const f of fields) if (body[f] !== undefined) updates[f] = body[f];
+
+    // Log temporal para diagnosticar problemas de parseo de montos.
+    // Si `sessionCost` viene como NaN o string con coma decimal, la validación Joi
+    // fallará antes de llegar acá, pero este log ayuda cuando ya pasa el schema.
+    if (updates.sessionCost !== undefined) {
+      logger.info(
+        '[updateAppointment] sessionCost received:',
+        updates.sessionCost,
+        'type:',
+        typeof updates.sessionCost
+      );
+    }
+
     if (updates.attended !== undefined) {
       if (typeof updates.attended === 'string') {
         updates.attended = updates.attended.toLowerCase() === 'true';
