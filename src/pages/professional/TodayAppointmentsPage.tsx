@@ -15,8 +15,6 @@ import {
   ChevronUpIcon,
   EyeIcon,
   XMarkIcon,
-  CheckCircleIcon,
-  XCircleIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -33,30 +31,25 @@ const AppointmentsPage = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedAppointmentForDescription, setSelectedAppointmentForDescription] = useState<Appointment | null>(null);
-  const [showFinishAppointmentModal, setShowFinishAppointmentModal] = useState(false);
-  const [selectedAppointmentForFinish, setSelectedAppointmentForFinish] = useState<Appointment | null>(null);
-  const [attended, setAttended] = useState<boolean>(true);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   const [pendingCancellationIds, setPendingCancellationIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<{
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  } | null>(null);
 
   const navigate = useNavigate();
 
   useEffect(() => {
     void loadAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, filterStatus]);
+  }, [user]);
+
+  // Cuando cambian los filtros, volvemos a la primera página para que
+  // el paginado coincida con el dataset filtrado (evita "parece que no cambia").
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, cancelFilter, sortOrder]);
 
   const loadAppointments = async () => {
     if (!user) return;
@@ -66,13 +59,13 @@ const AppointmentsPage = () => {
   
       const data = await appointmentsService.getProfessionalAppointments(
         user.id,
-        page,
-        20,
-        filterStatus
+        undefined,
+        undefined,
+        'all',
+        'include'
       );
   
       setAppointments(data.appointments);
-      setPagination(data.pagination || null);
   
     } catch (error) {
       console.error("Error al cargar las citas:", error);
@@ -154,86 +147,65 @@ const AppointmentsPage = () => {
       toast.success('Monto de la sesión actualizado exitosamente');
     } catch (error) {
       console.error('Error al actualizar el monto de la cita:', error);
+      // Log temporal: ayuda a distinguir si falla por validación del backend (Joi),
+      // por regla de negocio (403) u otro motivo.
+      console.log(
+        '[EditAppointment] error payload:',
+        (error as any)?.response?.data
+      );
       toast.error('Error al actualizar el monto de la cita');
     }
   };
 
-  const handleFinishAppointment = async (appointmentId: string, finishData: {
-    attended: boolean;
-    paymentAmount?: number;
-    noShowPaymentAmount?: number;
-    remainingBalance?: number;
-  }) => {
-    try {
-      const updateData: any = {
-        status: 'completed',
-        attended: finishData.attended,
-        completedAt: new Date().toISOString()
-      };
-
-      if (finishData.attended) {
-        updateData.paymentAmount = selectedAppointmentForFinish?.sessionCost || 0;
-        updateData.remainingBalance = 0;
-      } else {
-        updateData.noShowPaymentAmount = finishData.noShowPaymentAmount || 0;
-      }
-
-      await appointmentsService.updateAppointment(appointmentId, updateData);
-
-      await loadAppointments();
-      setShowFinishAppointmentModal(false);
-      setSelectedAppointmentForFinish(null);
-      setAttended(true);
-      toast.success('Cita finalizada exitosamente');
-    } catch (error) {
-      console.error('Error al finalizar la cita:', error);
-      toast.error('Error al finalizar la cita');
-    }
-  };
-
+  // Blindaje UI: aunque el backend aplique `cancelFilter`, si por algún motivo
+  // llega información que no coincide (p.ej. request previo en caché / validación),
+  // garantizamos que "Ocultar canceladas" realmente no las muestre.
+  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
+  const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm (local)
   const filteredAppointments = appointments
     .filter((appointment) => {
-      const appointmentDateTime = combineLocalDateTime(
-        appointment.date,
-        appointment.startTime
-      );
-      const now = new Date();
-
-      let keepByTime = true;
-      switch (filterStatus) {
-        case 'upcoming':
-          // Solo citas futuras realmente programadas
-          keepByTime =
-            appointment.status === 'scheduled' && appointmentDateTime >= now;
-          break;
-        case 'past':
-          // Citas cuya fecha/hora ya pasó o que ya no están programadas
-          keepByTime =
-            appointmentDateTime < now || appointment.status !== 'scheduled';
-          break;
-        case 'all':
-        default:
-          keepByTime = true;
+      if (filterStatus === 'upcoming') {
+        return (
+          appointment.status === 'scheduled' &&
+          (appointment.date > todayStr ||
+            (appointment.date === todayStr &&
+              (appointment.startTime || '') >= nowTime))
+        );
       }
 
-      if (!keepByTime) return false;
-
-      // Filtro de canceladas
-      if (cancelFilter === 'exclude' && appointment.status === 'cancelled') {
-        return false;
+      if (filterStatus === 'past') {
+        return (
+          appointment.date < todayStr ||
+          (appointment.date === todayStr &&
+            (appointment.startTime || '') < nowTime) ||
+          // Past incluye todo lo que no es 'scheduled' (cancelled/completed).
+          appointment.status !== 'scheduled'
+        );
       }
-      if (cancelFilter === 'only' && appointment.status !== 'cancelled') {
-        return false;
-      }
 
-      return true;
+      return true; // all
+    })
+    .filter((appointment) => {
+      if (cancelFilter === 'exclude') return appointment.status !== 'cancelled';
+      if (cancelFilter === 'only') return appointment.status === 'cancelled';
+      return true; // include
     })
     .sort((a, b) => {
       const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
       const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
-
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
+
+  const clientLimit = 20;
+  const totalFiltered = filteredAppointments.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / clientLimit));
+  const currentPage = Math.min(page, totalPages);
+  const hasPrev = currentPage > 1;
+  const hasNext = currentPage < totalPages;
+  const paginatedAppointments = filteredAppointments.slice(
+    (currentPage - 1) * clientLimit,
+    currentPage * clientLimit
+  );
 
 
 
@@ -333,7 +305,7 @@ const AppointmentsPage = () => {
           <>
             {/* ===== MOBILE/TABLET: CARDS ===== */}
             <div className="block md:hidden space-y-3">
-              {filteredAppointments.map((appointment) => {
+              {paginatedAppointments.map((appointment) => {
                 const status = getAppointmentStatus(appointment.status);
                 return (
                   <div
@@ -402,29 +374,19 @@ const AppointmentsPage = () => {
                         <EyeIcon className="h-5 w-5" />
                       </button>
 
-                      <button
-                        onClick={() => {
-                          setSelectedAppointment(appointment);
-                          setShowEditAppointmentModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-900 inline-flex items-center"
-                        title="Editar cita"
-                      >
-                        <PencilIcon className="h-5 w-5" />
-                      </button>
-                      {appointment.status === 'scheduled' && (
-                        <button
-                          onClick={() => {
-                            setSelectedAppointmentForFinish(appointment);
-                            setAttended(true);
-                            setShowFinishAppointmentModal(true);
-                          }}
-                          className="text-green-600 hover:text-green-900 inline-flex items-center"
-                          title="Finalizar cita"
-                        >
-                          <CheckCircleIcon className="h-5 w-5" />
-                        </button>
-                      )}
+                      {appointment.status !== 'completed' &&
+                        appointment.status !== 'cancelled' && (
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setShowEditAppointmentModal(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                            title="Editar cita"
+                          >
+                            <PencilIcon className="h-5 w-5" />
+                          </button>
+                        )}
                       {appointment.status === 'scheduled' && (
                         <button
                           onClick={() => {
@@ -472,7 +434,7 @@ const AppointmentsPage = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAppointments.map((appointment) => {
+                    {paginatedAppointments.map((appointment) => {
                       const status = getAppointmentStatus(appointment.status);
                       return (
                         <tr key={appointment.id} className="hover:bg-gray-50">
@@ -531,29 +493,19 @@ const AppointmentsPage = () => {
                             >
                               <EyeIcon className="h-5 w-5" />
                             </button>
-                            <button
-                              onClick={() => {
-                                setSelectedAppointment(appointment);
-                                setShowEditAppointmentModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900 mr-4"
-                              title="Editar cita"
-                            >
-                              <PencilIcon className="h-5 w-5" />
-                            </button>
-                            {appointment.status === 'scheduled' && (
-                              <button
-                                onClick={() => {
-                                  setSelectedAppointmentForFinish(appointment);
-                                  setAttended(true);
-                                  setShowFinishAppointmentModal(true);
-                                }}
-                                className="text-green-600 hover:text-green-900 mr-4"
-                                title="Finalizar cita"
-                              >
-                                <CheckCircleIcon className="h-5 w-5" />
-                              </button>
-                            )}
+                            {appointment.status !== 'completed' &&
+                              appointment.status !== 'cancelled' && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedAppointment(appointment);
+                                    setShowEditAppointmentModal(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900 mr-4"
+                                  title="Editar cita"
+                                >
+                                  <PencilIcon className="h-5 w-5" />
+                                </button>
+                              )}
                             {appointment.status === 'scheduled' && (
                               <button
                                 onClick={() => {
@@ -573,15 +525,15 @@ const AppointmentsPage = () => {
                     })}
                   </tbody>
                 </table>
-                {pagination && (
+                {totalPages > 1 && (
                   <div className="flex justify-between items-center mt-6">
 
                     {/* Prev */}
                     <button
-                      disabled={!pagination.hasPrev}
+                      disabled={!hasPrev}
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       className={`px-4 py-2 rounded-lg text-sm font-medium
-                        ${pagination.hasPrev
+                        ${hasPrev
                           ? "bg-gray-100 hover:bg-gray-200 text-gray-800"
                           : "bg-gray-50 text-gray-400 cursor-not-allowed"
                         }`}
@@ -591,15 +543,15 @@ const AppointmentsPage = () => {
 
                     {/* Info */}
                     <span className="text-sm text-gray-600">
-                      Página {pagination.page} de {pagination.totalPages}
+                      Página {currentPage} de {totalPages}
                     </span>
 
                     {/* Next */}
                     <button
-                      disabled={!pagination.hasNext}
-                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!hasNext}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                       className={`px-4 py-2 rounded-lg text-sm font-medium
-                        ${pagination.hasNext
+                        ${hasNext
                           ? "bg-gray-100 hover:bg-gray-200 text-gray-800"
                           : "bg-gray-50 text-gray-400 cursor-not-allowed"
                         }`}
@@ -646,7 +598,18 @@ const AppointmentsPage = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
-                const sessionCost = Number(formData.get('sessionCost') || 0);
+                const raw = formData.get('sessionCost');
+                // Soporte básico de coma decimal (p.ej. "12,34") para que Joi.number() no falle.
+                const normalized = typeof raw === 'string' ? raw.replace(',', '.') : String(raw ?? '0');
+                const sessionCost = Number(normalized);
+
+                console.log('[EditAppointment] sessionCost raw:', raw, 'normalized:', normalized, 'parsed:', sessionCost);
+
+                if (!Number.isFinite(sessionCost) || sessionCost < 0) {
+                  toast.error('Monto inválido');
+                  return;
+                }
+
                 handleEditAppointment({ sessionCost });
               }}
             >
@@ -798,119 +761,6 @@ const AppointmentsPage = () => {
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal para finalizar cita */}
-      {showFinishAppointmentModal && selectedAppointmentForFinish && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Finalizar Cita</h2>
-              <button
-                onClick={() => {
-                  setShowFinishAppointmentModal(false);
-                  setSelectedAppointmentForFinish(null);
-                  setAttended(true);
-                }}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <XCircleIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Paciente
-                </label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {selectedAppointmentForFinish.patientName}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Fecha y Hora
-                </label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {combineLocalDateTime(
-                    selectedAppointmentForFinish.date,
-                    selectedAppointmentForFinish.startTime
-                  ).toLocaleString('es-ES', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ¿El paciente asistió a la cita?
-                </label>
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setAttended(true)}
-                    className={`flex items-center px-4 py-2 rounded-lg ${attended
-                        ? 'bg-green-100 text-green-800 border-2 border-green-500'
-                        : 'bg-gray-100 text-gray-800 border-2 border-transparent'
-                      }`}
-                  >
-                    <CheckCircleIcon className="h-5 w-5 mr-2" />
-                    Sí asistió
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAttended(false)}
-                    className={`flex items-center px-4 py-2 rounded-lg ${!attended
-                        ? 'bg-red-100 text-red-800 border-2 border-red-500'
-                        : 'bg-gray-100 text-gray-800 border-2 border-transparent'
-                      }`}
-                  >
-                    <XCircleIcon className="h-5 w-5 mr-2" />
-                    No asistió
-                  </button>
-                </div>
-              </div>
-
-              {attended && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Costo de la sesión
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    ${selectedAppointmentForFinish.sessionCost?.toFixed(2) || '0.00'}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowFinishAppointmentModal(false);
-                  setSelectedAppointmentForFinish(null);
-                  setAttended(true);
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleFinishAppointment(selectedAppointmentForFinish.id, {
-                  attended
-                })}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Finalizar Cita
               </button>
             </div>
           </div>

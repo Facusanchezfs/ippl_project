@@ -51,15 +51,20 @@ class AppointmentsService {
 
   async getProfessionalAppointments(
     professionalId: string,
-    page: number = 1,
-    limit: number = 20,
-    filter: "all" | "upcoming" | "past" = "all"
+    page?: number,
+    limit?: number,
+    filter: "all" | "upcoming" | "past" = "all",
+    cancelFilter: "exclude" | "include" | "only" = "include"
   ): Promise<PaginatedAppointmentsResponse> {
     try {
+      const params: Record<string, any> = { filter, cancelFilter };
+      if (page !== undefined) params.page = page;
+      if (limit !== undefined) params.limit = limit;
+
       const response = await api.get(
         `/appointments/professional/${professionalId}`,
         {
-          params: { page, limit, filter }
+          params
         }
       );
   
