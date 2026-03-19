@@ -72,74 +72,82 @@ const getProfessionalAppointments = async (req, res) => {
     const { professionalId } = req.params;
 
     // Pagination
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    const hasPage = req.query.page !== undefined;
+    const hasLimit = req.query.limit !== undefined;
+    const page = hasPage ? parseInt(req.query.page, 10) : 1;
+    const limit = hasLimit ? parseInt(req.query.limit, 10) : null;
 
     // Filter: all | upcoming | past
     const filter = req.query.filter || 'all';
+    const cancelFilter = req.query.cancelFilter || 'include';
 
-    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
-    if (limit < 1 || limit > 100)
+    if (hasPage && page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+    if (hasLimit && (limit < 1 || limit > 100))
       return sendError(res, 400, 'limit debe estar entre 1 y 100');
 
-    const offset = (page - 1) * limit;
+    const offset = limit != null ? (page - 1) * limit : null;
 
     // Base WHERE
-    let whereClause = {
+    const whereClause = {
       active: true,
       professionalId,
+      [Op.and]: [],
     };
 
-    // Fecha actual
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm
+    // Fecha actual / hora actual (manteniendo convención actual del controller).
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
+    const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm (local)
 
-    // ✅ Aplicar filtros
+    // Aplicar filtros por fecha/hora como lo hace el frontend,
+    // para que la paginación sea consistente.
     if (filter === 'upcoming') {
-      whereClause = {
-        ...whereClause,
+      whereClause[Op.and].push({ status: 'scheduled' });
+      whereClause[Op.and].push({
         [Op.or]: [
-          // citas futuras
           { date: { [Op.gt]: today } },
-
-          // citas de hoy pero más tarde
           {
             date: today,
             startTime: { [Op.gte]: nowTime },
           },
         ],
-      };
+      });
     }
 
     if (filter === 'past') {
-      whereClause = {
-        ...whereClause,
+      whereClause[Op.and].push({
         [Op.or]: [
-          // citas anteriores
           { date: { [Op.lt]: today } },
-
-          // citas de hoy pero ya pasaron
           {
             date: today,
             startTime: { [Op.lt]: nowTime },
           },
+          // Past incluye todo lo que no es 'scheduled' (cancelled/completed).
+          { status: { [Op.ne]: 'scheduled' } },
         ],
-      };
+      });
+    }
+
+    // Aplicar filtro de canceladas para que count/pagination coincidan.
+    if (cancelFilter === 'exclude') {
+      whereClause[Op.and].push({ status: { [Op.ne]: 'cancelled' } });
+    } else if (cancelFilter === 'only') {
+      whereClause[Op.and].push({ status: 'cancelled' });
     }
 
     // Query final
-    const { count, rows } = await Appointment.findAndCountAll({
+    const queryOptions = {
       where: whereClause,
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
-      limit,
-      offset,
-    });
+      ...(limit != null ? { limit, offset } : {}),
+    };
 
-    const totalPages = Math.ceil(count / limit);
+    const { count, rows } = await Appointment.findAndCountAll(queryOptions);
+
+    const totalPages = limit != null ? Math.ceil(count / limit) : 1;
 
     return sendSuccess(res, {
       appointments: toAppointmentDTOList(rows),
@@ -148,7 +156,7 @@ const getProfessionalAppointments = async (req, res) => {
         limit,
         total: count,
         totalPages,
-        hasNext: page < totalPages,
+        hasNext: limit != null ? page < totalPages : false,
         hasPrev: page > 1,
       },
     });

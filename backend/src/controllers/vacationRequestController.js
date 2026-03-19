@@ -19,6 +19,23 @@ function addDays(ymd, days) {
   return `${yy}-${mm}-${dd}`;
 }
 
+function diffDaysInclusive(startYmd, endYmd) {
+  const [sy, sm, sd] = String(startYmd).split('-').map((n) => parseInt(n, 10));
+  const [ey, em, ed] = String(endYmd).split('-').map((n) => parseInt(n, 10));
+
+  // Usar medianoche local para ser consistente con DATEONLY + lógica existente.
+  const start = new Date(sy, (sm || 1) - 1, sd || 1);
+  const end = new Date(ey, (em || 1) - 1, ed || 1);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+
+  const diffMs = end.getTime() - start.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  // Incluir ambos extremos: 1 día => 1, 7 días => 7.
+  return diffDays + 1;
+}
+
 function rangesOverlap(startA, endA, startB, endB) {
   return startA <= endB && startB <= endA;
 }
@@ -27,30 +44,59 @@ const createVacationRequest = async (req, res) => {
   try {
     const professionalId = req.user?.id;
     const professionalName = req.user?.name || null;
-    const { startDate, weeksRequested, reason } = req.body;
+    const { startDate, weeksRequested, endDate: endDateInput, reason } = req.body;
 
     if (!professionalId) {
       return sendError(res, 401, 'Usuario no autenticado');
     }
 
-    if (!startDate || !weeksRequested) {
-      return sendError(
-        res,
-        400,
-        'startDate y weeksRequested son obligatorios'
-      );
+    if (!startDate) {
+      return sendError(res, 400, 'startDate es obligatorio');
     }
 
-    const weeks = Number(weeksRequested);
-    if (![1, 2, 3, 4].includes(weeks)) {
-      return sendError(
-        res,
-        400,
-        'weeksRequested debe ser 1, 2, 3 o 4'
-      );
-    }
+    let endDate;
+    let weeks;
 
-    const endDate = addDays(startDate, weeks * 7 - 1);
+    // Nuevo formato: startDate + endDate (si viene endDate se usa directamente).
+    if (endDateInput) {
+      endDate = endDateInput;
+
+      if (endDate < startDate) {
+        return sendError(
+          res,
+          400,
+          'endDate debe ser mayor o igual a startDate'
+        );
+      }
+
+      // Mantener el campo requerido en el modelo (weeksRequested) aunque no venga en el request nuevo.
+      const daysInclusive = diffDaysInclusive(startDate, endDate);
+      weeks = Math.ceil(daysInclusive / 7);
+
+      if (![1, 2, 3, 4].includes(weeks)) {
+        return sendError(res, 400, 'weeksRequested debe ser 1, 2, 3 o 4');
+      }
+    } else {
+      // Legacy: startDate + weeksRequested.
+      if (!weeksRequested) {
+        return sendError(
+          res,
+          400,
+          'startDate y weeksRequested son obligatorios'
+        );
+      }
+
+      weeks = Number(weeksRequested);
+      if (![1, 2, 3, 4].includes(weeks)) {
+        return sendError(
+          res,
+          400,
+          'weeksRequested debe ser 1, 2, 3 o 4'
+        );
+      }
+
+      endDate = addDays(startDate, weeks * 7 - 1);
+    }
 
     const existingPending = await VacationRequest.findOne({
       where: {

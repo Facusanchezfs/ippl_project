@@ -146,23 +146,28 @@ const translateActivity = (activity: Activity): Activity => {
     const endDate = activity.metadata?.endDate;
     const weeksRequested = activity.metadata?.weeksRequested;
 
-    let rangeStr = '';
+    let startLabel = startDate;
+    let endLabel = endDate;
+
     if (startDate && endDate) {
       try {
         const start = new Date(`${startDate}T00:00`);
         const end = new Date(`${endDate}T00:00`);
-        rangeStr = `${start.toLocaleDateString('es-AR')} - ${end.toLocaleDateString('es-AR')}`;
+        startLabel = start.toLocaleDateString('es-AR');
+        endLabel = end.toLocaleDateString('es-AR');
       } catch {
-        rangeStr = `${startDate} - ${endDate}`;
+        startLabel = startDate;
+        endLabel = endDate;
       }
     }
 
     return {
       ...activity,
       title: 'Solicitud de vacaciones',
-      description: `${professionalName} solicitó vacaciones${
-        rangeStr ? ` (${rangeStr})` : ''
-      }${weeksRequested ? ` por ${weeksRequested} semana(s)` : ''}`,
+      description:
+        endDate && startLabel && endLabel
+          ? `${professionalName} solicitó vacaciones desde ${startLabel} hasta ${endLabel}`
+          : `${professionalName} solicitó vacaciones por ${weeksRequested} semana(s) desde ${startLabel}`,
     };
   }
 

@@ -66,6 +66,7 @@ const getProfessionalAppointmentsSchema = Joi.object({
     page: Joi.number().integer().min(1).optional(),
     limit: Joi.number().integer().min(1).max(100).optional(),
     filter: Joi.string().valid('all', 'upcoming', 'past').optional(),
+    cancelFilter: Joi.string().valid('exclude', 'include', 'only').optional(),
   }).unknown(true),
   
 });

@@ -13,10 +13,20 @@ export interface VacationRequest {
 }
 
 const vacationRequestService = {
-  async create(startDate: string, weeksRequested: number, reason?: string): Promise<VacationRequest> {
+  async create(
+    startDate: string,
+    payload: { weeksRequested?: number; endDate?: string; reason?: string } = {}
+  ): Promise<VacationRequest> {
+    const { weeksRequested, endDate, reason } = payload;
+
+    // Backward compatibility: si no viene endDate, enviar legacy con weeksRequested.
+    const body: any = { startDate, reason };
+    if (endDate) body.endDate = endDate;
+    else body.weeksRequested = weeksRequested;
+
     const response = await api.post<{ data: VacationRequest }>(
       '/vacation-requests',
-      { startDate, weeksRequested, reason }
+      body
     );
     return (
       response.data?.data ||

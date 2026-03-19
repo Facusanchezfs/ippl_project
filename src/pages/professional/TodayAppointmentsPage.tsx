@@ -37,21 +37,19 @@ const AppointmentsPage = () => {
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   const [pendingCancellationIds, setPendingCancellationIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<{
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  } | null>(null);
 
   const navigate = useNavigate();
 
   useEffect(() => {
     void loadAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, filterStatus]);
+  }, [user]);
+
+  // Cuando cambian los filtros, volvemos a la primera página para que
+  // el paginado coincida con el dataset filtrado (evita "parece que no cambia").
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, cancelFilter, sortOrder]);
 
   const loadAppointments = async () => {
     if (!user) return;
@@ -61,13 +59,13 @@ const AppointmentsPage = () => {
   
       const data = await appointmentsService.getProfessionalAppointments(
         user.id,
-        page,
-        20,
-        filterStatus
+        undefined,
+        undefined,
+        'all',
+        'include'
       );
   
       setAppointments(data.appointments);
-      setPagination(data.pagination || null);
   
     } catch (error) {
       console.error("Error al cargar las citas:", error);
@@ -159,49 +157,55 @@ const AppointmentsPage = () => {
     }
   };
 
+  // Blindaje UI: aunque el backend aplique `cancelFilter`, si por algún motivo
+  // llega información que no coincide (p.ej. request previo en caché / validación),
+  // garantizamos que "Ocultar canceladas" realmente no las muestre.
+  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
+  const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm (local)
   const filteredAppointments = appointments
     .filter((appointment) => {
-      const appointmentDateTime = combineLocalDateTime(
-        appointment.date,
-        appointment.startTime
-      );
-      const now = new Date();
-
-      let keepByTime = true;
-      switch (filterStatus) {
-        case 'upcoming':
-          // Solo citas futuras realmente programadas
-          keepByTime =
-            appointment.status === 'scheduled' && appointmentDateTime >= now;
-          break;
-        case 'past':
-          // Citas cuya fecha/hora ya pasó o que ya no están programadas
-          keepByTime =
-            appointmentDateTime < now || appointment.status !== 'scheduled';
-          break;
-        case 'all':
-        default:
-          keepByTime = true;
+      if (filterStatus === 'upcoming') {
+        return (
+          appointment.status === 'scheduled' &&
+          (appointment.date > todayStr ||
+            (appointment.date === todayStr &&
+              (appointment.startTime || '') >= nowTime))
+        );
       }
 
-      if (!keepByTime) return false;
-
-      // Filtro de canceladas
-      if (cancelFilter === 'exclude' && appointment.status === 'cancelled') {
-        return false;
+      if (filterStatus === 'past') {
+        return (
+          appointment.date < todayStr ||
+          (appointment.date === todayStr &&
+            (appointment.startTime || '') < nowTime) ||
+          // Past incluye todo lo que no es 'scheduled' (cancelled/completed).
+          appointment.status !== 'scheduled'
+        );
       }
-      if (cancelFilter === 'only' && appointment.status !== 'cancelled') {
-        return false;
-      }
 
-      return true;
+      return true; // all
+    })
+    .filter((appointment) => {
+      if (cancelFilter === 'exclude') return appointment.status !== 'cancelled';
+      if (cancelFilter === 'only') return appointment.status === 'cancelled';
+      return true; // include
     })
     .sort((a, b) => {
       const dateA = combineLocalDateTime(a.date, a.startTime).getTime();
       const dateB = combineLocalDateTime(b.date, b.startTime).getTime();
-
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
+
+  const clientLimit = 20;
+  const totalFiltered = filteredAppointments.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / clientLimit));
+  const currentPage = Math.min(page, totalPages);
+  const hasPrev = currentPage > 1;
+  const hasNext = currentPage < totalPages;
+  const paginatedAppointments = filteredAppointments.slice(
+    (currentPage - 1) * clientLimit,
+    currentPage * clientLimit
+  );
 
 
 
@@ -301,7 +305,7 @@ const AppointmentsPage = () => {
           <>
             {/* ===== MOBILE/TABLET: CARDS ===== */}
             <div className="block md:hidden space-y-3">
-              {filteredAppointments.map((appointment) => {
+              {paginatedAppointments.map((appointment) => {
                 const status = getAppointmentStatus(appointment.status);
                 return (
                   <div
@@ -430,7 +434,7 @@ const AppointmentsPage = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAppointments.map((appointment) => {
+                    {paginatedAppointments.map((appointment) => {
                       const status = getAppointmentStatus(appointment.status);
                       return (
                         <tr key={appointment.id} className="hover:bg-gray-50">
@@ -521,15 +525,15 @@ const AppointmentsPage = () => {
                     })}
                   </tbody>
                 </table>
-                {pagination && (
+                {totalPages > 1 && (
                   <div className="flex justify-between items-center mt-6">
 
                     {/* Prev */}
                     <button
-                      disabled={!pagination.hasPrev}
+                      disabled={!hasPrev}
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       className={`px-4 py-2 rounded-lg text-sm font-medium
-                        ${pagination.hasPrev
+                        ${hasPrev
                           ? "bg-gray-100 hover:bg-gray-200 text-gray-800"
                           : "bg-gray-50 text-gray-400 cursor-not-allowed"
                         }`}
@@ -539,15 +543,15 @@ const AppointmentsPage = () => {
 
                     {/* Info */}
                     <span className="text-sm text-gray-600">
-                      Página {pagination.page} de {pagination.totalPages}
+                      Página {currentPage} de {totalPages}
                     </span>
 
                     {/* Next */}
                     <button
-                      disabled={!pagination.hasNext}
-                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!hasNext}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                       className={`px-4 py-2 rounded-lg text-sm font-medium
-                        ${pagination.hasNext
+                        ${hasNext
                           ? "bg-gray-100 hover:bg-gray-200 text-gray-800"
                           : "bg-gray-50 text-gray-400 cursor-not-allowed"
                         }`}

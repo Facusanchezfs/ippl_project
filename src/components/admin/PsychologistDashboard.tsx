@@ -35,7 +35,7 @@ const PsychologistDashboard = () => {
   const [showPatientsModal, setShowPatientsModal] = useState(false);
   const [showVacationModal, setShowVacationModal] = useState(false);
   const [vacationStartDate, setVacationStartDate] = useState('');
-  const [vacationWeeks, setVacationWeeks] = useState<number>(1);
+  const [vacationEndDate, setVacationEndDate] = useState('');
   const [vacationReason, setVacationReason] = useState('');
   const navigate = useNavigate();
 
@@ -105,17 +105,20 @@ const PsychologistDashboard = () => {
       toast.error('La fecha de inicio es obligatoria');
       return;
     }
-    if (![1, 2, 3, 4].includes(vacationWeeks)) {
-      toast.error('Las semanas deben ser 1, 2, 3 o 4');
+    if (!vacationEndDate) {
+      toast.error('La fecha de fin es obligatoria');
       return;
     }
 
     try {
-      await vacationRequestService.create(vacationStartDate, vacationWeeks, vacationReason.trim() || undefined);
+      await vacationRequestService.create(vacationStartDate, {
+        endDate: vacationEndDate,
+        reason: vacationReason.trim() || undefined,
+      });
       toast.success('Solicitud de vacaciones enviada');
       setShowVacationModal(false);
       setVacationStartDate('');
-      setVacationWeeks(1);
+      setVacationEndDate('');
       setVacationReason('');
     } catch (error: any) {
       console.error('Error al crear solicitud de vacaciones:', error);
@@ -320,7 +323,7 @@ const PsychologistDashboard = () => {
                 onClick={() => {
                   setShowVacationModal(false);
                   setVacationStartDate('');
-                  setVacationWeeks(1);
+                  setVacationEndDate('');
                   setVacationReason('');
                 }}
                 className="text-gray-400 hover:text-gray-500"
@@ -345,18 +348,15 @@ const PsychologistDashboard = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Semanas de vacaciones
+                  Fecha de fin
                 </label>
-                <select
-                  value={vacationWeeks}
-                  onChange={(e) => setVacationWeeks(Number(e.target.value))}
+                <input
+                  type="date"
+                  value={vacationEndDate}
+                  onChange={(e) => setVacationEndDate(e.target.value)}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-                >
-                  <option value={1}>1 semana</option>
-                  <option value={2}>2 semanas</option>
-                  <option value={3}>3 semanas</option>
-                  <option value={4}>4 semanas</option>
-                </select>
+                  required
+                />
               </div>
 
               <div>
@@ -381,7 +381,7 @@ const PsychologistDashboard = () => {
                   onClick={() => {
                     setShowVacationModal(false);
                     setVacationStartDate('');
-                    setVacationWeeks(1);
+                    setVacationEndDate('');
                     setVacationReason('');
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"

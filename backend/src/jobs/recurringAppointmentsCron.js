@@ -6,6 +6,19 @@ const logger = require('../utils/logger');
 const { Appointment } = require('../../models');
 const { Op } = require('sequelize');
 
+function toMinutes(hhmm) {
+  const [h, m] = String(hhmm || '')
+    .split(':')
+    .map((x) => parseInt(x, 10));
+  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+}
+
+function hasValidTimeOrder(startTime, endTime) {
+  // Tolerancia mínima: si faltan tiempos, considerarlos inválidos.
+  if (!startTime || !endTime) return false;
+  return toMinutes(endTime) > toMinutes(startTime);
+}
+
 /**
  * Estrategia activa: completar por hora de inicio (`startTime`).
  *
@@ -55,17 +68,62 @@ async function completeAppointmentsByStartTime() {
     ],
   };
 
-  const [affectedRows] = await Appointment.update(
-    { status: 'completed', attended: true },
-    {
-      where,
-      // Necesario para que el hook setee `completedAt` correctamente.
-      individualHooks: true,
+  // 1) Buscar candidatos y validar timeOrder antes del update.
+  //    Esto evita que Sequelize rompa con `endTime debe ser mayor que startTime`
+  //    si existen filas con startTime/endTime inválidos en la DB.
+  const candidates = await Appointment.findAll({
+    where,
+    attributes: ['id', 'startTime', 'endTime'],
+  });
+
+  const validIds = [];
+  let skippedMissingTimes = 0;
+  let skippedInvalidOrder = 0;
+
+  for (const appt of candidates) {
+    const { id, startTime, endTime } = appt;
+
+    if (!startTime || !endTime) {
+      skippedMissingTimes++;
+      logger.warn(
+        `[RecurringCron] Skipping appointment ${id} (missing startTime/endTime)`
+      );
+      continue;
     }
-  );
+
+    if (!hasValidTimeOrder(startTime, endTime)) {
+      skippedInvalidOrder++;
+      logger.warn(
+        `[RecurringCron] Skipping appointment ${id} (invalid time order: startTime=${startTime}, endTime=${endTime})`
+      );
+      continue;
+    }
+
+    validIds.push(id);
+  }
+
+  let affectedRows = 0;
+  if (validIds.length > 0) {
+    // 2) UPDATE masivo SOLO de los IDs válidos.
+    const updateWhere = { id: { [Op.in]: validIds } };
+
+    const result = await Appointment.update(
+      { status: 'completed', attended: true },
+      {
+        where: updateWhere,
+        // Necesario para que el hook setee `completedAt` correctamente.
+        individualHooks: true,
+        // Blindaje: algunos registros pueden tener `startTime/endTime` inválidos
+        // y romper `timeOrder`. Ya filtramos en JS, pero igual evitamos que el cron
+        // muera si hay casos raros de datos existentes.
+        validate: false,
+      }
+    );
+    affectedRows = result?.[0] ?? 0;
+  }
 
   logger.info(
-    `[RecurringCron] Auto-completed ${affectedRows} appointments by startTime (date/startTime <= local now)`
+    `[RecurringCron] Auto-completed ${affectedRows} appointments by startTime (date/startTime <= local now). Skipped: missing=${skippedMissingTimes}, invalidOrder=${skippedInvalidOrder}`
   );
 
   return affectedRows;
@@ -90,16 +148,54 @@ async function completeAppointmentsByEndTime() {
     ],
   };
 
-  const [affectedRows] = await Appointment.update(
-    { status: 'completed', attended: true },
-    {
-      where,
-      individualHooks: true,
+  const candidates = await Appointment.findAll({
+    where,
+    attributes: ['id', 'startTime', 'endTime'],
+  });
+
+  const validIds = [];
+  let skippedMissingTimes = 0;
+  let skippedInvalidOrder = 0;
+
+  for (const appt of candidates) {
+    const { id, startTime, endTime } = appt;
+
+    if (!startTime || !endTime) {
+      skippedMissingTimes++;
+      logger.warn(
+        `[RecurringCron] Skipping appointment ${id} (missing startTime/endTime)`
+      );
+      continue;
     }
-  );
+
+    if (!hasValidTimeOrder(startTime, endTime)) {
+      skippedInvalidOrder++;
+      logger.warn(
+        `[RecurringCron] Skipping appointment ${id} (invalid time order: startTime=${startTime}, endTime=${endTime})`
+      );
+      continue;
+    }
+
+    validIds.push(id);
+  }
+
+  let affectedRows = 0;
+  if (validIds.length > 0) {
+    const updateWhere = { id: { [Op.in]: validIds } };
+
+    const result = await Appointment.update(
+      { status: 'completed', attended: true },
+      {
+        where: updateWhere,
+        individualHooks: true,
+        validate: false,
+      }
+    );
+    affectedRows = result?.[0] ?? 0;
+  }
 
   logger.info(
-    `[RecurringCron] Auto-completed ${affectedRows} appointments by endTime (date/endTime <= local now)`
+    `[RecurringCron] Auto-completed ${affectedRows} appointments by endTime (date/endTime <= local now). Skipped: missing=${skippedMissingTimes}, invalidOrder=${skippedInvalidOrder}`
   );
 
   return affectedRows;
