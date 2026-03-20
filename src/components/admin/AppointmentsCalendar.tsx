@@ -22,17 +22,46 @@ moment.locale('es', {
 
 const localizer = momentLocalizer(moment);
 
+const normalizeFrequencyKey = (frequencyLabel?: string) => {
+  const raw = (frequencyLabel ?? '').toString().trim().toLowerCase();
+
+  if (['weekly', 'semanal'].includes(raw)) return 'weekly';
+  if (['biweekly', 'quincenal'].includes(raw)) return 'biweekly';
+  if (['monthly', 'mensual'].includes(raw)) return 'monthly';
+  if (['twice weekly', 'twice_weekly', 'dos veces por semana', 'dos veces por semana'].includes(raw)) return 'twice_weekly';
+  if (['one-time', 'one_time', 'one time', 'una vez'].includes(raw)) return 'one_time';
+
+  return raw || 'one_time';
+};
+
+const translateFrequencyLabel = (frequencyLabel?: string) => {
+  switch (normalizeFrequencyKey(frequencyLabel)) {
+    case 'weekly':
+      return 'Semanal';
+    case 'biweekly':
+      return 'Quincenal';
+    case 'monthly':
+      return 'Mensual';
+    case 'twice_weekly':
+      return 'Dos veces por semana';
+    case 'one_time':
+    default:
+      // En el calendario no queremos mostrar "Una vez"
+      return '';
+  }
+};
+
 const getFrequencyColor = (frequencyLabel?: string) => {
-  switch (frequencyLabel) {
-    case 'Weekly':
+  switch (normalizeFrequencyKey(frequencyLabel)) {
+    case 'weekly':
       return 'bg-blue-100 border-blue-200 text-blue-800';
-    case 'Biweekly':
+    case 'biweekly':
       return 'bg-green-100 border-green-200 text-green-800';
-    case 'Monthly':
+    case 'monthly':
       return 'bg-orange-100 border-orange-200 text-orange-800';
-    case 'Twice weekly':
+    case 'twice_weekly':
       return 'bg-purple-100 border-purple-200 text-purple-800';
-    case 'One-time':
+    case 'one_time':
     default:
       return 'bg-gray-100 border-gray-200 text-gray-800';
   }
@@ -71,8 +100,9 @@ const EventComponent = ({ event }: any) => {
     );
   }
 
-  const frequencyLabel = appointment.frequencyLabel ?? 'One-time';
-  const colorClass = getFrequencyColor(frequencyLabel);
+  const rawFrequencyLabel = appointment.frequencyLabel ?? 'One-time';
+  const frequencyLabel = translateFrequencyLabel(rawFrequencyLabel);
+  const colorClass = getFrequencyColor(rawFrequencyLabel);
   const isOnVacation = Boolean(appointment.isOnVacation);
   const conflictStyle = isOnVacation
     ? {
@@ -91,9 +121,11 @@ const EventComponent = ({ event }: any) => {
       <div className="font-medium text-[12px] leading-4 truncate">
         {appointment.patientName}
       </div>
-      <div className="text-[10px] leading-4 truncate">
-        {frequencyLabel}
-      </div>
+      {frequencyLabel ? (
+        <div className="text-[10px] leading-4 truncate">
+          {frequencyLabel}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -306,23 +338,19 @@ const AppointmentsCalendar = () => {
         <div className="mb-4 flex flex-wrap gap-4">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-blue-100 border border-blue-200"></div>
-            <span className="text-sm text-gray-600">Weekly</span>
+            <span className="text-sm text-gray-600">Semanal</span>
           </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
-          <span className="text-sm text-gray-600">Biweekly</span>
+          <span className="text-sm text-gray-600">Quincenal</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-orange-100 border border-orange-200"></div>
-          <span className="text-sm text-gray-600">Monthly</span>
+          <span className="text-sm text-gray-600">Mensual</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-purple-100 border border-purple-200"></div>
-          <span className="text-sm text-gray-600">Twice weekly</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded bg-gray-100 border border-gray-200"></div>
-          <span className="text-sm text-gray-600">One-time</span>
+          <span className="text-sm text-gray-600">Dos veces por semana</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-red-50 border border-red-200"></div>
@@ -408,7 +436,7 @@ const AppointmentsCalendar = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Frecuencia</label>
                   <p className="mt-1 text-sm text-gray-900">
-                    {selectedAppointment.frequencyLabel ?? 'One-time'}
+                    {translateFrequencyLabel(selectedAppointment.frequencyLabel ?? 'One-time')}
                   </p>
                 </div>
               </div>
