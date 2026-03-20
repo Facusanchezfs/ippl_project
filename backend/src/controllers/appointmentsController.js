@@ -1,8 +1,12 @@
 const { Op } = require('sequelize');
-const { Appointment, Patient, User, sequelize } = require('../../models');
+const { Appointment, RecurringAppointment, Patient, User, sequelize } = require('../../models');
 const { toAppointmentDTO, toAppointmentDTOList } = require('../../mappers/AppointmentMapper');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
+const {
+  buildBalanceSnapshot,
+  applyProfessionalBalanceForTransition,
+} = require('../services/appointmentFinancialEffectsService');
 
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -137,11 +141,21 @@ const getProfessionalAppointments = async (req, res) => {
     // Query final
     const queryOptions = {
       where: whereClause,
+      include: [
+        {
+          model: RecurringAppointment,
+          as: 'recurringSource',
+          attributes: ['frequency'],
+          required: false,
+        },
+      ],
       order: [
         ['date', 'DESC'],
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
+      // Con include + join, aseguramos que el count sea por Appointment.id.
+      distinct: true,
       ...(limit != null ? { limit, offset } : {}),
     };
 
@@ -171,6 +185,14 @@ const getCompletedProfessionalAppointments = async (req, res) => {
     const { professionalId } = req.params;
 
     const appointments = await Appointment.findAll({
+      include: [
+        {
+          model: RecurringAppointment,
+          as: 'recurringSource',
+          attributes: ['frequency'],
+          required: false,
+        },
+      ],
       where: {
         professionalId,
         status: "completed",
@@ -493,59 +515,12 @@ const updateAppointment = async (req, res) => {
       updates.remainingBalance = Math.max(sc - pa, 0);
     }
 
-    const prevStatus   = appt.status;
-    const prevAttended = appt.attended === true;
-    const prevCost     = toAmount(appt.sessionCost) ?? 0;
-    const prevProfId   = appt.professionalId;
-
-    const nextStatus   = updates.status          ?? prevStatus;
-    const nextAttended = updates.attended !== undefined ? updates.attended : prevAttended;
-    const nextCost     = updates.sessionCost !== undefined ? (updates.sessionCost ?? 0) : prevCost;
-    const nextProfId   = updates.professionalId ?? prevProfId;
-
-    const includePrev = prevStatus === 'completed' && prevAttended;
-    const includeNext = nextStatus === 'completed' && nextAttended;
-
     await sequelize.transaction(async (t) => {
+      const beforeSnapshot = buildBalanceSnapshot(appt);
       await appt.update(updates, { transaction: t });
       await appt.reload({ transaction: t });
-
-      const applyDelta = async (userId, delta) => {
-        if (!userId || !delta) return;
-
-        const prof = await User.findByPk(userId, {
-          transaction: t,
-          lock: t.LOCK.UPDATE,
-        });
-        if (!prof) return;
-
-        const currentTotal = toAmount(prof.saldoTotal) ?? 0;
-        const currentPend = toAmount(prof.saldoPendiente) ?? 0;
-        const newTotal = round2(currentTotal + delta);
-
-        let commissionInt = parseInt(prof.commission ?? 0, 10);
-        if (isNaN(commissionInt)) commissionInt = 0;
-        commissionInt = Math.max(0, Math.min(100, commissionInt));
-        const commissionRate = commissionInt / 100;
-
-        const newSessionPend = round2(delta * commissionRate);
-        const newPend = round2(currentPend + newSessionPend);
-
-        await prof.update(
-          { saldoTotal: newTotal, saldoPendiente: newPend },
-          { transaction: t }
-        );
-      };
-
-      if (prevProfId !== nextProfId) {
-        if (includePrev && prevCost) await applyDelta(prevProfId, -prevCost);
-        if (includeNext && nextCost) await applyDelta(nextProfId,  +nextCost);
-      } else {
-        const before = includePrev ? prevCost : 0;
-        const after  = includeNext ? nextCost : 0;
-        const delta  = round2(after - before);
-        if (delta !== 0) await applyDelta(prevProfId, delta);
-      }
+      const afterSnapshot = buildBalanceSnapshot(appt);
+      await applyProfessionalBalanceForTransition(t, beforeSnapshot, afterSnapshot);
     });
 
     return sendSuccess(res, toAppointmentDTO(appt), 'Cita actualizada correctamente');

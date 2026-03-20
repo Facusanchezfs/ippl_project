@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
+const { computeEndTimeFromStartAndDuration } = require('../utils/timeRangeUtils');
 
 /**
  * Crea una configuración de cita recurrente a partir de una cita base existente.
@@ -116,11 +117,6 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
     const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
     return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
   };
-  const fromMinutes = (mins) => {
-    const h = Math.floor(mins / 60) % 24;
-    const m = mins % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  };
 
   try {
     const now = new Date();
@@ -172,8 +168,17 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
       );
     }
 
-    const endMinutes = toMinutes(startTime) + duration;
-    const endTime = fromMinutes(endMinutes);
+    let endTime;
+    try {
+      ({ endTime } = computeEndTimeFromStartAndDuration(startTime, duration));
+    } catch (err) {
+      await t.rollback();
+      return sendError(
+        res,
+        400,
+        err.message || 'endTime inválido para la duración indicada'
+      );
+    }
 
     const sameDay = await Appointment.findAll({
       where: {
@@ -472,11 +477,6 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
       const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
       return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
     };
-    const fromMinutes = (mins) => {
-      const h = Math.floor(mins / 60) % 24;
-      const m = mins % 60;
-      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    };
 
     // ── Caso especial: twice_weekly (dos bloques) ──────────────────────────────
     if (frequency === 'twice_weekly') {
@@ -540,7 +540,17 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
           const { nextDate, startTime, duration, sessionCost } = entry;
 
           const startMinutes = toMinutes(startTime);
-          const endTime = fromMinutes(startMinutes + duration);
+          let endTime;
+          try {
+            ({ endTime } = computeEndTimeFromStartAndDuration(startTime, duration));
+          } catch (err) {
+            await t.rollback();
+            return sendError(
+              res,
+              400,
+              err.message || 'endTime inválido para la duración indicada'
+            );
+          }
 
           const sameDayAppointments = await Appointment.findAll({
             where: {
@@ -692,14 +702,21 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
         const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
         return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
       };
-      const fromMinutesLocal = (mins) => {
-        const h = Math.floor(mins / 60) % 24;
-        const m = mins % 60;
-        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-      };
 
-      const startMinutes = toMinutesLocal(startTime);
-      const endTime = fromMinutesLocal(startMinutes + duration);
+      let startMinutes;
+      let endTime;
+      try {
+        const range = computeEndTimeFromStartAndDuration(startTime, duration);
+        startMinutes = range.startMinutes;
+        endTime = range.endTime;
+      } catch (err) {
+        await t.rollback();
+        return sendError(
+          res,
+          400,
+          err.message || 'endTime inválido para la duración indicada'
+        );
+      }
 
       const sameDayAppointments = await Appointment.findAll({
         where: {
@@ -820,11 +837,6 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
     const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
     return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
   };
-  const fromMinutes = (mins) => {
-    const h = Math.floor(mins / 60) % 24;
-    const m = mins % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  };
 
   if (!groupId) {
     return sendError(res, 400, 'groupId es obligatorio');
@@ -940,7 +952,17 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
         );
       }
 
-      const endTime = fromMinutes(toMinutes(startTime) + duration);
+      let endTime;
+      try {
+        ({ endTime } = computeEndTimeFromStartAndDuration(startTime, duration));
+      } catch (err) {
+        await t.rollback();
+        return sendError(
+          res,
+          400,
+          err.message || 'endTime inválido para la duración indicada'
+        );
+      }
 
       const sameDay = await Appointment.findAll({
         where: {

@@ -9,6 +9,7 @@ export interface Appointment {
   endTime: string;
   type: 'regular' | 'first_time' | 'emergency';
   status: 'scheduled' | 'completed' | 'cancelled';
+  frequencyLabel?: string;
   notes?: string;
   audioNote?: string;
   sessionCost?: number;

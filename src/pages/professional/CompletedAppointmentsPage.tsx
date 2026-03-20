@@ -22,7 +22,7 @@ const CompletedAppointmentsPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("todos");
+  const [frequencyFilter, setFrequencyFilter] = useState("todos");
   const [attendedFilter, setAttendedFilter] = useState("todos");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
@@ -79,7 +79,7 @@ const CompletedAppointmentsPage = () => {
 
   const filteredAppointments = appointments
   .filter(a => a.patientName.toLowerCase().includes(search.toLowerCase()))
-  .filter(a => typeFilter === "todos" || a.type === typeFilter)
+  .filter(a => frequencyFilter === "todos" || a.frequencyLabel === frequencyFilter)
   .filter(a => attendedFilter === "todos" || (attendedFilter === "si" ? a.attended : !a.attended));
 
 const formatDate = (iso: string) =>
@@ -140,14 +140,16 @@ const badge = (ok?: boolean) =>
               />
               <div className="flex gap-2 flex-wrap">
                 <select
-                  value={typeFilter}
-                  onChange={e => setTypeFilter(e.target.value)}
+                  value={frequencyFilter}
+                  onChange={e => setFrequencyFilter(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
                 >
-                  <option value="todos">Todos los tipos</option>
-                  <option value="first_time">Primera vez</option>
-                  <option value="regular">Regular</option>
-                  <option value="emergency">Emergencia</option>
+                  <option value="todos">Todas las frecuencias</option>
+                  <option value="One-time">Una vez</option>
+                  <option value="Weekly">Semanal</option>
+                  <option value="Biweekly">Quincenal</option>
+                  <option value="Monthly">Mensual</option>
+                  <option value="Twice weekly">Dos veces por semana</option>
                 </select>
                 <select
                   value={attendedFilter}
@@ -168,7 +170,7 @@ const badge = (ok?: boolean) =>
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y Hora</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Frecuencia</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asistió</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pago</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -192,8 +194,7 @@ const badge = (ok?: boolean) =>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {appointment.type === 'regular' ? 'Regular' :
-                          appointment.type === 'first_time' ? 'Primera Vez' : 'Emergencia'}
+                          {appointment.frequencyLabel ?? 'One-time'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">  
                           <span className={badge(appointment.attended)}>
@@ -243,11 +244,7 @@ const badge = (ok?: boolean) =>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="text-xs rounded px-2 py-1 bg-gray-100 text-gray-700">
-                          {appointment.type === 'regular'
-                            ? 'Regular'
-                            : appointment.type === 'first_time'
-                            ? 'Primera Vez'
-                            : 'Emergencia'}
+                          {appointment.frequencyLabel ?? 'One-time'}
                         </span>
                         <span className={badge(appointment.attended)}>
                           {appointment.attended ? 'Asistió: Sí' : 'Asistió: No'}
