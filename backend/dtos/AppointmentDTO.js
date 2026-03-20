@@ -31,6 +31,23 @@ class AppointmentDTO {
     this.type = a.type;
     this.status = a.status;
 
+    const frequency = a.recurringSource?.frequency;
+    // Campo UI-specific: NO exponer el enum crudo `frequency` al frontend.
+    this.frequencyLabel = (() => {
+      switch (frequency) {
+        case 'weekly':
+          return 'Semanal';
+        case 'biweekly':
+          return 'Quincenal';
+        case 'monthly':
+          return 'Mensual';
+        case 'twice_weekly':
+          return 'Dos veces por semana';
+        default:
+          return 'Semanal';
+      }
+    })();
+
     this.notes = a.notes ?? undefined;
     this.audioNote = a.audioNote ?? undefined;
 

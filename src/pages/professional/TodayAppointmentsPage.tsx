@@ -117,22 +117,6 @@ const AppointmentsPage = () => {
   };
 
 
-  const toMinutes = (hhmm: string) => {
-    const [h, m] = (hhmm || '').split(':').map(Number);
-    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
-  };
-
-  const fromMinutes = (mins: number) => {
-    const h = Math.floor(mins / 60) % 24;
-    const m = mins % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  };
-
-  const addMinutesToTime = (hhmm: string, minutesToAdd: number) => {
-    const total = toMinutes(hhmm) + minutesToAdd;
-    return fromMinutes(total);
-  };
-
   const handleEditAppointment = async (appointmentData: { sessionCost: number }) => {
     try {
       if (!selectedAppointment) return;
@@ -343,11 +327,7 @@ const AppointmentsPage = () => {
                         </span>
                       )}
                       <span className="text-xs rounded px-2 py-1 bg-gray-100 text-gray-700">
-                        {appointment.type === 'regular'
-                          ? 'Regular'
-                          : appointment.type === 'first_time'
-                            ? 'Primera Vez'
-                            : 'Emergencia'}
+                        {appointment.frequencyLabel ?? 'One-time'}
                       </span>
                     </div>
 
@@ -423,7 +403,7 @@ const AppointmentsPage = () => {
                         Estado
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tipo
+                        Frecuencia
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Precio
@@ -473,11 +453,7 @@ const AppointmentsPage = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {appointment.type === 'regular'
-                              ? 'Regular'
-                              : appointment.type === 'first_time'
-                                ? 'Primera Vez'
-                                : 'Emergencia'}
+                            {appointment.frequencyLabel ?? 'One-time'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             ${appointment.sessionCost?.toFixed(2) || '0.00'}
@@ -721,10 +697,9 @@ const AppointmentsPage = () => {
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Tipo de Cita</h3>
+                <h3 className="text-sm font-medium text-gray-500">Frecuencia de la Cita</h3>
                 <p className="mt-1 text-sm text-gray-900">
-                  {selectedAppointmentForDescription.type === 'regular' ? 'Regular' :
-                    selectedAppointmentForDescription.type === 'first_time' ? 'Primera Vez' : 'Emergencia'}
+                  {selectedAppointmentForDescription.frequencyLabel ?? 'One-time'}
                 </p>
               </div>
 

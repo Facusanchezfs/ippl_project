@@ -46,7 +46,9 @@ function calculateNextDate(lastDate, frequency) {
  */
 async function generateRecurringAppointments() {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    // Misma convención que el CRON de auto-complete: fecha civil del servidor (local), YYYY-MM-DD.
+    // `Appointment.date` es DATEONLY, por lo que comparamos por fecha civil sin zona horaria.
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
     const vacations = await VacationRequest.findAll({
       where: {

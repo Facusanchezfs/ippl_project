@@ -3,8 +3,16 @@
 const cron = require('node-cron');
 const { generateRecurringAppointments } = require('../services/recurringGenerationService');
 const logger = require('../utils/logger');
-const { Appointment } = require('../../models');
+const { Appointment, sequelize } = require('../../models');
 const { Op } = require('sequelize');
+const {
+  buildBalanceSnapshot,
+  computeRemainingBalanceAttended,
+  applyProfessionalBalanceForTransition,
+} = require('../services/appointmentFinancialEffectsService');
+
+/** Citas procesadas por iteración (transacción atómica por cita, lote para throttling). */
+const COMPLETE_BATCH_SIZE = 75;
 
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || '')
@@ -14,45 +22,27 @@ function toMinutes(hhmm) {
 }
 
 function hasValidTimeOrder(startTime, endTime) {
-  // Tolerancia mínima: si faltan tiempos, considerarlos inválidos.
   if (!startTime || !endTime) return false;
   return toMinutes(endTime) > toMinutes(startTime);
 }
 
 /**
+ * remainingBalance al auto-completar:
+ * - Misma regla que `updateAppointment` con attended === true:
+ *   max(sessionCost - paymentAmount, 0), con nulos como 0.
+ * - Pagos parciales previos (paymentAmount en la fila) reducen el saldo pendiente.
+ * - attended siempre true en CRON; no-show / null balance no aplica aquí.
+ *
  * Estrategia activa: completar por hora de inicio (`startTime`).
  *
- * Requerimiento actual:
- * - Una cita debe marcarse como `completed` cuando pasa su hora de inicio.
- * - Ejemplo: 13:30 -> a las 13:31 ya debe estar `completed`.
- *
- * Implementación:
- * - Se ejecuta un UPDATE masivo contra la DB (sin traer datos a memoria).
- * - Condición temporal (en hora local del servidor para ser consistente con `date`/`startTime`):
- *   - `date < todayStr` => siempre completar (citas del día anterior).
- *   - `date = todayStr AND startTime < nowTime` => completar cuando el reloj
- *     supera el minuto de inicio (por eso se usa `<`, no `<=`).
- *
- * Cómo cambiar a la alternativa (`endTime`):
- * - Existe `completeAppointmentsByEndTime()` en este mismo archivo con la misma lógica,
- *   pero reemplazando `startTime` por `endTime` en la condición temporal.
- * - Para activarla, se debería reemplazar el call del cron:
- *     await completeAppointmentsByStartTime();
- *   por:
- *     await completeAppointmentsByEndTime();
- *
- * Ejemplos:
- * - startTime activo:
- *   - 13:30 -> a las 13:31 `completed`
- * - endTime alternativa (no ejecutada):
- *   - endTime=13:50 (ej. duración 20 min) -> a las 13:51 `completed`
+ * Transición atómica: `findOne ... FOR UPDATE` + `save` solo si sigue `scheduled`,
+ * evita doble aplicación de saldo profesional ante carreras con el API o re-ejecución del CRON.
  */
 async function completeAppointmentsByStartTime() {
   const now = new Date();
 
-  // Fecha/hora locales del servidor para comparar con los campos guardados en hora local.
-  const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
-  const nowTime = now.toTimeString().slice(0, 5); // HH:mm (local)
+  const todayStr = now.toLocaleDateString('en-CA');
+  const nowTime = now.toTimeString().slice(0, 5);
 
   const where = {
     active: true,
@@ -61,16 +51,11 @@ async function completeAppointmentsByStartTime() {
       { status: { [Op.notIn]: ['completed', 'cancelled'] } },
     ],
     [Op.or]: [
-      // Días anteriores: siempre completar.
       { date: { [Op.lt]: todayStr } },
-      // Mismo día: completar cuando ya pasó el minuto de inicio.
       { date: todayStr, startTime: { [Op.lt]: nowTime } },
     ],
   };
 
-  // 1) Buscar candidatos y validar timeOrder antes del update.
-  //    Esto evita que Sequelize rompa con `endTime debe ser mayor que startTime`
-  //    si existen filas con startTime/endTime inválidos en la DB.
   const candidates = await Appointment.findAll({
     where,
     attributes: ['id', 'startTime', 'endTime'],
@@ -85,7 +70,7 @@ async function completeAppointmentsByStartTime() {
 
     if (!startTime || !endTime) {
       skippedMissingTimes++;
-      logger.warn(
+      logger.debug(
         `[RecurringCron] Skipping appointment ${id} (missing startTime/endTime)`
       );
       continue;
@@ -93,7 +78,7 @@ async function completeAppointmentsByStartTime() {
 
     if (!hasValidTimeOrder(startTime, endTime)) {
       skippedInvalidOrder++;
-      logger.warn(
+      logger.debug(
         `[RecurringCron] Skipping appointment ${id} (invalid time order: startTime=${startTime}, endTime=${endTime})`
       );
       continue;
@@ -102,39 +87,102 @@ async function completeAppointmentsByStartTime() {
     validIds.push(id);
   }
 
-  let affectedRows = 0;
-  if (validIds.length > 0) {
-    // 2) UPDATE masivo SOLO de los IDs válidos.
-    const updateWhere = { id: { [Op.in]: validIds } };
+  let transitioned = 0;
+  let skippedRace = 0;
+  let skippedInvalidUnderLock = 0;
+  let errorCount = 0;
 
-    const result = await Appointment.update(
-      { status: 'completed', attended: true },
-      {
-        where: updateWhere,
-        // Necesario para que el hook setee `completedAt` correctamente.
-        individualHooks: true,
-        // Blindaje: algunos registros pueden tener `startTime/endTime` inválidos
-        // y romper `timeOrder`. Ya filtramos en JS, pero igual evitamos que el cron
-        // muera si hay casos raros de datos existentes.
-        validate: false,
+  for (let i = 0; i < validIds.length; i += COMPLETE_BATCH_SIZE) {
+    const batch = validIds.slice(i, i + COMPLETE_BATCH_SIZE);
+
+    for (const id of batch) {
+      try {
+        await sequelize.transaction(async (t) => {
+          const row = await Appointment.findOne({
+            where: { id, active: true, status: 'scheduled' },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          });
+
+          if (!row) {
+            skippedRace++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=no_scheduled_row (affectedRows=0)`
+            );
+            return;
+          }
+
+          if (!row.startTime || !row.endTime) {
+            skippedInvalidUnderLock++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=missing_times_under_lock startTime=${row.startTime} endTime=${row.endTime}`
+            );
+            return;
+          }
+
+          const startMin = toMinutes(row.startTime);
+          const endMin = toMinutes(row.endTime);
+          if (!(endMin > startMin)) {
+            skippedInvalidUnderLock++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=invalid_times_under_lock startTime=${row.startTime} endTime=${row.endTime} startMin=${startMin} endMin=${endMin}`
+            );
+            return;
+          }
+
+          const beforeSnapshot = buildBalanceSnapshot(row);
+          const remainingBalance = computeRemainingBalanceAttended(row);
+
+          row.set({
+            status: 'completed',
+            attended: true,
+            remainingBalance,
+          });
+
+          await row.save({
+            transaction: t,
+            validate: false,
+          });
+
+          const afterSnapshot = buildBalanceSnapshot(row);
+          const { deltas } = await applyProfessionalBalanceForTransition(
+            t,
+            beforeSnapshot,
+            afterSnapshot
+          );
+
+          transitioned++;
+          const deltaStr =
+            deltas.length > 0
+              ? deltas.map((d) => `${d.professionalId}:${d.delta}`).join(',')
+              : 'none';
+          logger.debug(
+            `[RecurringCron] Auto-complete ok id=${id} professionalId=${row.professionalId} remainingBalance=${remainingBalance} financialDeltas=${deltaStr}`
+          );
+        });
+      } catch (err) {
+        errorCount++;
+        logger.error(
+          `[RecurringCron] Auto-complete error id=${id}:`,
+          err
+        );
       }
-    );
-    affectedRows = result?.[0] ?? 0;
+    }
   }
 
   logger.info(
-    `[RecurringCron] Auto-completed ${affectedRows} appointments by startTime (date/startTime <= local now). Skipped: missing=${skippedMissingTimes}, invalidOrder=${skippedInvalidOrder}`
+    `[RecurringCron] Auto-complete summary byStartTime: transitioned=${transitioned}, skippedRace=${skippedRace}, skippedInvalidUnderLock=${skippedInvalidUnderLock}, errors=${errorCount}, prefiltered missingTimes=${skippedMissingTimes}, invalidOrder=${skippedInvalidOrder}`
   );
 
-  return affectedRows;
+  return transitioned;
 }
 
 // Alternativa definida para cambio futuro (NO se ejecuta ahora).
 // eslint-disable-next-line no-unused-vars
 async function completeAppointmentsByEndTime() {
   const now = new Date();
-  const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
-  const nowTime = now.toTimeString().slice(0, 5); // HH:mm (local)
+  const todayStr = now.toLocaleDateString('en-CA');
+  const nowTime = now.toTimeString().slice(0, 5);
 
   const where = {
     active: true,
@@ -162,7 +210,7 @@ async function completeAppointmentsByEndTime() {
 
     if (!startTime || !endTime) {
       skippedMissingTimes++;
-      logger.warn(
+      logger.debug(
         `[RecurringCron] Skipping appointment ${id} (missing startTime/endTime)`
       );
       continue;
@@ -170,7 +218,7 @@ async function completeAppointmentsByEndTime() {
 
     if (!hasValidTimeOrder(startTime, endTime)) {
       skippedInvalidOrder++;
-      logger.warn(
+      logger.debug(
         `[RecurringCron] Skipping appointment ${id} (invalid time order: startTime=${startTime}, endTime=${endTime})`
       );
       continue;
@@ -179,29 +227,96 @@ async function completeAppointmentsByEndTime() {
     validIds.push(id);
   }
 
-  let affectedRows = 0;
-  if (validIds.length > 0) {
-    const updateWhere = { id: { [Op.in]: validIds } };
+  let transitioned = 0;
+  let skippedRace = 0;
+  let skippedInvalidUnderLock = 0;
+  let errorCount = 0;
 
-    const result = await Appointment.update(
-      { status: 'completed', attended: true },
-      {
-        where: updateWhere,
-        individualHooks: true,
-        validate: false,
+  for (let i = 0; i < validIds.length; i += COMPLETE_BATCH_SIZE) {
+    const batch = validIds.slice(i, i + COMPLETE_BATCH_SIZE);
+
+    for (const id of batch) {
+      try {
+        await sequelize.transaction(async (t) => {
+          const row = await Appointment.findOne({
+            where: { id, active: true, status: 'scheduled' },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          });
+
+          if (!row) {
+            skippedRace++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=no_scheduled_row (affectedRows=0)`
+            );
+            return;
+          }
+
+          if (!row.startTime || !row.endTime) {
+            skippedInvalidUnderLock++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=missing_times_under_lock startTime=${row.startTime} endTime=${row.endTime}`
+            );
+            return;
+          }
+
+          const startMin = toMinutes(row.startTime);
+          const endMin = toMinutes(row.endTime);
+          if (!(endMin > startMin)) {
+            skippedInvalidUnderLock++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=invalid_times_under_lock startTime=${row.startTime} endTime=${row.endTime} startMin=${startMin} endMin=${endMin}`
+            );
+            return;
+          }
+
+          const beforeSnapshot = buildBalanceSnapshot(row);
+          const remainingBalance = computeRemainingBalanceAttended(row);
+
+          row.set({
+            status: 'completed',
+            attended: true,
+            remainingBalance,
+          });
+
+          await row.save({
+            transaction: t,
+            validate: false,
+          });
+
+          const afterSnapshot = buildBalanceSnapshot(row);
+          const { deltas } = await applyProfessionalBalanceForTransition(
+            t,
+            beforeSnapshot,
+            afterSnapshot
+          );
+
+          transitioned++;
+          const deltaStr =
+            deltas.length > 0
+              ? deltas.map((d) => `${d.professionalId}:${d.delta}`).join(',')
+              : 'none';
+          logger.debug(
+            `[RecurringCron] Auto-complete ok id=${id} professionalId=${row.professionalId} remainingBalance=${remainingBalance} financialDeltas=${deltaStr}`
+          );
+        });
+      } catch (err) {
+        errorCount++;
+        logger.error(
+          `[RecurringCron] Auto-complete error id=${id}:`,
+          err
+        );
       }
-    );
-    affectedRows = result?.[0] ?? 0;
+    }
   }
 
   logger.info(
-    `[RecurringCron] Auto-completed ${affectedRows} appointments by endTime (date/endTime <= local now). Skipped: missing=${skippedMissingTimes}, invalidOrder=${skippedInvalidOrder}`
+    `[RecurringCron] Auto-complete summary byEndTime: transitioned=${transitioned}, skippedRace=${skippedRace}, skippedInvalidUnderLock=${skippedInvalidUnderLock}, errors=${errorCount}, prefiltered missingTimes=${skippedMissingTimes}, invalidOrder=${skippedInvalidOrder}`
   );
 
-  return affectedRows;
+  return transitioned;
 }
 
-// Ejecuta la generación de citas recurrentes todos los minutos (cron)
 cron.schedule('* * * * *', async () => {
   try {
     await completeAppointmentsByStartTime();
