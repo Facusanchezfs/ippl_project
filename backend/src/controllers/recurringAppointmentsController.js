@@ -229,6 +229,18 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
       await recurrence.save({ transaction: t });
     }
 
+    // Mantener sincronizada la frecuencia del paciente con su agenda recurrente.
+    const patient = await Patient.findByPk(recurrence.patientId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (patient && patient.sessionFrequency !== recurrence.frequency) {
+      await patient.update(
+        { sessionFrequency: recurrence.frequency },
+        { transaction: t }
+      );
+    }
+
     await Appointment.update(
       { status: 'cancelled' },
       {
@@ -626,6 +638,14 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
           });
         }
 
+        // Reflejar en Patients la frecuencia vigente de la agenda.
+        if (patient.sessionFrequency !== 'twice_weekly') {
+          await patient.update(
+            { sessionFrequency: 'twice_weekly' },
+            { transaction: t }
+          );
+        }
+
         await t.commit();
 
         return sendSuccess(
@@ -780,6 +800,14 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
         { recurringAppointmentId: recurrence.id },
         { transaction: t }
       );
+
+      // Reflejar en Patients la frecuencia vigente de la agenda.
+      if (patient.sessionFrequency !== frequency) {
+        await patient.update(
+          { sessionFrequency: frequency },
+          { transaction: t }
+        );
+      }
 
       await t.commit();
 
@@ -1016,6 +1044,21 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
           hooks: false,
         }
       );
+    }
+
+    // Grupos de este endpoint siempre representan "twice_weekly".
+    const patientId = recurrences[0]?.patientId;
+    if (patientId) {
+      const patient = await Patient.findByPk(patientId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (patient && patient.sessionFrequency !== 'twice_weekly') {
+        await patient.update(
+          { sessionFrequency: 'twice_weekly' },
+          { transaction: t }
+        );
+      }
     }
 
     await t.commit();
