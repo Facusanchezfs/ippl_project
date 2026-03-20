@@ -93,6 +93,13 @@ const badge = (ok?: boolean) =>
     ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
   }`;
 
+  const formatPago = (a: Appointment) => {
+    // En la respuesta del backend el valor viene como `sessionCost`
+    // (y a veces `remainingBalance`). `paymentAmount` parece no estar seteado.
+    const value = a.sessionCost ?? a.remainingBalance ?? a.paymentAmount ?? 0;
+    return value.toFixed(2);
+  };
+
   return (
     <div className="p-6 space-y-8">
       {/* Header */}
@@ -202,7 +209,7 @@ const badge = (ok?: boolean) =>
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${appointment.paymentAmount?.toFixed(2) || '0.00'}
+                          ${formatPago(appointment)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
@@ -254,7 +261,7 @@ const badge = (ok?: boolean) =>
                       <div className="mt-3 rounded bg-gray-50 p-2 text-sm">
                         <div className="text-gray-500">Pago</div>
                         <div className="font-medium text-gray-900">
-                          ${appointment.paymentAmount?.toFixed(2) || '0.00'}
+                          ${formatPago(appointment)}
                         </div>
                       </div>
 

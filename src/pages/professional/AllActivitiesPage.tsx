@@ -28,21 +28,17 @@ const AllActivitiesPage = () => {
     try {
       setIsLoading(true);
       const data = await activityService.getActivities();
-      // Filtrar actividades relevantes para el profesional
-      const filteredActivities = data.filter(activity => {
-        // Solo mostrar actividades relacionadas con el profesional actual
-        if (activity.metadata?.professionalId && String(activity.metadata.professionalId) !== String(user?.id)) {
+      // El backend ya filtra por `professionalId` cuando el rol es `professional`.
+      // En el front no recortamos por `type`, ya que el usuario espera ver
+      // TODAS las notificaciones (nuevas y pasadas).
+      const filteredActivities = data.filter((activity) => {
+        if (
+          activity.metadata?.professionalId &&
+          String(activity.metadata.professionalId) !== String(user?.id)
+        ) {
           return false;
         }
-        // Tipos de actividades a mostrar
-        return [
-          'PATIENT_ASSIGNED',
-          'PATIENT_ACTIVATION_APPROVED',
-          'FREQUENCY_CHANGE_APPROVED',
-          'FREQUENCY_CHANGE_REJECTED',
-          'STATUS_CHANGE_APPROVED',
-          'STATUS_CHANGE_REJECTED'
-        ].includes(activity.type);
+        return true;
       });
       setActivities(filteredActivities);
     } catch (error) {
