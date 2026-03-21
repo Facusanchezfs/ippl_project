@@ -3,6 +3,7 @@
 const { Op } = require('sequelize');
 const { RecurringAppointment, Appointment, Patient, User, VacationRequest } = require('../../models');
 const logger = require('../utils/logger');
+const { getArgentinaCivilDateString } = require('../utils/civilDateUtils');
 
 /**
  * Calcula la próxima fecha basada en la frecuencia de recurrencia.
@@ -48,7 +49,7 @@ async function generateRecurringAppointments() {
   try {
     // Misma convención que el CRON de auto-complete: fecha civil del servidor (local), YYYY-MM-DD.
     // `Appointment.date` es DATEONLY, por lo que comparamos por fecha civil sin zona horaria.
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+    const today = getArgentinaCivilDateString();
 
     const vacations = await VacationRequest.findAll({
       where: {

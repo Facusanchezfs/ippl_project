@@ -10,6 +10,7 @@ const {
   computeRemainingBalanceAttended,
   applyProfessionalBalanceForTransition,
 } = require('../services/appointmentFinancialEffectsService');
+const { getArgentinaCivilDateString, getArgentinaTimeHHMM } = require('../utils/civilDateUtils');
 
 /** Citas procesadas por iteración (transacción atómica por cita, lote para throttling). */
 const COMPLETE_BATCH_SIZE = 75;
@@ -41,8 +42,8 @@ function hasValidTimeOrder(startTime, endTime) {
 async function completeAppointmentsByStartTime() {
   const now = new Date();
 
-  const todayStr = now.toLocaleDateString('en-CA');
-  const nowTime = now.toTimeString().slice(0, 5);
+  const todayStr = getArgentinaCivilDateString(now);
+  const nowTime = getArgentinaTimeHHMM(now);
 
   const where = {
     active: true,
@@ -181,8 +182,8 @@ async function completeAppointmentsByStartTime() {
 // eslint-disable-next-line no-unused-vars
 async function completeAppointmentsByEndTime() {
   const now = new Date();
-  const todayStr = now.toLocaleDateString('en-CA');
-  const nowTime = now.toTimeString().slice(0, 5);
+  const todayStr = getArgentinaCivilDateString(now);
+  const nowTime = getArgentinaTimeHHMM(now);
 
   const where = {
     active: true,

@@ -7,6 +7,7 @@ const {
   buildBalanceSnapshot,
   applyProfessionalBalanceForTransition,
 } = require('../services/appointmentFinancialEffectsService');
+const { getArgentinaCivilDateString, getArgentinaTimeHHMM } = require('../utils/civilDateUtils');
 
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -98,9 +99,10 @@ const getProfessionalAppointments = async (req, res) => {
       [Op.and]: [],
     };
 
-    // Fecha actual / hora actual (manteniendo convención actual del controller).
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
-    const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm (local)
+    // Fecha y hora civil Argentina (misma referencia que agenda recurrente y CRON).
+    const now = new Date();
+    const today = getArgentinaCivilDateString(now);
+    const nowTime = getArgentinaTimeHHMM(now);
 
     // Aplicar filtros por fecha/hora como lo hace el frontend,
     // para que la paginación sea consistente.
@@ -238,11 +240,7 @@ const getTodayProfessionalAppointments = async (req, res) => {
   try {
     const { professionalId } = req.params;
 
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const today = `${yyyy}-${mm}-${dd}`;
+    const today = getArgentinaCivilDateString();
 
     const appts = await Appointment.findAll({
       where: {
@@ -626,8 +624,7 @@ const getAvailableSlots = async (req, res) => {
 
 const getUpcomingAppointments = async (req, res) => {
   try {
-    const today = new Date();
-    const yyyyMMdd = today.toISOString().slice(0, 10);
+    const yyyyMMdd = getArgentinaCivilDateString();
     
     const appts = await Appointment.findAll({
       where: {

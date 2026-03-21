@@ -6,6 +6,10 @@ const path = require('path');
 const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const { computeEndTimeFromStartAndDuration } = require('../utils/timeRangeUtils');
+const { getArgentinaCivilDateString, getArgentinaTimeHHMM } = require('../utils/civilDateUtils');
+
+const MSG_INACTIVE_PATIENT_NO_RECURRING =
+  'No se puede gestionar la agenda recurrente mientras el paciente está inactivo. Activa al paciente primero.';
 
 /**
  * Crea una configuración de cita recurrente a partir de una cita base existente.
@@ -100,7 +104,7 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
   const { id } = req.params;
   const { frequency, nextDate, startTime, duration, sessionCost } = req.body;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getArgentinaCivilDateString();
   if (nextDate < todayStr) {
     return sendError(res, 400, 'nextDate no puede estar en el pasado');
   }
@@ -119,8 +123,7 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
   };
 
   try {
-    const now = new Date();
-    const nowTime = now.toTimeString().slice(0, 5);
+    const nowTime = getArgentinaTimeHHMM();
 
     const t = await sequelize.transaction();
 
@@ -138,7 +141,20 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
 
     const baseAppointment = recurrence.baseAppointment;
 
-    const nextScheduled = await Appointment.findOne({
+    const patient = await Patient.findByPk(recurrence.patientId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!patient || !patient.active) {
+      await t.rollback();
+      return sendError(res, 404, 'Paciente no encontrado');
+    }
+    if (patient.status === 'inactive') {
+      await t.rollback();
+      return sendError(res, 400, MSG_INACTIVE_PATIENT_NO_RECURRING);
+    }
+
+    let nextScheduled = await Appointment.findOne({
       where: {
         recurringAppointmentId: recurrence.id,
         status: 'scheduled',
@@ -159,14 +175,26 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
       lock: t.LOCK.UPDATE,
     });
 
+    /** Sin cita futura programada: rearmar desde la cita base (p. ej. tras baja y reactivación del paciente). */
+    let usedFallback = false;
     if (!nextScheduled) {
-      await t.rollback();
-      return sendError(
-        res,
-        404,
-        'No hay una cita programada futura para esta recurrencia que pueda editarse'
-      );
+      nextScheduled = baseAppointment;
+      if (!nextScheduled) {
+        await t.rollback();
+        return sendError(
+          res,
+          404,
+          'No hay cita base para rearmar esta recurrencia'
+        );
+      }
+      usedFallback = true;
+      if (!recurrence.active) {
+        recurrence.active = true;
+        await recurrence.save({ transaction: t });
+      }
     }
+
+    const oldAnchorDate = nextScheduled.date;
 
     let endTime;
     try {
@@ -213,15 +241,27 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
     const oldCost = baseAppointment.sessionCost;
     const oldDurationMinutes = toMinutes(oldEnd) - toMinutes(oldStart);
 
-    await nextScheduled.update(
-      { date: nextDate, startTime, endTime, sessionCost },
-      { transaction: t }
-    );
+    const anchorUpdate = usedFallback
+      ? {
+          date: nextDate,
+          startTime,
+          endTime,
+          sessionCost,
+          status: 'scheduled',
+          active: true,
+          recurringAppointmentId: recurrence.id,
+          patientName: patient.name,
+        }
+      : { date: nextDate, startTime, endTime, sessionCost };
 
-    await baseAppointment.update(
-      { startTime, endTime, sessionCost },
-      { transaction: t }
-    );
+    await nextScheduled.update(anchorUpdate, { transaction: t });
+
+    if (!usedFallback) {
+      await baseAppointment.update(
+        { startTime, endTime, sessionCost },
+        { transaction: t }
+      );
+    }
 
     const oldFrequency = recurrence.frequency;
     if (frequency && frequency !== oldFrequency) {
@@ -229,17 +269,14 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
       await recurrence.save({ transaction: t });
     }
 
-    // Mantener sincronizada la frecuencia del paciente con su agenda recurrente.
-    const patient = await Patient.findByPk(recurrence.patientId, {
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    });
-    if (patient && patient.sessionFrequency !== recurrence.frequency) {
+    if (patient.sessionFrequency !== recurrence.frequency) {
       await patient.update(
         { sessionFrequency: recurrence.frequency },
         { transaction: t }
       );
     }
+
+    const cancelFromDate = usedFallback ? nextDate : oldAnchorDate;
 
     await Appointment.update(
       { status: 'cancelled' },
@@ -249,7 +286,7 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
           active: true,
           status: 'scheduled',
           id: { [Op.ne]: nextScheduled.id },
-          date: { [Op.gte]: nextScheduled.date },
+          date: { [Op.gte]: cancelFromDate },
         },
         transaction: t,
         validate: false,
@@ -326,9 +363,8 @@ const getPatientRecurringScheduleAdmin = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
-    const nowTime = now.toTimeString().slice(0, 5);
+    const todayStr = getArgentinaCivilDateString();
+    const nowTime = getArgentinaTimeHHMM();
 
     const toMinutes = (hhmm) => {
       const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -479,7 +515,7 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
     const { id } = req.params;
     const { frequency } = req.body;
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getArgentinaCivilDateString();
 
     if (!frequency) {
       return sendError(res, 400, 'frequency es obligatorio');
@@ -534,6 +570,11 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
         if (!patient || !patient.active) {
           await t.rollback();
           return sendError(res, 404, 'Paciente no encontrado');
+        }
+
+        if (patient.status === 'inactive') {
+          await t.rollback();
+          return sendError(res, 400, MSG_INACTIVE_PATIENT_NO_RECURRING);
         }
 
         if (!patient.professionalId) {
@@ -709,6 +750,11 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
         return sendError(res, 404, 'Paciente no encontrado');
       }
 
+      if (patient.status === 'inactive') {
+        await t.rollback();
+        return sendError(res, 400, MSG_INACTIVE_PATIENT_NO_RECURRING);
+      }
+
       if (!patient.professionalId) {
         await t.rollback();
         return sendError(
@@ -857,9 +903,8 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
   const { groupId } = req.params;
   const { entries, active } = req.body;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const now = new Date();
-  const nowTime = now.toTimeString().slice(0, 5);
+  const todayStr = getArgentinaCivilDateString();
+  const nowTime = getArgentinaTimeHHMM();
 
   const toMinutes = (hhmm) => {
     const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
@@ -910,6 +955,19 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
 
     const recurrenceById = new Map(recurrences.map((r) => [String(r.id), r]));
 
+    const groupPatient = await Patient.findByPk(recurrences[0].patientId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!groupPatient || !groupPatient.active) {
+      await t.rollback();
+      return sendError(res, 404, 'Paciente no encontrado');
+    }
+    if (groupPatient.status === 'inactive') {
+      await t.rollback();
+      return sendError(res, 400, MSG_INACTIVE_PATIENT_NO_RECURRING);
+    }
+
     for (const entry of entries) {
       const { recurringId, nextDate, startTime, duration, sessionCost } = entry;
 
@@ -950,7 +1008,7 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
 
       const baseAppointment = recurrence.baseAppointment;
 
-      const nextScheduled = await Appointment.findOne({
+      let nextScheduled = await Appointment.findOne({
         where: {
           recurringAppointmentId: recurrence.id,
           status: 'scheduled',
@@ -971,14 +1029,25 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
         lock: t.LOCK.UPDATE,
       });
 
+      let usedFallback = false;
       if (!nextScheduled) {
-        await t.rollback();
-        return sendError(
-          res,
-          404,
-          'No hay una cita programada futura para esta recurrencia que pueda editarse'
-        );
+        nextScheduled = baseAppointment;
+        if (!nextScheduled) {
+          await t.rollback();
+          return sendError(
+            res,
+            404,
+            'No hay cita base para rearmar esta recurrencia'
+          );
+        }
+        usedFallback = true;
+        if (!recurrence.active) {
+          recurrence.active = true;
+          await recurrence.save({ transaction: t });
+        }
       }
+
+      const oldAnchorDate = nextScheduled.date;
 
       let endTime;
       try {
@@ -1019,15 +1088,29 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
         return sendError(res, 409, 'El horario seleccionado no está disponible');
       }
 
-      await nextScheduled.update(
-        { date: nextDate, startTime, endTime, sessionCost },
-        { transaction: t }
-      );
+      const anchorUpdate = usedFallback
+        ? {
+            date: nextDate,
+            startTime,
+            endTime,
+            sessionCost,
+            status: 'scheduled',
+            active: true,
+            recurringAppointmentId: recurrence.id,
+            patientName: groupPatient.name,
+          }
+        : { date: nextDate, startTime, endTime, sessionCost };
 
-      await baseAppointment.update(
-        { startTime, endTime, sessionCost },
-        { transaction: t }
-      );
+      await nextScheduled.update(anchorUpdate, { transaction: t });
+
+      if (!usedFallback) {
+        await baseAppointment.update(
+          { startTime, endTime, sessionCost },
+          { transaction: t }
+        );
+      }
+
+      const cancelFromDate = usedFallback ? nextDate : oldAnchorDate;
 
       await Appointment.update(
         { status: 'cancelled' },
@@ -1037,7 +1120,7 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
             active: true,
             status: 'scheduled',
             id: { [Op.ne]: nextScheduled.id },
-            date: { [Op.gte]: nextScheduled.date },
+            date: { [Op.gte]: cancelFromDate },
           },
           transaction: t,
           validate: false,
@@ -1046,19 +1129,11 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
       );
     }
 
-    // Grupos de este endpoint siempre representan "twice_weekly".
-    const patientId = recurrences[0]?.patientId;
-    if (patientId) {
-      const patient = await Patient.findByPk(patientId, {
-        transaction: t,
-        lock: t.LOCK.UPDATE,
-      });
-      if (patient && patient.sessionFrequency !== 'twice_weekly') {
-        await patient.update(
-          { sessionFrequency: 'twice_weekly' },
-          { transaction: t }
-        );
-      }
+    if (groupPatient.sessionFrequency !== 'twice_weekly') {
+      await groupPatient.update(
+        { sessionFrequency: 'twice_weekly' },
+        { transaction: t }
+      );
     }
 
     await t.commit();

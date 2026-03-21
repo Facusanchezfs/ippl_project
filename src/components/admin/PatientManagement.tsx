@@ -152,6 +152,9 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
     void loadSchedule();
   }, [isOpen, patient.id]);
 
+  const effectivePatientStatus = isEditing ? status : patient.status;
+  const scheduleBlockedForInactive = effectivePatientStatus === 'inactive';
+
   const handleCancelEdit = () => {
     setIsEditing(false);
     setStatus(patient.status);
@@ -225,6 +228,13 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   };
 
   const handleSaveSchedule = async () => {
+    if (scheduleBlockedForInactive) {
+      toast.error(
+        'No se puede guardar la agenda mientras el paciente está inactivo. Activá al paciente y guardá los datos primero.'
+      );
+      return;
+    }
+
     // Caso grupo twice_weekly
     if (scheduleMode === 'group') {
       if (scheduleEntries.length !== 2) {
@@ -508,6 +518,12 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
             {!scheduleLoading && !isScheduleEditing && (
               <button
                 type="button"
+                disabled={scheduleBlockedForInactive}
+                title={
+                  scheduleBlockedForInactive
+                    ? 'Activá al paciente y guardá los datos para gestionar la agenda'
+                    : undefined
+                }
                 onClick={() => {
                   if (!scheduleRecurringId && !scheduleGroupId) {
                     setScheduleFrequency(
@@ -529,7 +545,11 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                   setIsScheduleEditing(true);
                   setScheduleError(null);
                 }}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                className={`text-xs font-medium ${
+                  scheduleBlockedForInactive
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-blue-600 hover:text-blue-700'
+                }`}
               >
                 {scheduleRecurringId ? 'Editar agenda' : 'Crear agenda'}
               </button>
@@ -542,6 +562,13 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
 
           {scheduleError && !scheduleLoading && (
             <p className="text-sm text-red-600 mb-2">{scheduleError}</p>
+          )}
+
+          {scheduleBlockedForInactive && !scheduleLoading && (
+            <p className="text-sm text-amber-700 mb-2">
+              Con el paciente inactivo no se puede crear ni editar la agenda recurrente. Cambiá el estado a
+              Activo o Pendiente y guardá los datos antes de configurar la agenda.
+            </p>
           )}
 
           {!scheduleLoading && (scheduleRecurringId || scheduleGroupId || isScheduleEditing) && (
@@ -963,7 +990,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSaveSchedule}
-                    disabled={scheduleLoading}
+                    disabled={scheduleLoading || scheduleBlockedForInactive}
                     className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
                   >
                     {scheduleLoading ? 'Guardando...' : 'Guardar agenda'}

@@ -5,6 +5,7 @@ const { toPatientDTO } = require('../../mappers/PatientMapper');
 const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
+const { getArgentinaCivilDateString } = require('../utils/civilDateUtils');
 
 async function getAllPatients(req, res) {
   try {
@@ -329,7 +330,7 @@ async function deletePatient(req, res) {
       await patient.save({ transaction: t });
 
       // Cancelar citas futuras scheduled y desactivar recurrencias
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = getArgentinaCivilDateString();
 
       await Appointment.update(
         { status: 'cancelled' },
