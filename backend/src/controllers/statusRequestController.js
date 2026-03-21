@@ -5,6 +5,7 @@ const { toStatusRequestDTO, toStatusRequestDTOList } = require('../../mappers/St
 const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
+const { getArgentinaCivilDateString } = require('../utils/civilDateUtils');
 
 const VALID_STATUSES = ['active', 'pending', 'inactive'];
 
@@ -196,7 +197,7 @@ const approveRequest = async (req, res) => {
 
       // Al desactivar por status => cancelar futuras citas scheduled y desactivar recurrencias
       if (newStatus === 'inactive') {
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = getArgentinaCivilDateString();
 
         await Appointment.update(
           { status: 'cancelled' },
