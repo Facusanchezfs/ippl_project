@@ -40,7 +40,7 @@ async function main() {
 
   try {
     // 1) Contar cuántos registros hay actualmente en `abonos`
-    const [rows] = await sequelize.query('SELECT COUNT(*) AS count FROM abonos', {
+    const [rows] = await sequelize.query('SELECT COUNT(*) AS count FROM Abonos', {
       transaction,
     });
 
@@ -66,7 +66,7 @@ async function main() {
     console.log('\nProcediendo a eliminar TODOS los registros de `abonos`...');
 
     // 2) Eliminar todos los registros de `abonos`
-    const [deleteResult] = await sequelize.query('DELETE FROM abonos', {
+    const [deleteResult] = await sequelize.query('DELETE FROM Abonos', {
       transaction,
     });
 
