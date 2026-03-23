@@ -300,83 +300,125 @@ const ReportsPage: React.FC = () => {
   };
 
   const generateProfessionalPDF = async () => {
-  if (!selectedProfessional) return;
+    if (!selectedProfessional) return;
 
-  const prof = professionals.find(p => p.id == selectedProfessional);
-  if (!prof) return;
+    setLoading(true);
+    try {
+      const prof = professionals.find((p) => p.id == selectedProfessional);
+      if (!prof) return;
 
-  const toLocalDate = (ymd: string) => {
-    const [y,m,d] = ymd.split('-').map(Number);
-    return new Date(y, m-1, d);
-  };
+      const toLocalDate = (ymd: string) => {
+        const [y, m, d] = ymd.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
 
-  const start = startDate ? toLocalDate(startDate) : null;
-  const end   = endDate   ? toLocalDate(endDate)   : null;
-  if (start) start.setHours(0,0,0,0);
-  if (end)   end.setHours(23,59,59,999);
+      const start = startDate ? toLocalDate(startDate) : null;
+      const end = endDate ? toLocalDate(endDate) : null;
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
 
-  const [appointments, patients] = await Promise.all([
-    appointmentsService.getProfessionalAppointments(prof.id),
-    patientsService.getProfessionalPatients(prof.id),
-  ]);
+      // getProfessionalAppointments() devuelve { appointments, pagination }, no un array directo.
+      const [appointmentsResponse, patients] = await Promise.all([
+        appointmentsService.getProfessionalAppointments(prof.id),
+        patientsService.getProfessionalPatients(prof.id),
+      ]);
 
-  const patientMap = Object.fromEntries(patients.map((p: any) => [p.id, p]));
+      const appointmentsRaw = Array.isArray(appointmentsResponse)
+        ? appointmentsResponse
+        : (appointmentsResponse as any)?.appointments;
 
-  const inRange = (a: any) => {
-    const d = toLocalDate(a.date);
-    if (start && end)   return d >= start && d <= end;
-    if (start && !end)  return d >= start;
-    if (!start && end)  return d <= end;
-    return true;
-  };
+      const appointments: any[] = Array.isArray(appointmentsRaw) ? appointmentsRaw : [];
 
-  const filtered = appointments.filter(inRange);
-  const finalizadas = filtered.filter(a => a.status === 'completed');
-  const ausentes = finalizadas.filter(a => !a.attended).length;
-
-  const freqLabel = (f?: 'weekly'|'biweekly'|'monthly') =>
-    f === 'weekly' ? 'Semanal' :
-    f === 'biweekly' ? 'Quincenal' :
-    f === 'monthly' ? 'Mensual' : '-';
-
-  const rows = finalizadas.map(a => [
-    a.patientName,
-    a.attended ? 'Asistió' : 'No asistió',
-    freqLabel(patientMap[a.patientId]?.sessionFrequency),
-    `$${(a.paymentAmount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
-  ]);
-
-  const asistidas = finalizadas.filter(a => a.attended === true);
-  const total = asistidas.reduce((sum, a) => sum + (a.paymentAmount ?? 0), 0);
-  const totalRow = ['TOTAL', '', '', `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`];
-
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text('Instituto Psicológico y Psicoanálisis del Litoral', 105, 15, { align: 'center' });
-  doc.setFontSize(14);
-  doc.text(`Reporte de Citas Finalizadas - ${prof.name}`, 105, 25, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(`Rango: ${startDate || '...'} a ${endDate || '...'}`, 10, 32);
-  doc.text(`Cantidad de citas finalizadas: ${finalizadas.length}`, 10, 40);
-  doc.text(`Pacientes ausentes: ${ausentes}`, 10, 46);
-
-  autoTable(doc, {
-    head: [['Paciente', 'Asistencia', 'Frecuencia', 'Saldo']],
-    body: [...rows, totalRow],
-    startY: 52,
-    styles: { fontSize: 10 },
-    headStyles: { fillColor: [41, 128, 185] },
-    didParseCell: (data: any) => {
-      if (data.row.index === rows.length && data.column.index >= 0) {
-        data.cell.styles.fontStyle = 'bold';
-        if (data.column.index === 0) {
-          data.cell.styles.fillColor = [240, 240, 240];
-        }
+      if (!Array.isArray(appointmentsRaw)) {
+        // Esto ayuda a detectar cambios de contrato del backend.
+        console.error('generateProfessionalPDF: appointments no es array', {
+          appointmentsResponse,
+          appointmentsRawType: typeof appointmentsRaw,
+        });
+        alert('No se pudo generar el reporte: la respuesta de citas no tiene el formato esperado.');
+        setLoading(false);
+        return;
       }
-    },
-  });
-  doc.save(`Reporte_Citas_${prof.name.replace(/ /g, '_')}.pdf`);
-};
+
+      const patientMap = Object.fromEntries(patients.map((p: any) => [p.id, p]));
+
+      const inRange = (a: any) => {
+        if (!a?.date) return false;
+        const d = toLocalDate(a.date);
+        if (start && end) return d >= start && d <= end;
+        if (start && !end) return d >= start;
+        if (!start && end) return d <= end;
+        return true;
+      };
+
+      const filtered = appointments.filter(inRange);
+      const finalizadas = filtered.filter((a) => a.status === 'completed');
+      const ausentes = finalizadas.filter((a) => !a.attended).length;
+
+      const freqLabel = (f?: 'weekly' | 'biweekly' | 'monthly') =>
+        f === 'weekly'
+          ? 'Semanal'
+          : f === 'biweekly'
+            ? 'Quincenal'
+            : f === 'monthly'
+              ? 'Mensual'
+              : '-';
+
+      const rows = finalizadas.map((a) => [
+        a.patientName,
+        a.attended ? 'Asistió' : 'No asistió',
+        freqLabel(patientMap[a.patientId]?.sessionFrequency),
+        `$${(a.paymentAmount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
+      ]);
+
+      const asistidas = finalizadas.filter((a) => a.attended === true);
+      const total = asistidas.reduce((sum, a) => sum + (a.paymentAmount ?? 0), 0);
+      const totalRow = [
+        'TOTAL',
+        '',
+        '',
+        `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
+      ];
+
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text(
+        'Instituto Psicológico y Psicoanálisis del Litoral',
+        105,
+        15,
+        { align: 'center' }
+      );
+      doc.setFontSize(14);
+      doc.text(`Reporte de Citas Finalizadas - ${prof.name}`, 105, 25, { align: 'center' });
+      doc.setFontSize(11);
+      doc.text(`Rango: ${startDate || '...'} a ${endDate || '...'}`, 10, 32);
+      doc.text(`Cantidad de citas finalizadas: ${finalizadas.length}`, 10, 40);
+      doc.text(`Pacientes ausentes: ${ausentes}`, 10, 46);
+
+      autoTable(doc, {
+        head: [['Paciente', 'Asistencia', 'Frecuencia', 'Saldo']],
+        body: [...rows, totalRow],
+        startY: 52,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [41, 128, 185] },
+        didParseCell: (data: any) => {
+          if (data.row.index === rows.length && data.column.index >= 0) {
+            data.cell.styles.fontStyle = 'bold';
+            if (data.column.index === 0) {
+              data.cell.styles.fillColor = [240, 240, 240];
+            }
+          }
+        },
+      });
+      doc.save(`Reporte_Citas_${prof.name.replace(/ /g, '_')}.pdf`);
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.error || error?.message || 'Error al generar el reporte';
+      alert(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="pt-24 px-8 space-y-6">

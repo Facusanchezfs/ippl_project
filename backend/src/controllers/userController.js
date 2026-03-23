@@ -1,6 +1,16 @@
 'use strict';
 const bcrypt = require('bcryptjs');
-const { User, Abono, Patient, Appointment, FrequencyRequest, StatusRequest, Activity, sequelize } = require('../../models');
+const {
+  User,
+  Abono,
+  Patient,
+  Appointment,
+  FrequencyRequest,
+  StatusRequest,
+  Activity,
+  RecurringAppointment,
+  sequelize,
+} = require('../../models');
 const { toUserDTO } = require('../../mappers/UserMapper');
 const { toAbonoDTOList } = require('../../mappers/AbonoMapper');
 const logger = require('../utils/logger');
@@ -344,6 +354,18 @@ const permanentDeleteUser = async (req, res) => {
       logger.info(`[permanentDeleteUser] Eliminando ${deletedActivitiesCount} activities asociadas al profesional`);
     }
 
+    // Recurrencias siguen existiendo en BD aunque el paciente se desasigne o las citas se cancelen;
+    // la FK professionalId -> Users es RESTRICT y bloquea el DELETE del usuario.
+    const deletedRecurringCount = await RecurringAppointment.destroy({
+      where: { professionalId: user.id },
+      transaction: t,
+    });
+    if (deletedRecurringCount > 0) {
+      logger.info(
+        `[permanentDeleteUser] Eliminando ${deletedRecurringCount} registro(s) de RecurringAppointments del profesional`
+      );
+    }
+
     logger.info(`[permanentDeleteUser] Eliminando usuario ${id} permanentemente`);
     await user.destroy({ transaction: t });
 
@@ -429,7 +451,12 @@ const getAbonos = async (req, res) => {
 
     return sendSuccess(res, { abonos: toAbonoDTOList(abonos) });
   } catch (error) {
-    logger.error('Error al obtener abonos:', error);
+    const detail =
+      error?.parent?.sqlMessage ||
+      error?.original?.sqlMessage ||
+      error?.message ||
+      String(error);
+    logger.error(`[getAbonos] ${detail}`, error);
     return sendError(res, 500, 'Error al obtener abonos');
   }
 };
