@@ -189,6 +189,8 @@ async function assignPatient(req, res) {
     const patient = await Patient.findByPk(patientId);
     if (!patient || !patient.active) return sendError(res, 404, 'Paciente no encontrado');
 
+    const requestedStatus = status; // puede venir undefined si no cambian el status
+
     const originalProfessionalId = patient.professionalId;
 
     if (professionalId !== undefined) {
@@ -223,6 +225,43 @@ async function assignPatient(req, res) {
     if (sessionFrequency !== undefined) patient.sessionFrequency = sessionFrequency;
 
     await patient.save();
+
+    // FIX: si el admin deja el paciente como `inactive` desde edición,
+    // cancelar futuras citas programadas y desactivar recurrencias,
+    // para que el CRON no siga generando/mostrando agenda para pacientes inactivos.
+    if (requestedStatus === 'inactive') {
+      const t = await sequelize.transaction();
+      try {
+        const todayStr = getArgentinaCivilDateString();
+
+        await Appointment.update(
+          { status: 'cancelled' },
+          {
+            where: {
+              patientId: patient.id,
+              status: 'scheduled',
+              active: true,
+              date: { [Op.gte]: todayStr },
+            },
+            transaction: t,
+            validate: false,
+          }
+        );
+
+        await RecurringAppointment.update(
+          { active: false },
+          {
+            where: { patientId: patient.id, active: true },
+            transaction: t,
+          }
+        );
+
+        await t.commit();
+      } catch (err) {
+        await t.rollback();
+        throw err;
+      }
+    }
 
     const lastDerivation = await Derivation.findOne({
       where: { patientId: patient.id },
