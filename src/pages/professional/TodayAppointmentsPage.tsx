@@ -798,21 +798,8 @@ const AppointmentsPage = () => {
                   setCancelReason('');
                   toast.success('Solicitud de cancelación enviada al administrador');
                 } catch (error: any) {
-                  const status = error?.response?.status;
-                  const backendData = error?.response?.data;
-                  const backendMsg = backendData?.error;
-                  const backendDetails = backendData?.details;
-
-                  console.error('Error al crear solicitud de cancelación:', {
-                    status,
-                    backendData,
-                    backendMsg,
-                    backendDetails,
-                    requestPayload: {
-                      appointmentId: appointmentToCancel.id,
-                      reasonLength: trimmed.length,
-                    },
-                  });
+                  console.error('Error al crear solicitud de cancelación:', error);
+                  const backendMsg = error?.response?.data?.error;
                   toast.error(
                     backendMsg || 'Error al enviar la solicitud de cancelación'
                   );

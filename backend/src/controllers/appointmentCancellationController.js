@@ -109,11 +109,7 @@ const createCancellationRequest = async (req, res) => {
     return sendError(
       res,
       500,
-      'Error al crear la solicitud de cancelación de cita',
-      {
-        message: error?.message || 'Error interno sin mensaje',
-        name: error?.name || 'Error',
-      }
+      'Error al crear la solicitud de cancelación de cita'
     );
   }
 };
