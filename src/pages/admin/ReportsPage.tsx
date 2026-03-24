@@ -318,7 +318,7 @@ const ReportsPage: React.FC = () => {
       if (end) end.setHours(23, 59, 59, 999);
 
       // Depuración PDF (solo consola del navegador): nombre exacto; dejar '' para silenciar.
-      const PDF_DEBUG_PATIENT_NAME = 'Guillermina Otero';
+      const PDF_DEBUG_PATIENT_NAME = 'Carla Wilbers';
 
       // getProfessionalAppointments() devuelve { appointments, pagination }, no un array directo.
       const [appointmentsResponse, patients] = await Promise.all([
