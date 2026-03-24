@@ -18,7 +18,9 @@
 		"db:backfill-recurring:all": "npm run db:backfill-recurring && npm run db:backfill-recurring:apply",
 		"db:deactivate-recurring-inactive": "node src/scripts/deactivateRecurringForInactivePatients.js",
 		"db:deactivate-recurring-inactive:apply": "node src/scripts/deactivateRecurringForInactivePatients.js --apply",
-		"db:deactivate-recurring-inactive:all": "npm run db:deactivate-recurring-inactive && npm run db:deactivate-recurring-inactive:apply"
+		"db:deactivate-recurring-inactive:all": "npm run db:deactivate-recurring-inactive && npm run db:deactivate-recurring-inactive:apply",
+		"db:purge-appointments-before-week": "node src/scripts/purgeAppointmentsBeforeCurrentWeek.js",
+		"db:purge-appointments-before-week:apply": "node src/scripts/purgeAppointmentsBeforeCurrentWeek.js --apply"
 	},
 	"keywords": [],
 	"author": "",
