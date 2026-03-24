@@ -260,7 +260,7 @@ const ReportsPage: React.FC = () => {
       
       revenueData.byProfessional.forEach((prof) => {
         const nombre = prof.professionalName;
-        const total = prof.total.toLocaleString('es-CO', { minimumFractionDigits: 2 });
+        const total = prof.total.toLocaleString('es-AR', { minimumFractionDigits: 2 });
         const totalStr = `$${total}`;
         const maxChars = 60;
         const nombreLen = nombre.length;
@@ -278,7 +278,7 @@ const ReportsPage: React.FC = () => {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       const totalLabel = 'Ingreso Total';
-      const totalStr = `$${revenueData.total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+      const totalStr = `$${revenueData.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
       const maxChars = 60;
       const nombreLen = totalLabel.length;
       const totalLen = totalStr.length;
@@ -353,7 +353,6 @@ const ReportsPage: React.FC = () => {
 
       const filtered = appointments.filter(inRange);
       const finalizadas = filtered.filter((a) => a.status === 'completed');
-      const ausentes = finalizadas.filter((a) => !a.attended).length;
 
       const freqLabel = (f?: 'weekly' | 'biweekly' | 'monthly') =>
         f === 'weekly'
@@ -364,20 +363,19 @@ const ReportsPage: React.FC = () => {
               ? 'Mensual'
               : '-';
 
+      const getSessionValue = (a: any) => a.sessionCost ?? a.paymentAmount ?? 0;
+
       const rows = finalizadas.map((a) => [
         a.patientName,
-        a.attended ? 'Asistió' : 'No asistió',
         freqLabel(patientMap[a.patientId]?.sessionFrequency),
-        `$${(a.paymentAmount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
+        `$${getSessionValue(a).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
       ]);
 
-      const asistidas = finalizadas.filter((a) => a.attended === true);
-      const total = asistidas.reduce((sum, a) => sum + (a.paymentAmount ?? 0), 0);
+      const total = finalizadas.reduce((sum, a) => sum + getSessionValue(a), 0);
       const totalRow = [
         'TOTAL',
         '',
-        '',
-        `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
+        `$${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
       ];
 
       const doc = new jsPDF();
@@ -393,10 +391,9 @@ const ReportsPage: React.FC = () => {
       doc.setFontSize(11);
       doc.text(`Rango: ${startDate || '...'} a ${endDate || '...'}`, 10, 32);
       doc.text(`Cantidad de citas finalizadas: ${finalizadas.length}`, 10, 40);
-      doc.text(`Pacientes ausentes: ${ausentes}`, 10, 46);
 
       autoTable(doc, {
-        head: [['Paciente', 'Asistencia', 'Frecuencia', 'Saldo']],
+        head: [['Paciente', 'Frecuencia', 'Costo por sesión']],
         body: [...rows, totalRow],
         startY: 52,
         styles: { fontSize: 10 },
@@ -519,7 +516,7 @@ const ReportsPage: React.FC = () => {
             Generar PDF
           </button>
         </div>
-        <p className="text-gray-500">El reporte incluirá la cantidad de citas finalizadas, nombre del paciente, asistencia, frecuencia y saldo correspondiente al rango de fechas seleccionado.</p>
+        <p className="text-gray-500">El reporte incluirá la cantidad de citas finalizadas, nombre del paciente, frecuencia y costo por sesión correspondiente al rango de fechas seleccionado.</p>
       </div>
       <div className="mt-12">
         <h2 className="text-xl font-bold mb-4">Ingreso total mensual</h2>
