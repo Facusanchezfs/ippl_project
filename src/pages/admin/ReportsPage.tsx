@@ -317,6 +317,9 @@ const ReportsPage: React.FC = () => {
       if (start) start.setHours(0, 0, 0, 0);
       if (end) end.setHours(23, 59, 59, 999);
 
+      // Depuración PDF (solo consola del navegador): nombre exacto; dejar '' para silenciar.
+      const PDF_DEBUG_PATIENT_NAME = 'Guillermina Otero';
+
       // getProfessionalAppointments() devuelve { appointments, pagination }, no un array directo.
       const [appointmentsResponse, patients] = await Promise.all([
         appointmentsService.getProfessionalAppointments(prof.id),
@@ -354,6 +357,36 @@ const ReportsPage: React.FC = () => {
       const filtered = appointments.filter(inRange);
       const finalizadas = filtered.filter((a) => a.status === 'completed');
 
+      const getSessionValue = (a: any) => a.sessionCost ?? a.paymentAmount ?? 0;
+
+      const debugName = PDF_DEBUG_PATIENT_NAME.trim();
+      const matchDebugPatient = (a: any) =>
+        debugName !== '' && String(a?.patientName || '').trim() === debugName;
+
+      if (debugName) {
+        const enRangoDebugPaciente = filtered.filter(matchDebugPatient);
+        console.log(
+          '[Reporte PDF][front] Citas en rango elegido (cualquier estado), paciente debug:',
+          {
+            rango: { desde: startDate || null, hasta: endDate || null },
+            count: enRangoDebugPaciente.length,
+            items: enRangoDebugPaciente,
+          }
+        );
+
+        const finalizadasDebugPaciente = finalizadas.filter(matchDebugPatient);
+        console.log(
+          '[Reporte PDF][front] Objetos que armarán fila en el PDF (completed + rango), paciente debug:',
+          {
+            count: finalizadasDebugPaciente.length,
+            items: finalizadasDebugPaciente.map((a) => ({
+              ...a,
+              _pdfMontoMostrado: getSessionValue(a),
+            })),
+          }
+        );
+      }
+
       const freqLabel = (f?: 'weekly' | 'biweekly' | 'monthly') =>
         f === 'weekly'
           ? 'Semanal'
@@ -362,8 +395,6 @@ const ReportsPage: React.FC = () => {
             : f === 'monthly'
               ? 'Mensual'
               : '-';
-
-      const getSessionValue = (a: any) => a.sessionCost ?? a.paymentAmount ?? 0;
 
       const rows = finalizadas.map((a) => [
         a.patientName,
