@@ -51,10 +51,22 @@ function getArgentinaTimeHHMM(date = new Date()) {
   return `${h}:${min}`;
 }
 
+/**
+ * Día de la semana en español (Argentina), p. ej. "lunes", "domingo".
+ * Útil para reglas de negocio (cron: domingo sin backlog, etc.).
+ */
+function getArgentinaWeekdayLongEs(date = new Date()) {
+  return new Intl.DateTimeFormat('es-AR', {
+    timeZone: AR_TIMEZONE,
+    weekday: 'long',
+  }).format(date);
+}
+
 module.exports = {
   AR_TIMEZONE,
   getArgentinaCivilDateString,
   getArgentinaTimeHHMM,
+  getArgentinaWeekdayLongEs,
   /** Alias explícitos (misma implementación que getArgentina*). */
   getLocalDateString: getArgentinaCivilDateString,
   getLocalTimeHHMM: getArgentinaTimeHHMM,
