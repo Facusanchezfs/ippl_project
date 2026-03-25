@@ -58,6 +58,14 @@ const createRecurringAppointment = async (req, res) => {
         { transaction: t }
       );
 
+      // Vincular la cita base con la recurrencia creada.
+      // Esto permite que el CRON y las ediciones/cancelaciones por `recurringAppointmentId`
+      // funcionen de forma consistente con la recurrencia.
+      await baseAppointment.update(
+        { recurringAppointmentId: created.id },
+        { transaction: t }
+      );
+
       return created;
     });
 
@@ -276,7 +284,14 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
       );
     }
 
-    const cancelFromDate = usedFallback ? nextDate : oldAnchorDate;
+    // Si `nextDate` es anterior a `oldAnchorDate`, cancelar también desde `nextDate`
+    // para evitar que queden citas "próximas" viejas.
+    // (Comparación válida para YYYY-MM-DD como strings).
+    const cancelFromDate = usedFallback
+      ? nextDate
+      : nextDate < oldAnchorDate
+        ? nextDate
+        : oldAnchorDate;
 
     await Appointment.update(
       { status: 'cancelled' },
@@ -1110,7 +1125,14 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
         );
       }
 
-      const cancelFromDate = usedFallback ? nextDate : oldAnchorDate;
+    // Si `nextDate` es anterior a `oldAnchorDate`, cancelar también desde `nextDate`
+    // para evitar que queden citas "próximas" viejas.
+    // (Comparación válida para YYYY-MM-DD como strings).
+    const cancelFromDate = usedFallback
+      ? nextDate
+      : nextDate < oldAnchorDate
+        ? nextDate
+        : oldAnchorDate;
 
       await Appointment.update(
         { status: 'cancelled' },

@@ -47,7 +47,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       professionalId: {
         type: DataTypes.BIGINT,
-        allowNull: true,
+        allowNull: false,
       },
       professionalName: {
         type: DataTypes.STRING(150),

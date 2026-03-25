@@ -203,29 +203,40 @@ async function generateRecurringAppointments() {
             continue;
           }
 
-          const newAppointment = await Appointment.create({
-            patientId: recurrence.patientId,
-            patientName:
-              patient?.name || baseAppointment.patientName || 'Paciente no encontrado',
-            professionalId: recurrence.professionalId,
-            professionalName:
-              professional?.name ||
-              baseAppointment.professionalName ||
-              'Profesional no encontrado',
-            date: candidateDate,
-            startTime: baseAppointment.startTime,
-            endTime: baseAppointment.endTime,
-            type: baseAppointment.type || 'regular',
-            status: 'scheduled',
-            notes: null,
-            audioNote: null,
-            sessionCost: baseAppointment.sessionCost,
-            attended: null,
-            paymentAmount: null,
-            remainingBalance: baseAppointment.sessionCost,
-            recurringAppointmentId: recurrence.id,
-            active: true,
-          });
+          let newAppointment;
+          try {
+            newAppointment = await Appointment.create({
+              patientId: recurrence.patientId,
+              patientName:
+                patient?.name || baseAppointment.patientName || 'Paciente no encontrado',
+              professionalId: recurrence.professionalId,
+              professionalName:
+                professional?.name ||
+                baseAppointment.professionalName ||
+                'Profesional no encontrado',
+              date: candidateDate,
+              startTime: baseAppointment.startTime,
+              endTime: baseAppointment.endTime,
+              type: baseAppointment.type || 'regular',
+              status: 'scheduled',
+              notes: null,
+              audioNote: null,
+              sessionCost: baseAppointment.sessionCost,
+              attended: null,
+              paymentAmount: null,
+              remainingBalance: baseAppointment.sessionCost,
+              recurringAppointmentId: recurrence.id,
+              active: true,
+            });
+          } catch (error) {
+            // Hardening mínimo: si ya existe (por race/duplicado),
+            // no rompas el cron y seguí buscando la siguiente cita futura.
+            if (error?.name === 'SequelizeUniqueConstraintError') {
+              referenceDate = candidateDate;
+              continue;
+            }
+            throw error;
+          }
 
           createdCount++;
           futureCreated++;
