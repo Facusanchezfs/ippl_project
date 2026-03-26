@@ -235,8 +235,10 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
       return;
     }
 
+    const shouldUseGroup = scheduleFrequency === 'twice_weekly' || scheduleMode === 'group';
+
     // Caso grupo twice_weekly
-    if (scheduleMode === 'group') {
+    if (shouldUseGroup) {
       if (scheduleEntries.length !== 2) {
         setScheduleError('Debes completar ambos bloques de la agenda.');
         return;
@@ -258,18 +260,44 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
 
       try {
         setScheduleLoading(true);
-        await recurringAppointmentsService.updateRecurringAppointmentGroupAdmin(
-          scheduleGroupId!,
-          {
-            entries: scheduleEntries.map((entry) => ({
-              recurringId: entry.recurringId!,
-              nextDate: entry.nextDate,
-              startTime: entry.startTime,
-              duration: entry.duration,
-              sessionCost: Number(entry.sessionCost),
-            })),
+
+        if (scheduleGroupId) {
+          if (scheduleEntries.some((entry) => !entry.recurringId)) {
+            setScheduleError(
+              'No se pudieron resolver los IDs de recurrencia para actualizar el grupo.'
+            );
+            return;
           }
-        );
+
+          await recurringAppointmentsService.updateRecurringAppointmentGroupAdmin(
+            scheduleGroupId,
+            {
+              entries: scheduleEntries.map((entry) => ({
+                recurringId: entry.recurringId!,
+                nextDate: entry.nextDate,
+                startTime: entry.startTime,
+                duration: entry.duration,
+                sessionCost: Number(entry.sessionCost),
+              })),
+            }
+          );
+        } else {
+          // Si venís de un modo "single" pero el usuario eligió twice_weekly,
+          // crear la configuración agrupada (si el backend lo permite).
+          await recurringAppointmentsService.createPatientRecurringScheduleAdmin(
+            patient.id,
+            {
+              frequency: 'twice_weekly',
+              entries: scheduleEntries.map((entry) => ({
+                nextDate: entry.nextDate,
+                startTime: entry.startTime,
+                duration: entry.duration,
+                sessionCost: Number(entry.sessionCost),
+              })),
+            }
+          );
+        }
+
         setIsScheduleEditing(false);
         await onScheduleUpdated();
       } catch (error: any) {
@@ -580,16 +608,51 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                 <select
                   disabled={!isScheduleEditing}
                   value={scheduleFrequency}
-                  onChange={(e) =>
-                    setScheduleFrequency(
-                      e.target.value as
-                        | 'weekly'
-                        | 'biweekly'
-                        | 'monthly'
-                        | 'twice_weekly'
-                        | ''
-                    )
-                  }
+                  onChange={(e) => {
+                    const nextFrequency = e.target.value as
+                      | 'weekly'
+                      | 'biweekly'
+                      | 'monthly'
+                      | 'twice_weekly'
+                      | '';
+
+                    setScheduleFrequency(nextFrequency);
+
+                    if (nextFrequency === 'twice_weekly') {
+                      setScheduleMode('group');
+
+                      // Asegurar que siempre existan 2 bloques para que el form muestre ambos.
+                      setScheduleEntries((prev) => {
+                        if (prev.length === 2) return prev;
+
+                        const baseDuration = scheduleSingle.duration ?? 60;
+                        const baseCost = scheduleSingle.sessionCost;
+                        const baseDate = scheduleSingle.nextDate;
+                        const baseStart = scheduleSingle.startTime;
+
+                        const entry0 = prev[0] || {
+                          recurringId: null,
+                          nextDate: baseDate || '',
+                          startTime: baseStart || '',
+                          duration: baseDuration,
+                          sessionCost: baseCost,
+                        };
+
+                        const entry1 = prev[1] || {
+                          recurringId: null,
+                          nextDate: '',
+                          startTime: '',
+                          duration: baseDuration,
+                          sessionCost: '',
+                        };
+
+                        return [entry0, entry1];
+                      });
+                    } else {
+                      setScheduleMode('single');
+                      setScheduleEntries([]);
+                    }
+                  }}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                 >
                   <option value="weekly">Semanal</option>
@@ -599,7 +662,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                 </select>
               </div>
 
-              {scheduleMode !== 'group' && (
+              {scheduleMode !== 'group' && scheduleFrequency !== 'twice_weekly' && (
                 <>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
@@ -691,7 +754,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
                 </>
               )}
 
-              {scheduleMode === 'group' && (
+              {(scheduleMode === 'group' || scheduleFrequency === 'twice_weekly') && (
                 <div className="space-y-4">
                   {/* Bloque A */}
                   <div className="border rounded-lg p-3">
