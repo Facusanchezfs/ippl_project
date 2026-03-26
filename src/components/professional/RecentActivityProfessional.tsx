@@ -118,6 +118,7 @@ const RecentActivityProfessional = () => {
       case 'weekly': return 'Semanal';
       case 'biweekly': return 'Quincenal';
       case 'monthly': return 'Mensual';
+      case 'twice_weekly': return '2 veces por semana';
       default: return 'No asignada';
     }
   };
@@ -157,6 +158,7 @@ const RecentActivityProfessional = () => {
     translated = translated.replace(/\bweekly\b/gi, 'Semanal');
     translated = translated.replace(/\bbiweekly\b/gi, 'Quincenal');
     translated = translated.replace(/\bmonthly\b/gi, 'Mensual');
+    translated = translated.replace(/\btwice_weekly\b/gi, '2 veces por semana');
     
     // Reemplazar estados en inglés
     translated = translated.replace(/\bapproved\b/gi, 'Aprobado');

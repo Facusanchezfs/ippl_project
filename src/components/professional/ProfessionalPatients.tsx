@@ -184,6 +184,7 @@ const FrequencyChangeModal: React.FC<FrequencyChangeModalProps> = ({ isOpen, onC
       case 'weekly': return 'Semanal';
       case 'biweekly': return 'Quincenal';
       case 'monthly': return 'Mensual';
+      case 'twice_weekly': return '2 veces por semana';
       default: return 'No asignada';
     }
   };
@@ -509,6 +510,7 @@ const ProfessionalPatients = () => {
       case 'weekly': return 'Semanal';
       case 'biweekly': return 'Quincenal';
       case 'monthly': return 'Mensual';
+      case 'twice_weekly': return '2 veces por semana';
       default: return 'No asignada';
     }
   };

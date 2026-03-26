@@ -2026,6 +2026,7 @@ const FrequencyRequestModal: React.FC<FrequencyRequestModalProps> = ({
       case 'weekly': return 'Semanal';
       case 'biweekly': return 'Quincenal';
       case 'monthly': return 'Mensual';
+      case 'twice_weekly': return '2 veces por semana';
       default: return freq;
     }
   };
@@ -2104,6 +2105,7 @@ const getFrequencyLabel = (freq: string | undefined) => {
     case 'weekly': return 'Semanal';
     case 'biweekly': return 'Quincenal';
     case 'monthly': return 'Mensual';
+    case 'twice_weekly': return '2 veces por semana';
     default: return 'No asignada';
   }
 };
