@@ -20,7 +20,9 @@
 		"db:deactivate-recurring-inactive:apply": "node src/scripts/deactivateRecurringForInactivePatients.js --apply",
 		"db:deactivate-recurring-inactive:all": "npm run db:deactivate-recurring-inactive && npm run db:deactivate-recurring-inactive:apply",
 		"db:purge-appointments-before-week": "node src/scripts/purgeAppointmentsBeforeCurrentWeek.js",
-		"db:purge-appointments-before-week:apply": "node src/scripts/purgeAppointmentsBeforeCurrentWeek.js --apply"
+		"db:purge-appointments-before-week:apply": "node src/scripts/purgeAppointmentsBeforeCurrentWeek.js --apply",
+		"db:reconcile-professional-saldos": "node src/scripts/reconcileProfessionalSaldos.js",
+		"db:reconcile-professional-saldos:apply": "node src/scripts/reconcileProfessionalSaldos.js --apply"
 	},
 	"keywords": [],
 	"author": "",
