@@ -16,7 +16,6 @@
  * este modelo (ajustes manuales, otra fuente de abonos), revisar antes de aplicar.
  */
 
-const { Op } = require('sequelize');
 const { User, Appointment, Abono, sequelize } = require('../../models');
 
 function round2(n) {
@@ -89,7 +88,7 @@ async function main() {
       `[${diff ? 'CAMBIO' : '—'} id=${prof.id}] ${prof.name} | bruto_citas=${g} %=${(rate * 100).toFixed(0)} comisión=${fullCommission} abonos=${ab}`
     );
     console.log(
-      `   saldoTotal: ${oldT} → ${newTotal} | saldoPendiente: ${oldP} → ${newP}`
+      `   saldoTotal: ${oldT} → ${newTotal} | saldoPendiente: ${oldP} → ${newPend}`
     );
 
     if (apply && diff) {
