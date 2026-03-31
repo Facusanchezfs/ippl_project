@@ -24,15 +24,9 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const getAllAppointments = async (req, res) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    
-    if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
-    if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
-    
-    const offset = (page - 1) * limit;
-    
-    const { count, rows: appts } = await Appointment.findAndCountAll({
+    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+
+    const baseQuery = {
       where: { active: true },
       attributes: [
         'id', 'patientId', 'professionalId', 'patientName', 'professionalName',
@@ -45,15 +39,23 @@ const getAllAppointments = async (req, res) => {
         ['startTime', 'ASC'],
         ['createdAt', 'DESC'],
       ],
-      limit,
-      offset,
-    });
+    };
 
-    const totalPages = Math.ceil(count / limit);
-    
-    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
-    
     if (hasPagination) {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 20;
+
+      if (page < 1) return sendError(res, 400, 'page debe ser mayor a 0');
+      if (limit < 1 || limit > 100) return sendError(res, 400, 'limit debe estar entre 1 y 100');
+
+      const offset = (page - 1) * limit;
+      const { count, rows: appts } = await Appointment.findAndCountAll({
+        ...baseQuery,
+        limit,
+        offset,
+      });
+      const totalPages = Math.ceil(count / limit);
+
       return sendSuccess(res, {
         appointments: toAppointmentDTOList(appts),
         pagination: {
@@ -64,6 +66,7 @@ const getAllAppointments = async (req, res) => {
         },
       });
     } else {
+      const appts = await Appointment.findAll(baseQuery);
       return sendSuccess(res, { appointments: toAppointmentDTOList(appts) });
     }
   } catch (error) {
