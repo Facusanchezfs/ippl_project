@@ -12,11 +12,26 @@
  *   node src/scripts/reconcileProfessionalSaldos.js --userId=13
  *   node src/scripts/reconcileProfessionalSaldos.js --userId=13 --apply
  *
+ * Período contable: solo citas y abonos con fecha civil entre 2026-03-30 y hoy
+ * (hora local del servidor). Todo lo anterior al 30/03/2026 no entra al cálculo.
+ *
  * IMPORTANTE: ejecutar con backup en producción. Si hay lógica contable fuera de
  * este modelo (ajustes manuales, otra fuente de abonos), revisar antes de aplicar.
  */
 
+const { Op } = require('sequelize');
 const { User, Appointment, Abono, sequelize } = require('../../models');
+
+/** Corte inclusive: solo sesiones / abonos desde esta fecha (YYYY-MM-DD). */
+const RECONCILE_FROM_YMD = '2026-03-30';
+
+function todayLocalYmd() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -44,8 +59,19 @@ async function main() {
     order: [['id', 'ASC']],
   });
 
+  const toYmd = todayLocalYmd();
+  if (toYmd < RECONCILE_FROM_YMD) {
+    throw new Error(
+      `Fecha local hoy (${toYmd}) es anterior al corte ${RECONCILE_FROM_YMD}; revisar reloj o constante.`
+    );
+  }
+  const dateRange = { [Op.between]: [RECONCILE_FROM_YMD, toYmd] };
+
   console.log('==============================================================');
   console.log(` reconcileProfessionalSaldos  (${apply ? 'APLICAR' : 'DRY-RUN'})`);
+  console.log(
+    ` Período: citas y abonos desde ${RECONCILE_FROM_YMD} hasta ${toYmd} (fecha local)`
+  );
   console.log('==============================================================');
 
   for (const prof of professionals) {
@@ -55,6 +81,7 @@ async function main() {
         status: 'completed',
         attended: true,
         active: true,
+        date: dateRange,
       },
     });
 
@@ -64,7 +91,10 @@ async function main() {
 
     const abonosSum =
       (await Abono.sum('amount', {
-        where: { professionalId: prof.id },
+        where: {
+          professionalId: prof.id,
+          date: dateRange,
+        },
       })) || 0;
     const ab = round2(Number(abonosSum) || 0);
 
