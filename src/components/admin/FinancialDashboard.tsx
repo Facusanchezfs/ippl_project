@@ -20,6 +20,7 @@ import jsPDF from 'jspdf';
 import patientsService from '../../services/patients.service';
 import appointmentsService from '../../services/appointments.service';
 import { parseNumber } from '../../utils/functionUtils';
+import type { Appointment } from '../../types/Appointment';
 import ChangePasswordModal from '../professional/ChangePassword';
 
 interface FinancialStats {
@@ -43,6 +44,17 @@ interface FinancialStats {
 
 const TRANSACTIONS_PER_PAGE = 10;
 const PROFESSIONALS_PER_PAGE = 10;
+
+/** Valor bruto de sesión completada: el backend suele cargar `sessionCost`; `paymentAmount` a menudo queda 0 si el paciente aún debe (`remainingBalance`). */
+function grossCompletedSessionValue(
+	a: Pick<Appointment, 'sessionCost' | 'paymentAmount' | 'remainingBalance'>
+): number {
+	const sc = a.sessionCost != null ? Number(a.sessionCost) : NaN;
+	if (Number.isFinite(sc) && sc > 0) return sc;
+	const paid = Number(a.paymentAmount) || 0;
+	const rem = Number(a.remainingBalance) || 0;
+	return paid + rem;
+}
 
 type ProfessionalSortField = 'name' | 'saldoPendiente';
 type SortDirection = 'asc' | 'desc';
@@ -96,7 +108,7 @@ const FinancialDashboard: React.FC = () => {
 				(a) => a.status === 'completed'
 			);
 			const totalRevenue = completedAppointments.reduce(
-				(sum, a) => sum + (a.paymentAmount || 0),
+				(sum, a) => sum + grossCompletedSessionValue(a),
 				0
 			);
 			const pendingPayments = completedAppointments.reduce(
@@ -114,12 +126,12 @@ const FinancialDashboard: React.FC = () => {
 						(p) => p.professionalName === appointment.professionalName
 					);
 					if (professional) {
-						professional.totalAmount += appointment.paymentAmount || 0;
+						professional.totalAmount += grossCompletedSessionValue(appointment);
 						professional.pendingAmount += appointment.remainingBalance || 0;
 					} else {
 						acc.push({
 							professionalName: appointment.professionalName,
-							totalAmount: appointment.paymentAmount || 0,
+							totalAmount: grossCompletedSessionValue(appointment),
 							pendingAmount: appointment.remainingBalance || 0,
 						});
 					}
@@ -133,11 +145,14 @@ const FinancialDashboard: React.FC = () => {
 			);
 
 			const recentTransactions = completedAppointments
-				.filter((a) => a.paymentAmount && a.paymentAmount > 0)
+				.filter((a) => grossCompletedSessionValue(a) > 0)
 				.map((a) => ({
 					id: a.id,
 					patientName: a.patientName,
-					amount: a.paymentAmount || 0,
+					amount:
+						a.paymentAmount && a.paymentAmount > 0
+							? a.paymentAmount
+							: grossCompletedSessionValue(a),
 					date: a.completedAt || a.date,
 					type: a.type,
 				}))

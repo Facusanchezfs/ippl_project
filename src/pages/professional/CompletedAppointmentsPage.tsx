@@ -133,11 +133,11 @@ const badge = (ok?: boolean) =>
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
                 >
                   <option value="todos">Todas las frecuencias</option>
-                  <option value="One-time">Una vez</option>
-                  <option value="Weekly">Semanal</option>
-                  <option value="Biweekly">Quincenal</option>
-                  <option value="Monthly">Mensual</option>
-                  <option value="Twice weekly">Dos veces por semana</option>
+                  {/* Valores alineados con `frequencyLabel` del backend (AppointmentDTO) */}
+                  <option value="Semanal">Semanal</option>
+                  <option value="Quincenal">Quincenal</option>
+                  <option value="Mensual">Mensual</option>
+                  <option value="Dos veces por semana">Dos veces por semana</option>
                 </select>
                 <select
                   value={attendedFilter}

@@ -144,7 +144,9 @@ const AppointmentsPage = () => {
   // Blindaje UI: aunque el backend aplique `cancelFilter`, si por algún motivo
   // llega información que no coincide (p.ej. request previo en caché / validación),
   // garantizamos que "Ocultar canceladas" realmente no las muestre.
-  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
+  // Fecha civil local (misma lógica que `appointment.date` YYYY-MM-DD en agenda).
+  const todayLocal = new Date();
+  const todayStr = `${todayLocal.getFullYear()}-${String(todayLocal.getMonth() + 1).padStart(2, '0')}-${String(todayLocal.getDate()).padStart(2, '0')}`;
   const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm (local)
   const filteredAppointments = appointments
     .filter((appointment) => {
