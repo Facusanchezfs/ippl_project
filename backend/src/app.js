@@ -27,6 +27,7 @@ const recurringAppointmentsRouter = require('./routes/recurringAppointments');
 const adminRecurringAppointmentsRouter = require('./routes/adminRecurringAppointments');
 const adminPatientsRouter = require('./routes/adminPatients');
 const appointmentCancellationRequestsRouter = require('./routes/appointmentCancellationRequests');
+const financialReconcileRouter = require('./routes/financialReconcile');
 require('./jobs/recurringAppointmentsCron');
 
 const app = express();
@@ -223,6 +224,7 @@ app.use('/api/recurring-appointments', recurringAppointmentsRouter);
 app.use('/api/admin/recurring-appointments', adminRecurringAppointmentsRouter);
 app.use('/api/admin/patients', adminPatientsRouter);
 app.use('/api/appointment-cancellation-requests', appointmentCancellationRequestsRouter);
+app.use('/api/financial/reconcile-saldos', financialReconcileRouter);
 
 app.use(errorLogger);
 

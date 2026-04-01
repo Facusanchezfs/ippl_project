@@ -22,6 +22,11 @@ import appointmentsService from '../../services/appointments.service';
 import { parseNumber } from '../../utils/functionUtils';
 import type { Appointment } from '../../types/Appointment';
 import ChangePasswordModal from '../professional/ChangePassword';
+import financialReconcileService, {
+	type ReconcileSaldosPreviewPayload,
+	type ReconcileSaldosRow,
+} from '../../services/financialReconcile.service';
+import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 
 interface FinancialStats {
 	totalRevenue: number;
@@ -82,6 +87,11 @@ const FinancialDashboard: React.FC = () => {
 		direction: SortDirection;
 	}>({ field: 'name', direction: 'asc' });
 	const [professionalSearch, setProfessionalSearch] = useState<string>('');
+	const [reconcilePayload, setReconcilePayload] =
+		useState<ReconcileSaldosPreviewPayload | null>(null);
+	const [reconcileLoading, setReconcileLoading] = useState(false);
+	const [reconcileApplying, setReconcileApplying] = useState(false);
+	const [reconcileSectionOpen, setReconcileSectionOpen] = useState(false);
 
 	useEffect(() => {
 		if (user) {
@@ -192,6 +202,60 @@ const FinancialDashboard: React.FC = () => {
 			toast.error(friendlyMessage);
 		}
 	};
+
+	const loadReconcilePreview = async () => {
+		try {
+			setReconcileLoading(true);
+			const data = await financialReconcileService.getPreview();
+			setReconcilePayload(data);
+		} catch (error) {
+			const friendlyMessage = getFriendlyErrorMessage(
+				error,
+				'No se pudo consultar los desfasajes. Intenta de nuevo.'
+			);
+			toast.error(friendlyMessage);
+		} finally {
+			setReconcileLoading(false);
+		}
+	};
+
+	const handleOpenReconcileSection = async () => {
+		if (!reconcileSectionOpen) {
+			setReconcileSectionOpen(true);
+			await loadReconcilePreview();
+		} else {
+			setReconcileSectionOpen(false);
+		}
+	};
+
+	const handleApplyReconcile = async () => {
+		if (!reconcilePayload?.cantidadDesfase) return;
+		const ok = window.confirm(
+			`Se van a actualizar los saldos de ${reconcilePayload.cantidadDesfase} profesional(es) para que coincidan con esta revisión. ¿Continuar?`
+		);
+		if (!ok) return;
+		try {
+			setReconcileApplying(true);
+			await financialReconcileService.apply();
+			toast.success('Saldos actualizados correctamente.');
+			await Promise.all([loadReconcilePreview(), loadProfessionals()]);
+		} catch (error) {
+			const friendlyMessage = getFriendlyErrorMessage(
+				error,
+				'No se pudo aplicar la corrección.'
+			);
+			toast.error(friendlyMessage);
+		} finally {
+			setReconcileApplying(false);
+		}
+	};
+
+	const sortedReconcileRows: ReconcileSaldosRow[] = reconcilePayload
+		? [...reconcilePayload.rows].sort((a, b) => {
+				if (a.hayDesfase !== b.hayDesfase) return a.hayDesfase ? -1 : 1;
+				return String(a.name).localeCompare(String(b.name), 'es');
+			})
+		: [];
 
 	const changePassword = async (newPassword: string) =>{
     try{
@@ -765,6 +829,158 @@ const FinancialDashboard: React.FC = () => {
 				)}
 			</div>
 
+			<div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+				<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+					<div className="flex gap-3">
+						<div className="p-2 rounded-lg bg-amber-50 text-amber-800 shrink-0">
+							<ClipboardDocumentListIcon className="h-6 w-6" />
+						</div>
+						<div>
+							<h2 className="text-lg font-semibold text-gray-900">
+								Revisar y corregir saldos de profesionales
+							</h2>
+							<p className="text-sm text-gray-500 mt-1 max-w-2xl">
+								Podés ver si los montos de cada profesional coinciden con las sesiones ya hechas y los
+								abonos cargados. Si algo sale en rojo es que hay una diferencia; podés alinearlo con el
+								botón Corregir.
+							</p>
+						</div>
+					</div>
+					<div className="flex flex-wrap gap-2 shrink-0">
+						<button
+							type="button"
+							onClick={handleOpenReconcileSection}
+							disabled={reconcileLoading}
+							className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+								reconcileSectionOpen
+									? 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+									: 'text-amber-900 bg-amber-100 hover:bg-amber-200'
+							} disabled:opacity-50 disabled:cursor-not-allowed`}
+						>
+							{reconcileLoading
+								? 'Consultando…'
+								: reconcileSectionOpen
+									? 'Ocultar'
+									: 'Consultar'}
+						</button>
+						{reconcileSectionOpen && reconcilePayload && (
+							<button
+								type="button"
+								onClick={() => loadReconcilePreview()}
+								disabled={reconcileLoading}
+								className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+							>
+								Actualizar consulta
+							</button>
+						)}
+					</div>
+				</div>
+
+				{reconcileSectionOpen && reconcileLoading && (
+					<p className="mt-6 text-sm text-gray-500">Consultando datos…</p>
+				)}
+
+				{reconcileSectionOpen && !reconcileLoading && !reconcilePayload && (
+					<p className="mt-6 text-sm text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
+						No hay resultado cargado. Reintentá con «Actualizar consulta» o volvé a abrir la
+						sección.
+					</p>
+				)}
+
+				{reconcileSectionOpen && !reconcileLoading && reconcilePayload && (
+					<div className="mt-6 space-y-4">
+						<p className="text-sm text-gray-600">
+							Período revisado:{' '}
+							<strong>
+								{reconcilePayload.period.from} — {reconcilePayload.period.to}
+							</strong>
+							{' · '}
+							Profesionales con diferencias:{' '}
+							<strong
+								className={
+									reconcilePayload.cantidadDesfase > 0 ? 'text-red-600' : 'text-green-700'
+								}
+							>
+								{reconcilePayload.cantidadDesfase}
+							</strong>
+						</p>
+
+						<div className="overflow-x-auto rounded-lg border border-gray-200">
+							<table className="min-w-full text-sm">
+								<thead className="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+									<tr>
+										<th className="px-3 py-2">ID</th>
+										<th className="px-3 py-2">Profesional</th>
+										<th className="px-3 py-2 text-right">% com.</th>
+										<th className="px-3 py-2 text-right">Bruto citas</th>
+										<th className="px-3 py-2 text-right">Comisión</th>
+										<th className="px-3 py-2 text-right">Abonos</th>
+										<th className="px-3 py-2 text-right">Total (BD)</th>
+										<th className="px-3 py-2 text-right">Total (esperado)</th>
+										<th className="px-3 py-2 text-right">Pend. (BD)</th>
+										<th className="px-3 py-2 text-right">Pend. (esperado)</th>
+									</tr>
+								</thead>
+								<tbody>
+									{sortedReconcileRows.map((row) => (
+										<tr
+											key={String(row.professionalId)}
+											className={
+												row.hayDesfase
+													? 'bg-red-50 text-red-950 border-t border-red-100'
+													: 'border-t border-gray-100'
+											}
+										>
+											<td className="px-3 py-2 font-mono text-xs">{row.professionalId}</td>
+											<td className="px-3 py-2">{row.name}</td>
+											<td className="px-3 py-2 text-right">{row.commissionPercent}%</td>
+											<td className="px-3 py-2 text-right tabular-nums">
+												${row.grossFromSessions.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+											<td className="px-3 py-2 text-right tabular-nums">
+												${row.fullCommission.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+											<td className="px-3 py-2 text-right tabular-nums">
+												${row.abonosSum.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+											<td className="px-3 py-2 text-right tabular-nums">
+												${row.currentSaldoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+											<td className="px-3 py-2 text-right tabular-nums font-medium">
+												${row.expectedSaldoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+											<td className="px-3 py-2 text-right tabular-nums">
+												${row.currentSaldoPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+											<td className="px-3 py-2 text-right tabular-nums font-medium">
+												${row.expectedSaldoPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+
+						{reconcilePayload.cantidadDesfase > 0 && (
+							<div className="flex flex-wrap items-center gap-3 pt-2">
+								<button
+									type="button"
+									onClick={handleApplyReconcile}
+									disabled={reconcileApplying || reconcileLoading}
+									className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									{reconcileApplying ? 'Corrigiendo…' : 'Corregir saldos'}
+								</button>
+								<p className="text-xs text-gray-500">
+									Actualiza en el sistema los importes de cada profesional para que queden alineados con
+									esta revisión. En producción, usalo con criterio.
+								</p>
+							</div>
+						)}
+					</div>
+				)}
+			</div>
+
 			{/* Modal de Detalle de Profesional */}
 			{selectedProfessional && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -800,10 +1016,10 @@ const FinancialDashboard: React.FC = () => {
 				</div>
 			)}
 			<ChangePasswordModal
-			isOpen={showModal}
-			onClose={() => setShowModal(false)}
-			onSubmit={changePassword}
-		/>;
+				isOpen={showModal}
+				onClose={() => setShowModal(false)}
+				onSubmit={changePassword}
+			/>
 		</div>
 	);
 };
