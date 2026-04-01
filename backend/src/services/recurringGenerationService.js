@@ -116,6 +116,23 @@ async function generateRecurringAppointments() {
           continue;
         }
 
+        // Plantilla horario/monto: la próxima cita futura programada (la que edita el admin).
+        // Si copiáramos solo desde `baseAppointment`, un arancel nuevo quedaría mal al quedar
+        // la base en el pasado o completada.
+        const templateAppointment = await Appointment.findOne({
+          where: {
+            recurringAppointmentId: recurrence.id,
+            active: true,
+            status: 'scheduled',
+            date: { [Op.gte]: today },
+          },
+          order: [
+            ['date', 'ASC'],
+            ['startTime', 'ASC'],
+          ],
+        });
+        const slotSource = templateAppointment || baseAppointment;
+
         // 3) Contar cuántas citas FUTURAS scheduled existen para esta recurrencia.
         // Contrato esperado: mantener SIEMPRE 2 citas futuras en estado 'scheduled' por recurrencia activa.
         const futureScheduledCount = await Appointment.count({
@@ -208,23 +225,23 @@ async function generateRecurringAppointments() {
             newAppointment = await Appointment.create({
               patientId: recurrence.patientId,
               patientName:
-                patient?.name || baseAppointment.patientName || 'Paciente no encontrado',
+                patient?.name || slotSource.patientName || 'Paciente no encontrado',
               professionalId: recurrence.professionalId,
               professionalName:
                 professional?.name ||
-                baseAppointment.professionalName ||
+                slotSource.professionalName ||
                 'Profesional no encontrado',
               date: candidateDate,
-              startTime: baseAppointment.startTime,
-              endTime: baseAppointment.endTime,
-              type: baseAppointment.type || 'regular',
+              startTime: slotSource.startTime,
+              endTime: slotSource.endTime,
+              type: slotSource.type || 'regular',
               status: 'scheduled',
               notes: null,
               audioNote: null,
-              sessionCost: baseAppointment.sessionCost,
+              sessionCost: slotSource.sessionCost,
               attended: null,
               paymentAmount: null,
-              remainingBalance: baseAppointment.sessionCost,
+              remainingBalance: slotSource.sessionCost,
               recurringAppointmentId: recurrence.id,
               active: true,
             });
@@ -243,7 +260,7 @@ async function generateRecurringAppointments() {
           referenceDate = candidateDate;
 
           logger.info(
-            `[RecurringGeneration] Creada cita futura #${futureScheduledCount + futureCreated} para paciente ${recurrence.patientId} con profesional ${recurrence.professionalId} en ${candidateDate} ${baseAppointment.startTime}, con id: ${newAppointment.id}`
+            `[RecurringGeneration] Creada cita futura #${futureScheduledCount + futureCreated} para paciente ${recurrence.patientId} con profesional ${recurrence.professionalId} en ${candidateDate} ${slotSource.startTime}, con id: ${newAppointment.id}`
           );
         }
 

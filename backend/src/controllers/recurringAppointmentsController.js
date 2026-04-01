@@ -12,6 +12,21 @@ const MSG_INACTIVE_PATIENT_NO_RECURRING =
   'No se puede gestionar la agenda recurrente mientras el paciente está inactivo. Activa al paciente primero.';
 
 /**
+ * La cita enlazada como `baseAppointment` en RecurringAppointment suele ser la primera
+ * cita con la que se creó la recurrencia. Si esa cita ya pasó y está `completed`,
+ * NO debe recibir el nuevo arancel al editar la agenda: eso corrompe reportes y saldos históricos.
+ * Solo sincronizamos plantilla en la fila base si sigue siendo una cita futura programada.
+ */
+function baseAppointmentIsFutureScheduledTemplate(baseAppointment, todayStr) {
+  return (
+    baseAppointment &&
+    baseAppointment.active &&
+    baseAppointment.status === 'scheduled' &&
+    String(baseAppointment.date) >= String(todayStr)
+  );
+}
+
+/**
  * Crea una configuración de cita recurrente a partir de una cita base existente.
  *
  * Reglas:
@@ -264,7 +279,10 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
 
     await nextScheduled.update(anchorUpdate, { transaction: t });
 
-    if (!usedFallback) {
+    if (
+      !usedFallback &&
+      baseAppointmentIsFutureScheduledTemplate(baseAppointment, todayStr)
+    ) {
       await baseAppointment.update(
         { startTime, endTime, sessionCost },
         { transaction: t }
@@ -1118,7 +1136,10 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
 
       await nextScheduled.update(anchorUpdate, { transaction: t });
 
-      if (!usedFallback) {
+      if (
+        !usedFallback &&
+        baseAppointmentIsFutureScheduledTemplate(baseAppointment, todayStr)
+      ) {
         await baseAppointment.update(
           { startTime, endTime, sessionCost },
           { transaction: t }
