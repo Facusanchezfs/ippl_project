@@ -29,6 +29,7 @@ const adminPatientsRouter = require('./routes/adminPatients');
 const appointmentCancellationRequestsRouter = require('./routes/appointmentCancellationRequests');
 const financialReconcileRouter = require('./routes/financialReconcile');
 require('./jobs/recurringAppointmentsCron');
+const { getCronHealth } = require('./services/cronHealthService');
 
 const app = express();
 
@@ -225,6 +226,32 @@ app.use('/api/admin/recurring-appointments', adminRecurringAppointmentsRouter);
 app.use('/api/admin/patients', adminPatientsRouter);
 app.use('/api/appointment-cancellation-requests', appointmentCancellationRequestsRouter);
 app.use('/api/financial/reconcile-saldos', financialReconcileRouter);
+
+app.get('/health', (req, res) => {
+  const cron = getCronHealth();
+  const staleMs = cron.updatedAt ? Date.now() - new Date(cron.updatedAt).getTime() : null;
+  const isStale = staleMs != null && staleMs > 1000 * 60 * 20;
+
+  return res.json({
+    status: isStale ? 'warn' : cron.status,
+    service: 'ippl-backend',
+    uptimeSeconds: Math.floor(process.uptime()),
+    updatedAt: cron.updatedAt,
+    stale: isStale,
+  });
+});
+
+app.get('/health/cron', (req, res) => {
+  const cron = getCronHealth();
+  const staleMs = cron.updatedAt ? Date.now() - new Date(cron.updatedAt).getTime() : null;
+
+  return res.json({
+    ...cron,
+    stale: staleMs != null && staleMs > 1000 * 60 * 20,
+    staleMs,
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+});
 
 app.use(errorLogger);
 

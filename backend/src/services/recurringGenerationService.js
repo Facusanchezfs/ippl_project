@@ -67,8 +67,12 @@ function calculateNextDate(lastDate, frequency) {
  * Genera citas automáticamente desde configuraciones de recurrencia activas.
  * El servicio es seguro para ejecutarse múltiples veces y nunca crea duplicados.
  */
-async function generateRecurringAppointments() {
+async function generateRecurringAppointments(options = {}) {
   try {
+    const maxAttemptsPerRecurrence = Math.max(
+      1,
+      Number.parseInt(options.maxAttemptsPerRecurrence ?? 10, 10) || 10
+    );
     // Misma convención que el CRON de auto-complete: fecha civil del servidor (local), YYYY-MM-DD.
     // `Appointment.date` es DATEONLY, por lo que comparamos por fecha civil sin zona horaria.
     const today = getArgentinaCivilDateString();
@@ -263,7 +267,10 @@ async function generateRecurringAppointments() {
 
         // Generar hasta completar (2 - futureScheduledCount) citas futuras scheduled.
         // attempts evita loops infinitos en caso de que muchas fechas caigan en vacaciones o haya duplicados.
-        while (futureScheduledCount + futureCreated < 2 && attempts < 30) {
+        while (
+          futureScheduledCount + futureCreated < 2 &&
+          attempts < maxAttemptsPerRecurrence
+        ) {
           attempts++;
 
           let candidateDate = calculateNextDate(referenceDate, recurrence.frequency);

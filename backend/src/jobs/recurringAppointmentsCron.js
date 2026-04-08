@@ -15,9 +15,17 @@ const {
   getArgentinaTimeHHMM,
   getArgentinaWeekdayLongEs,
 } = require('../utils/civilDateUtils');
+const { updateCronHealth } = require('../services/cronHealthService');
 
 /** Citas procesadas por iteración (transacción atómica por cita, lote para throttling). */
 const COMPLETE_BATCH_SIZE = 75;
+const AUTO_COMPLETE_CRON = process.env.AUTO_COMPLETE_CRON || '* * * * *';
+const RECURRING_GENERATION_CRON =
+  process.env.RECURRING_GENERATION_CRON || '*/15 * * * *';
+const MAX_RECURRING_ATTEMPTS =
+  Number.parseInt(process.env.RECURRING_MAX_ATTEMPTS || '10', 10) || 10;
+
+let recurringGenerationRunning = false;
 
 /**
  * Minutos después de `endTime` (misma fecha civil que la cita) para marcar completed.
@@ -233,21 +241,79 @@ async function completeDueAppointments() {
   return transitioned;
 }
 
-cron.schedule('* * * * *', async () => {
+cron.schedule(AUTO_COMPLETE_CRON, async () => {
+  const startedAt = Date.now();
   try {
-    await completeDueAppointments();
+    const transitioned = await completeDueAppointments();
+    await updateCronHealth('autoComplete', {
+      status: 'ok',
+      transitioned,
+      durationMs: Date.now() - startedAt,
+      lastRunAt: new Date().toISOString(),
+      schedule: AUTO_COMPLETE_CRON,
+    });
+  } catch (error) {
+    await updateCronHealth('autoComplete', {
+      status: 'error',
+      durationMs: Date.now() - startedAt,
+      lastRunAt: new Date().toISOString(),
+      lastError: error?.message || String(error),
+      schedule: AUTO_COMPLETE_CRON,
+    });
+    logger.error('[RecurringCron] Auto-complete failed', error);
+  }
+});
 
+cron.schedule(RECURRING_GENERATION_CRON, async () => {
+  const startedAt = Date.now();
+  if (recurringGenerationRunning) {
+    logger.warn(
+      '[RecurringCron] Skipping recurring generation because previous cycle is still running'
+    );
+    await updateCronHealth('recurringGeneration', {
+      status: 'warn',
+      skipped: true,
+      reason: 'already_running',
+      durationMs: 0,
+      lastRunAt: new Date().toISOString(),
+      schedule: RECURRING_GENERATION_CRON,
+    });
+    return;
+  }
+
+  recurringGenerationRunning = true;
+  try {
+    await sequelize.query('SELECT 1');
     logger.info('[RecurringCron] Starting recurring appointment generation');
-
-    const result = await generateRecurringAppointments();
+    const result = await generateRecurringAppointments({
+      maxAttemptsPerRecurrence: MAX_RECURRING_ATTEMPTS,
+    });
 
     logger.info(
       `[RecurringCron] Finished generation: ${JSON.stringify(result)}`
     );
+    await updateCronHealth('recurringGeneration', {
+      status: result.errors > 0 ? 'warn' : 'ok',
+      durationMs: Date.now() - startedAt,
+      lastRunAt: new Date().toISOString(),
+      schedule: RECURRING_GENERATION_CRON,
+      maxAttemptsPerRecurrence: MAX_RECURRING_ATTEMPTS,
+      ...result,
+    });
   } catch (error) {
+    await updateCronHealth('recurringGeneration', {
+      status: 'error',
+      durationMs: Date.now() - startedAt,
+      lastRunAt: new Date().toISOString(),
+      schedule: RECURRING_GENERATION_CRON,
+      maxAttemptsPerRecurrence: MAX_RECURRING_ATTEMPTS,
+      lastError: error?.message || String(error),
+    });
     logger.error(
       '[RecurringCron] Failed to generate recurring appointments',
       error
     );
+  } finally {
+    recurringGenerationRunning = false;
   }
 });
