@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { formatAppointmentDateTimeEsAR } from '../../utils/appointmentDateTime';
 
 const CompletedAppointmentsPage = () => {
   const { user } = useAuth();
@@ -63,11 +64,8 @@ const CompletedAppointmentsPage = () => {
   .filter(a => frequencyFilter === "todos" || a.frequencyLabel === frequencyFilter)
   .filter(a => attendedFilter === "todos" || (attendedFilter === "si" ? a.attended : !a.attended));
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('es-ES', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
+const formatDate = (date: string, startTime?: string) =>
+  formatAppointmentDateTimeEsAR(date, startTime);
 
 const badge = (ok?: boolean) =>
   `px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -178,7 +176,9 @@ const badge = (ok?: boolean) =>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <ClockIcon className="h-5 w-5 text-gray-400 mr-2" />
-                            <span className="text-sm text-gray-900">{formatDate(appointment.date)}</span>
+                            <span className="text-sm text-gray-900">
+                              {formatDate(appointment.date, appointment.startTime)}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -213,7 +213,9 @@ const badge = (ok?: boolean) =>
                       </h3>
                       <div className="mt-1 flex items-center text-sm text-gray-600">
                         <ClockIcon className="h-4 w-4 mr-1 shrink-0" />
-                        <span className="truncate">{formatDate(appointment.date)}</span>
+                        <span className="truncate">
+                          {formatDate(appointment.date, appointment.startTime)}
+                        </span>
                       </div>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">

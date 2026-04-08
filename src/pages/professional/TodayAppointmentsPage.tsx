@@ -18,6 +18,10 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import {
+  combineLocalDateTime,
+  formatAppointmentDateTimeEsAR,
+} from '../../utils/appointmentDateTime';
 
 const AppointmentsPage = () => {
   const { user } = useAuth();
@@ -26,7 +30,7 @@ const AppointmentsPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'scheduled' | 'cancelled'>('all');
   const [cancelFilter, setCancelFilter] = useState<'exclude' | 'include' | 'only'>('exclude');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
@@ -76,15 +80,6 @@ const AppointmentsPage = () => {
   };
   
   
-
-  const combineLocalDateTime = (dateStr: string, timeStr?: string) => {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    let hh = 0, mm = 0;
-    if (timeStr) {
-      [hh, mm] = timeStr.split(':').map(Number);
-    }
-    return new Date(y, (m - 1), d, hh, mm);
-  }
 
   const formatDateTime = (dateStr: string, timeStr?: string) => {
     const date = combineLocalDateTime(dateStr, timeStr);
@@ -150,7 +145,7 @@ const AppointmentsPage = () => {
   const nowTime = new Date().toTimeString().slice(0, 5); // HH:mm (local)
   const filteredAppointments = appointments
     .filter((appointment) => {
-      if (filterStatus === 'upcoming') {
+      if (filterStatus === 'scheduled') {
         return (
           appointment.status === 'scheduled' &&
           (appointment.date > todayStr ||
@@ -159,17 +154,12 @@ const AppointmentsPage = () => {
         );
       }
 
-      if (filterStatus === 'past') {
-        return (
-          appointment.date < todayStr ||
-          (appointment.date === todayStr &&
-            (appointment.startTime || '') < nowTime) ||
-          // Past incluye todo lo que no es 'scheduled' (cancelled/completed).
-          appointment.status !== 'scheduled'
-        );
+      if (filterStatus === 'cancelled') {
+        return appointment.status === 'cancelled';
       }
 
-      return true; // all
+      // Gestión de citas no debe incluir finalizadas (van en su sección dedicada).
+      return appointment.status !== 'completed';
     })
     .filter((appointment) => {
       if (cancelFilter === 'exclude') return appointment.status !== 'cancelled';
@@ -252,13 +242,15 @@ const AppointmentsPage = () => {
             <select
               value={filterStatus}
               onChange={(e) =>
-                setFilterStatus(e.target.value as 'all' | 'upcoming' | 'past')
+                setFilterStatus(
+                  e.target.value as 'all' | 'scheduled' | 'cancelled'
+                )
               }
               className="rounded-lg border-gray-300 text-sm"
             >
-              <option value="all">Todas las citas</option>
-              <option value="upcoming">Citas próximas</option>
-              <option value="past">Citas pasadas</option>
+              <option value="all">Todas (sin finalizadas)</option>
+              <option value="scheduled">Programadas</option>
+              <option value="cancelled">Canceladas</option>
             </select>
             <select
               value={cancelFilter}
@@ -687,14 +679,11 @@ const AppointmentsPage = () => {
                   {combineLocalDateTime(
                     selectedAppointmentForDescription.date,
                     selectedAppointmentForDescription.startTime
-                  ).toLocaleString('es-ES', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  )}
+                  {formatAppointmentDateTimeEsAR(
+                    selectedAppointmentForDescription.date,
+                    selectedAppointmentForDescription.startTime
+                  )}
                 </p>
               </div>
 
