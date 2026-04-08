@@ -8,7 +8,10 @@ import { StatusRequest } from '../../types/StatusRequest';
 import toast from 'react-hot-toast';
 import Modal from '../Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
-import frequencyRequestService, { FrequencyRequest } from '../../services/frequencyRequest.service';
+import frequencyRequestService, {
+  FrequencyRequest,
+  FrequencyApproveSchedulePayload,
+} from '../../services/frequencyRequest.service';
 import appointmentsService from '../../services/appointments.service';
 import recurringAppointmentsService from '../../services/recurringAppointments.service';
 import AudioRecorder from '../AudioRecorder';
@@ -2054,28 +2057,93 @@ interface FrequencyRequestModalProps {
   onClose: () => void;
   patient: Patient;
   request: FrequencyRequest;
-  onApprove: (response: string) => Promise<void>;
+  onConfirmApproveWithSchedule: (schedule: FrequencyApproveSchedulePayload) => Promise<void>;
   onReject: (response: string) => Promise<void>;
 }
 
-const FrequencyRequestModal: React.FC<FrequencyRequestModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  patient, 
-  request,
-  onApprove, 
-  onReject 
-}) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const freqModalLabel = (freq: string) => {
+  switch (freq) {
+    case 'weekly':
+      return 'Semanal';
+    case 'biweekly':
+      return 'Quincenal';
+    case 'monthly':
+      return 'Mensual';
+    case 'twice_weekly':
+      return '2 veces por semana';
+    default:
+      return freq;
+  }
+};
 
-  const handleSubmit = async (approve: boolean) => {
+const FrequencyRequestModal: React.FC<FrequencyRequestModalProps> = ({
+  isOpen,
+  onClose,
+  patient,
+  request,
+  onConfirmApproveWithSchedule,
+  onReject,
+}) => {
+  const [step, setStep] = useState<'review' | 'schedule'>('review');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleLoadError, setScheduleLoadError] = useState<string | null>(null);
+  const [recurringId, setRecurringId] = useState('');
+  const [editFrequency, setEditFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
+  const [nextDate, setNextDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [duration, setDuration] = useState<30 | 60>(60);
+  const [sessionCost, setSessionCost] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('review');
+      setScheduleLoadError(null);
+      setScheduleLoading(false);
+    }
+  }, [isOpen]);
+
+  const loadScheduleTemplate = useCallback(async () => {
+    setScheduleLoading(true);
+    setScheduleLoadError(null);
+    try {
+      const data = await recurringAppointmentsService.getPatientRecurringScheduleAdmin(patient.id);
+      if (!data) {
+        setScheduleLoadError(
+          'Este paciente no tiene agenda recurrente activa. Configurá la agenda desde el listado de pacientes y volvé a gestionar esta solicitud.'
+        );
+        return;
+      }
+      if (data.mode === 'group') {
+        setScheduleLoadError(
+          'La agenda es 2× por semana. Desde esta solicitud no se puede sincronizar el calendario: abrí la ficha del paciente y editá la agenda grupal allí. Podés rechazar esta solicitud o cerrar y editar manualmente.'
+        );
+        return;
+      }
+      setRecurringId(String(data.recurringId));
+      setEditFrequency(request.requestedFrequency);
+      setNextDate(data.nextDate);
+      setStartTime(data.startTime);
+      setDuration(data.duration);
+      setSessionCost(String(data.sessionCost ?? ''));
+    } catch (e) {
+      console.error(e);
+      setScheduleLoadError('No se pudo cargar la agenda del paciente. Reintentá o editá desde la ficha.');
+    } finally {
+      setScheduleLoading(false);
+    }
+  }, [patient.id, request.requestedFrequency]);
+
+  useEffect(() => {
+    if (isOpen && step === 'schedule') {
+      void loadScheduleTemplate();
+    }
+  }, [isOpen, step, loadScheduleTemplate]);
+
+  const handleReject = async () => {
     setIsSubmitting(true);
     try {
-      if (approve) {
-        await onApprove(''); // No response needed for approval
-      } else {
-        await onReject(''); // No response needed for rejection
-      }
+      await onReject('Rechazado por el administrador');
       onClose();
     } catch (error) {
       console.error('Error al procesar solicitud:', error);
@@ -2084,80 +2152,209 @@ const FrequencyRequestModal: React.FC<FrequencyRequestModalProps> = ({
     }
   };
 
-  const getFrequencyLabel = (freq: string) => {
-    switch (freq) {
-      case 'weekly': return 'Semanal';
-      case 'biweekly': return 'Quincenal';
-      case 'monthly': return 'Mensual';
-      case 'twice_weekly': return '2 veces por semana';
-      default: return freq;
+  const handleConfirmSchedule = async () => {
+    if (!recurringId || !nextDate || !startTime) {
+      toast.error('Completá fecha y hora de la próxima sesión.');
+      return;
+    }
+    const costNum = Number(sessionCost);
+    if (!Number.isFinite(costNum) || costNum < 0) {
+      toast.error('Costo de sesión inválido.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await onConfirmApproveWithSchedule({
+        recurringId,
+        frequency: editFrequency,
+        nextDate,
+        startTime,
+        duration,
+        sessionCost: costNum,
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error al aprobar con agenda:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="p-6">
+      <div className="p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">
               Solicitud de Cambio de Frecuencia
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              El profesional ha solicitado cambiar la frecuencia de sesiones para este paciente.
+              {step === 'review'
+                ? 'El profesional ha solicitado cambiar la frecuencia de sesiones para este paciente.'
+                : 'Confirmá la agenda como en la edición del paciente: se aprueba la solicitud y se actualiza la recurrencia en la misma operación.'}
             </p>
           </div>
         </div>
 
-        <div className="mb-6">
-          <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <ClockIcon className="h-6 w-6 text-blue-600" />
+        {step === 'review' && (
+          <>
+            <div className="mb-6">
+              <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <ClockIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900">Detalles de la Solicitud</h4>
+                  <p className="text-lg font-semibold text-gray-900">{patient.name}</p>
+                  <p className="text-sm text-gray-500">
+                    Frecuencia actual:{' '}
+                    <span className="font-medium text-gray-900">
+                      {freqModalLabel(request.currentFrequency)}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Frecuencia solicitada:{' '}
+                    <span className="font-medium text-blue-600">
+                      {freqModalLabel(request.requestedFrequency)}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Razón del cambio:{' '}
+                    <span className="font-medium text-gray-900">{request.reason}</span>
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-900">Detalles de la Solicitud</h4>
-              <p className="text-lg font-semibold text-gray-900">{patient.name}</p>
-              <p className="text-sm text-gray-500">
-                Frecuencia actual: <span className="font-medium text-gray-900">
-                  {getFrequencyLabel(request.currentFrequency)}
-                </span>
-              </p>
-              <p className="text-sm text-gray-500">
-                Frecuencia solicitada: <span className="font-medium text-blue-600">
-                  {getFrequencyLabel(request.requestedFrequency)}
-                </span>
-              </p>
-              <p className="text-sm text-gray-500 mt-2">
-                Razón del cambio: <span className="font-medium text-gray-900">{request.reason}</span>
-              </p>
-            </div>
-          </div>
-        </div>
 
-        <div className="space-y-4">
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => handleSubmit(false)}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-            >
-              Rechazar
-            </button>
-            <button
-              onClick={() => handleSubmit(true)}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-            >
-              Aprobar
-            </button>
-          </div>
-        </div>
+            <div className="flex justify-end gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleReject()}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                Rechazar
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('schedule')}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                Aprobar…
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'schedule' && (
+          <>
+            {scheduleLoading && (
+              <p className="text-sm text-gray-600 py-8 text-center">Cargando agenda del paciente…</p>
+            )}
+            {!scheduleLoading && scheduleLoadError && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-50 text-amber-900 text-sm">{scheduleLoadError}</div>
+            )}
+            {!scheduleLoading && !scheduleLoadError && (
+              <div className="space-y-4 mb-6">
+                <p className="text-sm text-gray-600">
+                  Ajustá la próxima cita y la frecuencia efectiva para el CRON (igual que al editar desde el
+                  paciente).
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Frecuencia efectiva</label>
+                  <select
+                    value={editFrequency}
+                    onChange={(e) =>
+                      setEditFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly')
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="weekly">Semanal</option>
+                    <option value="biweekly">Quincenal</option>
+                    <option value="monthly">Mensual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Próxima fecha</label>
+                  <input
+                    type="date"
+                    value={nextDate}
+                    onChange={(e) => setNextDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Hora inicio</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Duración</label>
+                  <select
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value) as 30 | 60)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value={30}>30 minutos</option>
+                    <option value={60}>60 minutos</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Costo sesión</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={sessionCost}
+                    onChange={(e) => setSessionCost(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setStep('review')}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              {!scheduleLoadError && !scheduleLoading && (
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmSchedule()}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Guardando…' : 'Confirmar y aprobar'}
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );
@@ -2631,15 +2828,35 @@ const PatientManagement = () => {
     await openFrequencyRequestModal(patient);
   };
 
-  const handleApproveFrequencyRequest = async (response: string) => {
-    if (!selectedFrequencyRequest) return;
+  const handleConfirmApproveFrequencyWithSchedule = async (
+    schedule: FrequencyApproveSchedulePayload
+  ) => {
+    if (!selectedFrequencyRequest || !selectedPatient) return;
     try {
-      await frequencyRequestService.approveRequest(selectedFrequencyRequest.id, response);
-      await loadData(); // Recargar datos
-      toast.success('Solicitud aprobada correctamente');
-    } catch (error) {
+      await recurringAppointmentsService.patchPatientRecurringScheduleAdmin(selectedPatient.id, {
+        recurringId: schedule.recurringId,
+        frequency: schedule.frequency,
+        nextDate: schedule.nextDate,
+        startTime: schedule.startTime,
+        duration: schedule.duration,
+        sessionCost: schedule.sessionCost,
+      });
+      await frequencyRequestService.approveRequest(selectedFrequencyRequest.id, {
+        recurrenceAlreadyApplied: true,
+        adminResponse: '',
+      });
+      await loadData();
+      toast.success('Solicitud aprobada y agenda recurrente actualizada');
+      setIsFrequencyModalOpen(false);
+      setSelectedFrequencyRequest(null);
+      setSelectedPatient(null);
+    } catch (error: unknown) {
       console.error('Error al aprobar solicitud:', error);
-      toast.error('Error al aprobar la solicitud');
+      const data = (error as { response?: { data?: { error?: string; message?: string } } })?.response
+        ?.data;
+      const msg = data?.error || data?.message;
+      toast.error(msg || 'Error al aprobar la solicitud');
+      throw error;
     }
   };
 
@@ -3139,7 +3356,7 @@ const PatientManagement = () => {
           }}
           patient={selectedPatient}
           request={selectedFrequencyRequest}
-          onApprove={handleApproveFrequencyRequest}
+          onConfirmApproveWithSchedule={handleConfirmApproveFrequencyWithSchedule}
           onReject={handleRejectFrequencyRequest}
         />
       )}

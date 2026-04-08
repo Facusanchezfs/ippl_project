@@ -98,6 +98,27 @@ class RecurringAppointmentsService {
     }
   }
 
+  /** Igual que updateRecurringAppointmentAdmin pero vía PATCH /admin/patients/:id/recurring (tabla + citas). */
+  async patchPatientRecurringScheduleAdmin(
+    patientId: string,
+    data: {
+      recurringId: string | number;
+      frequency: RecurringFrequency;
+      nextDate: string;
+      startTime: string;
+      duration: 30 | 60;
+      sessionCost: number;
+    }
+  ) {
+    try {
+      const response = await api.patch(`/admin/patients/${patientId}/recurring`, data);
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error patching patient recurring schedule:', error);
+      throw error;
+    }
+  }
+
   async createPatientRecurringScheduleAdmin(
     patientId: string,
     data:

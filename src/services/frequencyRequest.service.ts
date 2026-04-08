@@ -29,6 +29,16 @@ export interface CreateFrequencyRequestDTO {
 	reason: string;
 }
 
+/** Misma forma que PATCH /admin/recurring-appointments/:id (agenda simple). */
+export interface FrequencyApproveSchedulePayload {
+	recurringId: string | number;
+	frequency: 'weekly' | 'biweekly' | 'monthly';
+	nextDate: string;
+	startTime: string;
+	duration: 30 | 60;
+	sessionCost: number;
+}
+
 const frequencyRequestService = {
 	// Crear una nueva solicitud
 	createRequest: async (
@@ -89,16 +99,30 @@ const frequencyRequestService = {
 			return Array.isArray(requests) ? requests : [];
 	},
 
-	// Aprobar una solicitud
+	// Aprobar una solicitud (opcional: schedule = misma semántica que edición de agenda admin)
 	approveRequest: async (
 		requestId: string,
-		adminResponse: string
+		adminResponseOrOptions:
+			| string
+			| {
+					adminResponse?: string;
+					schedule?: FrequencyApproveSchedulePayload;
+					/** Si ya aplicaste PATCH /admin/patients/:id/recurring */
+					recurrenceAlreadyApplied?: boolean;
+			  }
 	): Promise<FrequencyRequest> => {
+			const body =
+				typeof adminResponseOrOptions === 'string'
+					? { adminResponse: adminResponseOrOptions }
+					: {
+							adminResponse: adminResponseOrOptions.adminResponse ?? '',
+							schedule: adminResponseOrOptions.schedule,
+							recurrenceAlreadyApplied:
+								adminResponseOrOptions.recurrenceAlreadyApplied === true,
+						};
 			const response = await api.post<{data: FrequencyRequest}>(
 				`/frequency-requests/${requestId}/approve`,
-				{
-					adminResponse,
-				}
+				body
 			);
 			// Invalidar cache al aprobar una solicitud
 			pendingRequestsCache = null;

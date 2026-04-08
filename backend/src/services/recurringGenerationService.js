@@ -5,6 +5,27 @@ const { RecurringAppointment, Appointment, Patient, User, VacationRequest } = re
 const logger = require('../utils/logger');
 const { getArgentinaCivilDateString } = require('../utils/civilDateUtils');
 
+/** Normaliza DATEONLY / string / Date a YYYY-MM-DD */
+function toYmd(dateVal) {
+  if (dateVal == null) return '';
+  if (typeof dateVal === 'string') {
+    return dateVal.length >= 10 ? dateVal.slice(0, 10) : dateVal;
+  }
+  if (dateVal instanceof Date) {
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const d = String(dateVal.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(dateVal).slice(0, 10);
+}
+
+function isSimpleFrequencyRecurrence(recurrence) {
+  if (recurrence.groupId) return false;
+  const f = recurrence.frequency;
+  return f === 'weekly' || f === 'biweekly' || f === 'monthly';
+}
+
 /**
  * Calcula la próxima fecha basada en la frecuencia de recurrencia.
  * @param {Date|string} lastDate - Fecha de la última cita (Date o string YYYY-MM-DD)
@@ -12,8 +33,9 @@ const { getArgentinaCivilDateString } = require('../utils/civilDateUtils');
  * @returns {string} Fecha en formato YYYY-MM-DD
  */
 function calculateNextDate(lastDate, frequency) {
+  const ymd = toYmd(lastDate);
   // Parsear manualmente para evitar problemas de timezone
-  const [year, month, day] = lastDate.split('-').map(Number);
+  const [year, month, day] = ymd.split('-').map(Number);
   const nextDate = new Date(year, month - 1, day);
 
   switch (frequency) {
@@ -135,7 +157,7 @@ async function generateRecurringAppointments() {
 
         // 3) Contar cuántas citas FUTURAS scheduled existen para esta recurrencia.
         // Contrato esperado: mantener SIEMPRE 2 citas futuras en estado 'scheduled' por recurrencia activa.
-        const futureScheduledCount = await Appointment.count({
+        let futureScheduledCount = await Appointment.count({
           where: {
             recurringAppointmentId: recurrence.id,
             active: true,
@@ -143,6 +165,61 @@ async function generateRecurringAppointments() {
             date: { [Op.gte]: today },
           },
         });
+
+        // Tras varios cambios de frecuencia (admin / solicitudes), pueden quedar 2+ citas futuras
+        // que NO respetan la cadencia actual de `recurrence.frequency`. El generador las veía,
+        // hacía `continue` y nunca corregía (ej. semanal en UI pero 14/04 → 05/05 = 3 semanas).
+        if (futureScheduledCount >= 2 && isSimpleFrequencyRecurrence(recurrence)) {
+          const futures = await Appointment.findAll({
+            where: {
+              recurringAppointmentId: recurrence.id,
+              active: true,
+              status: 'scheduled',
+              date: { [Op.gte]: today },
+            },
+            order: [
+              ['date', 'ASC'],
+              ['startTime', 'ASC'],
+            ],
+            attributes: ['id', 'date'],
+          });
+
+          if (futures.length >= 2) {
+            let mismatchIdx = -1;
+            for (let i = 1; i < futures.length; i++) {
+              const prevYmd = toYmd(futures[i - 1].date);
+              const curYmd = toYmd(futures[i].date);
+              const expected = calculateNextDate(prevYmd, recurrence.frequency);
+              if (curYmd !== expected) {
+                mismatchIdx = i;
+                break;
+              }
+            }
+
+            if (mismatchIdx !== -1) {
+              const cancelIds = futures.slice(mismatchIdx).map((f) => f.id);
+              await Appointment.update(
+                { status: 'cancelled' },
+                {
+                  where: { id: { [Op.in]: cancelIds } },
+                  validate: false,
+                  hooks: false,
+                }
+              );
+              logger.warn(
+                `[RecurringGeneration] Cadencia inconsistente con frequency=${recurrence.frequency} (recurrencia ${recurrence.id}): canceladas ${cancelIds.length} cita(s) desde índice ${mismatchIdx} para regenerar con la regla vigente`
+              );
+              futureScheduledCount = await Appointment.count({
+                where: {
+                  recurringAppointmentId: recurrence.id,
+                  active: true,
+                  status: 'scheduled',
+                  date: { [Op.gte]: today },
+                },
+              });
+            }
+          }
+        }
 
         if (futureScheduledCount >= 2) {
           logger.debug(

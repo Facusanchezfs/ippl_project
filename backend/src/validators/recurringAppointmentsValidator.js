@@ -54,8 +54,52 @@ const adminUpdateRecurringAppointmentSchema = Joi.object({
   }),
 });
 
+/** PATCH /admin/patients/:id/recurring — mismo cuerpo que adminUpdate + recurringId */
+const patientAdminPatchRecurringSchema = Joi.object({
+  params: Joi.object({
+    id: Joi.alternatives()
+      .try(Joi.number().integer().positive(), Joi.string().min(1))
+      .required(),
+  }),
+  body: Joi.object({
+    recurringId: Joi.alternatives()
+      .try(Joi.number().integer().positive(), Joi.string().min(1))
+      .required()
+      .messages({ 'any.required': 'recurringId es requerido' }),
+    frequency: Joi.string()
+      .valid('weekly', 'biweekly', 'monthly', 'twice_weekly')
+      .required(),
+    nextDate: Joi.string()
+      .pattern(/^\d{4}-\d{2}-\d{2}$/)
+      .required()
+      .messages({
+        'string.pattern.base': 'nextDate debe estar en formato YYYY-MM-DD',
+        'any.required': 'nextDate es requerido',
+      }),
+    startTime: Joi.string()
+      .pattern(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)
+      .required()
+      .messages({
+        'string.pattern.base': 'startTime debe estar en formato HH:MM',
+        'any.required': 'startTime es requerido',
+      }),
+    duration: Joi.number()
+      .valid(30, 60)
+      .required()
+      .messages({
+        'any.only': 'duration debe ser 30 o 60 minutos',
+        'any.required': 'duration es requerido',
+      }),
+    sessionCost: Joi.number().min(0).required().messages({
+      'number.min': 'sessionCost debe ser mayor o igual a 0',
+      'any.required': 'sessionCost es requerido',
+    }),
+  }),
+});
+
 module.exports = {
   create: createRecurringAppointmentSchema,
   adminUpdate: adminUpdateRecurringAppointmentSchema,
+  patientAdminPatchRecurring: patientAdminPatchRecurringSchema,
 };
 

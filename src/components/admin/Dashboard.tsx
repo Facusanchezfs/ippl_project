@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import statsService, { SystemStats, ProfessionalStats } from '../../services/stats.service';
+import statsService, { SystemStats } from '../../services/stats.service';
 import { messageService, Message } from '../../services/messageService';
-import postsService, { Post } from '../../services/posts.service';
+// import postsService, { Post } from '../../services/posts.service';
 import activityService from '../../services/activity.service';
 import { Activity } from '../../types/Activity';
 import userService, { UpdateUserData, User } from '../../services/user.service';
@@ -130,6 +130,7 @@ const translateActivity = (activity: Activity): Activity => {
         });
       } catch (e) {
         dateTimeStr = `${date} ${startTime}`;
+        console.error(e);
       }
     }
 
@@ -202,12 +203,12 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
-  const [professionalStats, setProfessionalStats] = useState<ProfessionalStats | null>(null);
+  // const [professionalStats, setProfessionalStats] = useState<ProfessionalStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [recentMessages, setRecentMessages] = useState<Message[]>([]);
   const [messageError, setMessageError] = useState<string | null>(null);
-  const [recentPosts, setRecentPosts] = useState<Post[]>([]);
+  // const [recentPosts, setRecentPosts] = useState<Post[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -223,7 +224,7 @@ const Dashboard = () => {
   useEffect(() => {
     loadStats();
     loadRecentMessages();
-    loadRecentPosts();
+    // loadRecentPosts();
     loadActivities();
     loadFinancialMetrics();
     if (user) {
@@ -247,10 +248,11 @@ const Dashboard = () => {
       if (user?.role === 'admin') {
         const stats = await statsService.getSystemStats();
         setSystemStats(stats);
-      } else if (user?.role === 'professional') {
-        const stats = await statsService.getProfessionalStats(user.id);
-        setProfessionalStats(stats);
       }
+      // else if (user?.role === 'professional') {
+      //   const stats = await statsService.getProfessionalStats(user.id);
+      //   setProfessionalStats(stats);
+      // }
     } catch (error) {
       console.error('Error al cargar estadísticas:', error);
       setStatsError('Error al cargar las estadísticas del sistema');
@@ -285,18 +287,18 @@ const Dashboard = () => {
     }
   };
 
-  const loadRecentPosts = async () => {
-    try {
-      const response = await postsService.getAllPosts();
-      const sortedPosts = response.posts
-        .filter(post => post.status === 'published')
-        .sort((a, b) => new Date(b.publishedAt || b.createdAt).getTime() - new Date(a.publishedAt || a.createdAt).getTime())
-        .slice(0, 4);
-      setRecentPosts(sortedPosts);
-    } catch (error) {
-      console.error('Error al cargar posts recientes:', error);
-    }
-  };
+  // const loadRecentPosts = async () => {
+  //   try {
+  //     const response = await postsService.getAllPosts();
+  //     const sortedPosts = response.posts
+  //       .filter(post => post.status === 'published')
+  //       .sort((a, b) => new Date(b.publishedAt || b.createdAt).getTime() - new Date(a.publishedAt || a.createdAt).getTime())
+  //       .slice(0, 4);
+  //     setRecentPosts(sortedPosts);
+  //   } catch (error) {
+  //     console.error('Error al cargar posts recientes:', error);
+  //   }
+  // };
 
   const loadActivities = async () => {
     try {
@@ -719,9 +721,9 @@ const Dashboard = () => {
                   color: "emerald",
                   route: "/financial",
                   stats: [
-                    { label: "Pagos Pendientes", value: financialMetrics.pagosPendientes },
-                    { label: "Solicitudes", value: financialMetrics.cantidadSolicitudes },
-                    { label: "Ingresos del Mes", value: financialMetrics.ingresosDelMes }
+                    { label: "Pagos Pendientes", value: `$ ${parseFloat(financialMetrics.pagosPendientes.toFixed(2)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                    { label: "Solicitudes", value: `${financialMetrics.cantidadSolicitudes.toLocaleString('es-AR')}` },
+                    { label: "Ingresos del Mes", value: `$ ${financialMetrics.ingresosDelMes.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
                   ]
                 }
               ].map((section, index) => (

@@ -2,12 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, checkRole } = require('../middleware/auth');
 
-const { sequelize, Patient, FrequencyRequest } = require('../../models');
+const { sequelize, Patient, FrequencyRequest, RecurringAppointment } = require('../../models');
 const { toFrequencyRequestDTO, toFrequencyRequestDTOList } = require('../../mappers/FrequencyRequestMapper');
 
 const { createActivity } = require('../controllers/activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
+const {
+  applyAdminRecurringScheduleUpdate,
+  ScheduleApplyError,
+} = require('../services/adminRecurringScheduleApplyService');
 
 router.post(
   '/',
@@ -139,7 +143,9 @@ router.post(
   checkRole(['admin']),
   async (req, res) => {
     const { requestId } = req.params;
-    const { adminResponse } = req.body;
+    const { adminResponse, schedule, recurrenceAlreadyApplied } = req.body;
+
+    const simpleFrequencies = ['weekly', 'biweekly', 'monthly'];
 
     try {
       let snapshot;
@@ -170,10 +176,88 @@ router.post(
           throw err;
         }
 
-        await patient.update(
-          { sessionFrequency: request.requestedFrequency },
-          { transaction: t }
-        );
+        if (recurrenceAlreadyApplied === true) {
+          if (schedule && typeof schedule === 'object') {
+            const err = new Error(
+              'No envíes schedule si ya aplicaste la agenda con PATCH /admin/patients/:id/recurring'
+            );
+            err.status = 400;
+            throw err;
+          }
+        } else if (schedule && typeof schedule === 'object') {
+          const {
+            recurringId,
+            frequency,
+            nextDate,
+            startTime,
+            duration,
+            sessionCost,
+          } = schedule;
+
+          if (
+            recurringId == null ||
+            !frequency ||
+            !nextDate ||
+            !startTime ||
+            duration == null ||
+            sessionCost == null
+          ) {
+            const err = new Error(
+              'schedule incompleto: se requiere recurringId, frequency, nextDate, startTime, duration y sessionCost'
+            );
+            err.status = 400;
+            throw err;
+          }
+
+          if (!simpleFrequencies.includes(frequency)) {
+            const err = new Error(
+              'La aprobación con agenda solo admite frecuencia weekly, biweekly o monthly. Para 2 veces por semana editá la agenda desde el paciente.'
+            );
+            err.status = 400;
+            throw err;
+          }
+
+          const recurrence = await RecurringAppointment.findOne({
+            where: {
+              id: recurringId,
+              patientId: request.patientId,
+              active: true,
+            },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          });
+
+          if (!recurrence) {
+            const err = new Error(
+              'No hay recurrencia activa con ese id para este paciente. Configurá la agenda desde el listado de pacientes.'
+            );
+            err.status = 404;
+            throw err;
+          }
+
+          if (recurrence.groupId) {
+            const err = new Error(
+              'Esta solicitud no puede aplicarse a una agenda 2× semana desde acá. Editá el grupo desde el paciente.'
+            );
+            err.status = 400;
+            throw err;
+          }
+
+          await applyAdminRecurringScheduleUpdate({
+            transaction: t,
+            recurrenceId,
+            frequency,
+            nextDate,
+            startTime,
+            duration: duration === 30 || duration === 60 ? duration : Number(duration),
+            sessionCost: Number(sessionCost),
+          });
+        } else if (recurrenceAlreadyApplied !== true) {
+          await patient.update(
+            { sessionFrequency: request.requestedFrequency },
+            { transaction: t }
+          );
+        }
 
         await request.update(
           {
@@ -204,6 +288,9 @@ router.post(
 
       return sendSuccess(res, toFrequencyRequestDTO(snapshot), 'Solicitud aprobada exitosamente');
     } catch (error) {
+      if (error instanceof ScheduleApplyError) {
+        return sendError(res, error.status, error.message);
+      }
       const status = error.status || 500;
       if (status !== 500) {
         return sendError(res, status, error.message);
@@ -213,10 +300,6 @@ router.post(
     }
   }
 );
-
-module.exports = router;
-
-
 
 router.post(
   '/:requestId/reject',

@@ -7,24 +7,14 @@ const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const { computeEndTimeFromStartAndDuration } = require('../utils/timeRangeUtils');
 const { getArgentinaCivilDateString, getArgentinaTimeHHMM } = require('../utils/civilDateUtils');
+const {
+  applyAdminRecurringScheduleUpdate,
+  ScheduleApplyError,
+  baseAppointmentIsFutureScheduledTemplate,
+} = require('../services/adminRecurringScheduleApplyService');
 
 const MSG_INACTIVE_PATIENT_NO_RECURRING =
   'No se puede gestionar la agenda recurrente mientras el paciente está inactivo. Activa al paciente primero.';
-
-/**
- * La cita enlazada como `baseAppointment` en RecurringAppointment suele ser la primera
- * cita con la que se creó la recurrencia. Si esa cita ya pasó y está `completed`,
- * NO debe recibir el nuevo arancel al editar la agenda: eso corrompe reportes y saldos históricos.
- * Solo sincronizamos plantilla en la fila base si sigue siendo una cita futura programada.
- */
-function baseAppointmentIsFutureScheduledTemplate(baseAppointment, todayStr) {
-  return (
-    baseAppointment &&
-    baseAppointment.active &&
-    baseAppointment.status === 'scheduled' &&
-    String(baseAppointment.date) >= String(todayStr)
-  );
-}
 
 /**
  * Crea una configuración de cita recurrente a partir de una cita base existente.
@@ -127,207 +117,21 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
   const { id } = req.params;
   const { frequency, nextDate, startTime, duration, sessionCost } = req.body;
 
-  const todayStr = getArgentinaCivilDateString();
-  if (nextDate < todayStr) {
-    return sendError(res, 400, 'nextDate no puede estar en el pasado');
-  }
-
-  if (duration !== 30 && duration !== 60) {
-    return sendError(res, 400, 'duration debe ser 30 o 60');
-  }
-
-  if (sessionCost < 0) {
-    return sendError(res, 400, 'sessionCost debe ser mayor o igual a 0');
-  }
-
-  const toMinutes = (hhmm) => {
-    const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
-    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
-  };
-
+  const t = await sequelize.transaction();
   try {
-    const nowTime = getArgentinaTimeHHMM();
-
-    const t = await sequelize.transaction();
-
-    const recurrence = await RecurringAppointment.findOne({
-      where: { id },
-      include: [{ model: Appointment, as: 'baseAppointment' }],
+    const audit = await applyAdminRecurringScheduleUpdate({
       transaction: t,
-      lock: t.LOCK.UPDATE,
+      recurrenceId: id,
+      frequency,
+      nextDate,
+      startTime,
+      duration,
+      sessionCost,
     });
-
-    if (!recurrence || !recurrence.baseAppointment) {
-      await t.rollback();
-      return sendError(res, 404, 'Configuración de recurrencia no encontrada');
-    }
-
-    const baseAppointment = recurrence.baseAppointment;
-
-    const patient = await Patient.findByPk(recurrence.patientId, {
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    });
-    if (!patient || !patient.active) {
-      await t.rollback();
-      return sendError(res, 404, 'Paciente no encontrado');
-    }
-    if (patient.status === 'inactive') {
-      await t.rollback();
-      return sendError(res, 400, MSG_INACTIVE_PATIENT_NO_RECURRING);
-    }
-
-    let nextScheduled = await Appointment.findOne({
-      where: {
-        recurringAppointmentId: recurrence.id,
-        status: 'scheduled',
-        active: true,
-        [Op.or]: [
-          { date: { [Op.gt]: todayStr } },
-          {
-            date: todayStr,
-            startTime: { [Op.gte]: nowTime },
-          },
-        ],
-      },
-      order: [
-        ['date', 'ASC'],
-        ['startTime', 'ASC'],
-      ],
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    });
-
-    /** Sin cita futura programada: rearmar desde la cita base (p. ej. tras baja y reactivación del paciente). */
-    let usedFallback = false;
-    if (!nextScheduled) {
-      nextScheduled = baseAppointment;
-      if (!nextScheduled) {
-        await t.rollback();
-        return sendError(
-          res,
-          404,
-          'No hay cita base para rearmar esta recurrencia'
-        );
-      }
-      usedFallback = true;
-      if (!recurrence.active) {
-        recurrence.active = true;
-        await recurrence.save({ transaction: t });
-      }
-    }
-
-    const oldAnchorDate = nextScheduled.date;
-
-    let endTime;
-    try {
-      ({ endTime } = computeEndTimeFromStartAndDuration(startTime, duration));
-    } catch (err) {
-      await t.rollback();
-      return sendError(
-        res,
-        400,
-        err.message || 'endTime inválido para la duración indicada'
-      );
-    }
-
-    const sameDay = await Appointment.findAll({
-      where: {
-        id: { [Op.ne]: nextScheduled.id },
-        active: true,
-        professionalId: nextScheduled.professionalId,
-        date: nextDate,
-        status: { [Op.eq]: 'scheduled' },
-        recurringAppointmentId: { [Op.ne]: recurrence.id },
-      },
-      attributes: ['id', 'startTime', 'endTime'],
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    });
-
-    const newStart = toMinutes(startTime);
-    const newEnd = toMinutes(endTime);
-    const overlaps = sameDay.some((a) => {
-      const s = toMinutes(a.startTime);
-      const e = toMinutes(a.endTime);
-      return newStart < e && s < newEnd;
-    });
-
-    if (overlaps) {
-      await t.rollback();
-      return sendError(res, 409, 'El horario seleccionado no está disponible');
-    }
-
-    const oldDate = baseAppointment.date;
-    const oldStart = baseAppointment.startTime;
-    const oldEnd = baseAppointment.endTime;
-    const oldCost = baseAppointment.sessionCost;
-    const oldDurationMinutes = toMinutes(oldEnd) - toMinutes(oldStart);
-
-    const anchorUpdate = usedFallback
-      ? {
-          date: nextDate,
-          startTime,
-          endTime,
-          sessionCost,
-          status: 'scheduled',
-          active: true,
-          recurringAppointmentId: recurrence.id,
-          patientName: patient.name,
-        }
-      : { date: nextDate, startTime, endTime, sessionCost };
-
-    await nextScheduled.update(anchorUpdate, { transaction: t });
-
-    if (
-      !usedFallback &&
-      baseAppointmentIsFutureScheduledTemplate(baseAppointment, todayStr)
-    ) {
-      await baseAppointment.update(
-        { startTime, endTime, sessionCost },
-        { transaction: t }
-      );
-    }
-
-    const oldFrequency = recurrence.frequency;
-    if (frequency && frequency !== oldFrequency) {
-      recurrence.frequency = frequency;
-      await recurrence.save({ transaction: t });
-    }
-
-    if (patient.sessionFrequency !== recurrence.frequency) {
-      await patient.update(
-        { sessionFrequency: recurrence.frequency },
-        { transaction: t }
-      );
-    }
-
-    // Si `nextDate` es anterior a `oldAnchorDate`, cancelar también desde `nextDate`
-    // para evitar que queden citas "próximas" viejas.
-    // (Comparación válida para YYYY-MM-DD como strings).
-    const cancelFromDate = usedFallback
-      ? nextDate
-      : nextDate < oldAnchorDate
-        ? nextDate
-        : oldAnchorDate;
-
-    await Appointment.update(
-      { status: 'cancelled' },
-      {
-        where: {
-          recurringAppointmentId: recurrence.id,
-          active: true,
-          status: 'scheduled',
-          id: { [Op.ne]: nextScheduled.id },
-          date: { [Op.gte]: cancelFromDate },
-        },
-        transaction: t,
-        validate: false,
-        hooks: false,
-      }
-    );
-
     await t.commit();
+
+    const { recurrence, endTime, oldFrequency, oldDate, oldStart, oldEnd, oldCost, oldDurationMinutes } =
+      audit;
 
     try {
       const logDir = path.join(__dirname, '../../../logs');
@@ -382,8 +186,127 @@ const updateRecurringAppointmentAdmin = async (req, res) => {
       'Recurrencia actualizada correctamente'
     );
   } catch (error) {
+    await t.rollback();
+    if (error instanceof ScheduleApplyError) {
+      return sendError(res, error.status, error.message);
+    }
     logger.error('[updateRecurringAppointmentAdmin] Error al actualizar recurrencia:', error);
     return sendError(res, 500, 'Error al actualizar configuración de recurrencia');
+  }
+};
+
+/**
+ * Actualiza la agenda recurrente de un paciente por patientId (misma lógica que PATCH recurring-appointments/:id).
+ * PATCH /api/admin/patients/:id/recurring
+ */
+const updatePatientRecurringScheduleAdmin = async (req, res) => {
+  const patientPk = req.params.id;
+  const { recurringId, frequency, nextDate, startTime, duration, sessionCost } = req.body;
+
+  const t = await sequelize.transaction();
+  try {
+    const row = await RecurringAppointment.findOne({
+      where: {
+        id: recurringId,
+        patientId: patientPk,
+        active: true,
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!row) {
+      await t.rollback();
+      return sendError(
+        res,
+        404,
+        'Recurrencia activa no encontrada para este paciente (verificá recurringId)'
+      );
+    }
+
+    if (row.groupId) {
+      await t.rollback();
+      return sendError(
+        res,
+        400,
+        'Esta agenda es 2× semana. Usá PATCH /admin/recurring-appointments/group/:groupId'
+      );
+    }
+
+    const audit = await applyAdminRecurringScheduleUpdate({
+      transaction: t,
+      recurrenceId: recurringId,
+      frequency,
+      nextDate,
+      startTime,
+      duration,
+      sessionCost,
+    });
+    await t.commit();
+
+    const { recurrence, endTime, oldFrequency, oldDate, oldStart, oldEnd, oldCost, oldDurationMinutes } =
+      audit;
+
+    try {
+      const logDir = path.join(__dirname, '../../../logs');
+      const logPath = path.join(logDir, 'audit_log.txt');
+
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+
+      const nowIso = new Date().toISOString();
+      const adminId = req.user?.id ?? 'unknown';
+      const patientId = recurrence.patientId ?? 'unknown';
+
+      const logEntry =
+        `[${nowIso}]\n` +
+        `ADMIN_ID=${adminId}\n` +
+        `PATIENT_ID=${patientId}\n` +
+        `ACTION: patient_recurring_patch\n` +
+        `ROUTE=PATCH /admin/patients/:id/recurring\n\n` +
+        `OLD:\n` +
+        `frequency=${oldFrequency}\n` +
+        `date=${oldDate}\n` +
+        `start=${oldStart}\n` +
+        `duration=${oldDurationMinutes}\n` +
+        `cost=${oldCost}\n\n` +
+        `NEW:\n` +
+        `frequency=${frequency}\n` +
+        `date=${nextDate}\n` +
+        `start=${startTime}\n` +
+        `duration=${duration}\n` +
+        `cost=${sessionCost}\n\n`;
+
+      fs.appendFile(logPath, logEntry, (err) => {
+        if (err) {
+          logger.error('[updatePatientRecurringScheduleAdmin] Error writing audit log:', err);
+        }
+      });
+    } catch (logError) {
+      logger.error('[updatePatientRecurringScheduleAdmin] Audit log failure:', logError);
+    }
+
+    return sendSuccess(
+      res,
+      {
+        id: recurrence.id,
+        frequency: recurrence.frequency,
+        nextDate,
+        startTime,
+        endTime,
+        duration,
+        sessionCost,
+      },
+      'Agenda recurrente del paciente actualizada correctamente'
+    );
+  } catch (error) {
+    await t.rollback();
+    if (error instanceof ScheduleApplyError) {
+      return sendError(res, error.status, error.message);
+    }
+    logger.error('[updatePatientRecurringScheduleAdmin]', error);
+    return sendError(res, 500, 'Error al actualizar la agenda recurrente del paciente');
   }
 };
 
@@ -1195,6 +1118,7 @@ const updateRecurringAppointmentGroupAdmin = async (req, res) => {
 module.exports = {
   createRecurringAppointment,
   updateRecurringAppointmentAdmin,
+  updatePatientRecurringScheduleAdmin,
   getPatientRecurringScheduleAdmin,
   createPatientRecurringScheduleAdmin,
   updateRecurringAppointmentGroupAdmin,
