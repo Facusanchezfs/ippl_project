@@ -240,7 +240,7 @@ const FinancialPagosPage: React.FC = () => {
         files: receiptFiles,
       });
 
-      toast.success('Comprobantes enviados correctamente');
+      toast.success('Comprobantes enviados. Este paso no acredita saldo.');
       handleCloseReceiptModal();
     } catch (error) {
       console.error('Error enviando comprobantes:', error);
@@ -265,15 +265,18 @@ const FinancialPagosPage: React.FC = () => {
         <h1 className="text-2xl font-bold">Gestión de Pagos de Profesionales</h1>
       </div>
       <div className="mb-4 text-lg font-semibold text-red-700">
-        Pagos pendientes totales con el instituto: ${totalDeudaComision.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+        Deuda/pagos pendientes totales con el instituto: ${totalDeudaComision.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
       </div>
+      <p className="mb-4 text-sm text-gray-600">
+        Aclaracion: <strong>Abonar</strong> impacta saldos. <strong>Enviar comprobantes</strong> solo envia respaldo por email y no modifica saldos.
+      </p>
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white border rounded shadow">
           <thead>
             <tr className="bg-blue-600 text-white">
               <th className="px-4 py-2">Profesional</th>
               <th className="px-4 py-2">Comisión (%)</th>
-              <th className="px-4 py-2">Deuda Actual</th>
+              <th className="px-4 py-2">Deuda / Saldo a favor</th>
               <th className="px-4 py-2">Abonar</th>
             </tr>
           </thead>
@@ -344,7 +347,7 @@ const FinancialPagosPage: React.FC = () => {
                         disabled={sendingReceipts && selectedProfessional?.id === prof.id}
                       >
                         <PaperClipIcon className="h-4 w-4" />
-                        Enviar comprobantes
+                        Enviar comprobantes (sin acreditar saldo)
                       </Button>
                     </div>
                   </td>
@@ -366,7 +369,7 @@ const FinancialPagosPage: React.FC = () => {
           <div className="relative z-10 w-full max-w-2xl mx-4 bg-white rounded-lg shadow-xl">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="text-lg font-semibold text-gray-800">
-                Enviar comprobantes a {selectedProfessional.name}
+                Enviar comprobantes (sin acreditar saldo) a {selectedProfessional.name}
               </h2>
               <button
                 type="button"
@@ -447,7 +450,7 @@ const FinancialPagosPage: React.FC = () => {
                     className="mt-1 w-full rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-gray-700 cursor-not-allowed"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Se calcula automáticamente como la diferencia entre monto abonado y deuda actual.
+                    Se calcula automaticamente como la diferencia entre monto abonado y deuda actual.
                   </p>
                 </div>
                 <div className="sm:col-span-2">
@@ -511,6 +514,9 @@ const FinancialPagosPage: React.FC = () => {
                 </p>
               </div>
 
+              <p className="text-xs text-gray-500 -mt-1">
+                Importante: este envio no registra abonos ni modifica saldos.
+              </p>
               <div className="flex items-center justify-end gap-3 border-t pt-4">
                 <Button
                   type="button"

@@ -223,7 +223,7 @@ const PsychologistDashboard = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-3xl font-bold text-gray-900">${userLoaded?.saldoTotal}</h3>
-              <p className="text-lg text-gray-600 font-semibold">Saldo Total</p>
+              <p className="text-lg text-gray-600 font-semibold">Acumulado historico</p>
             </div>
           </div>
           <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 col-span-1 md:col-span-2 flex items-center hover:shadow-lg transition-all duration-200">
@@ -232,7 +232,7 @@ const PsychologistDashboard = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-3xl font-bold text-gray-900">${userLoaded?.saldoPendiente}</h3>
-              <p className="text-lg text-gray-600 font-semibold">Saldo Pendiente</p>
+              <p className="text-lg text-gray-600 font-semibold">Deuda / saldo a favor</p>
             </div>
           </div>
         </div>

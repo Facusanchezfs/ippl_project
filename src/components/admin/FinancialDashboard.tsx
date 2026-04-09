@@ -997,11 +997,11 @@ const FinancialDashboard: React.FC = () => {
 							{selectedProfessional.email}
 						</div>
 						<div className="mb-2">
-							<span className="font-bold">Saldo Total:</span> $
+							<span className="font-bold">Acumulado historico:</span> $
 							{(selectedProfessional.saldoTotal || 0).toFixed(2)}
 						</div>
 						<div className="mb-4">
-							<span className="font-bold">Saldo Pendiente:</span> $
+							<span className="font-bold">Deuda / saldo a favor:</span> $
 							{(selectedProfessional.saldoPendiente || 0).toFixed(2)}
 						</div>
 						<div className="flex justify-end">

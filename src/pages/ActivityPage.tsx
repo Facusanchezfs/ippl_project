@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Activity } from '../types/Activity';
 import activityService from '../services/activity.service';
 import { BellIcon, CheckCircleIcon, ArrowLeftIcon, TrashIcon } from '@heroicons/react/24/outline';
@@ -11,20 +11,7 @@ import statusRequestService from '../services/statusRequest.service';
 import appointmentCancellationRequestService from '../services/appointmentCancellationRequest.service';
 import vacationRequestService from '../services/vacationRequest.service';
 
-const RELEVANT_ACTIVITY_TYPES: Activity['type'][] = [
-  'PATIENT_DISCHARGE_REQUEST',
-  'PATIENT_ACTIVATION_REQUEST',
-  'STATUS_CHANGE_APPROVED',
-  'STATUS_CHANGE_REJECTED',
-  'FREQUENCY_CHANGE_REQUEST',
-  'FREQUENCY_CHANGE_REQUESTED',
-  'FREQUENCY_CHANGE_APPROVED',
-  'FREQUENCY_CHANGE_REJECTED',
-  'APPOINTMENT_CANCELLATION_REQUESTED',
-  'VACATION_REQUESTED',
-  'VACATION_APPROVED',
-  'VACATION_REJECTED',
-];
+const PAGE_SIZE = 20;
 
 const translateFrequency = (freq?: string) => {
   switch (freq) {
@@ -188,15 +175,161 @@ const ActivityPage: React.FC = () => {
   const [showVacationModal, setShowVacationModal] = useState(false);
   const [selectedVacationActivity, setSelectedVacationActivity] = useState<Activity | null>(null);
   const [isProcessingVacation, setIsProcessingVacation] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 0,
+  });
+  const [tabTotals, setTabTotals] = useState<{ unread: number; read: number }>({
+    unread: 0,
+    read: 0,
+  });
 
-  const filteredActivities = activities.filter(activity =>
-    RELEVANT_ACTIVITY_TYPES.includes(activity.type)
-  );
+  const loadActivities = useCallback(async () => {
+    try {
+      setLoading(true);
+      const readParam = activeTab === 'read';
+      const result = await activityService.getActivitiesPage({
+        page,
+        limit: PAGE_SIZE,
+        read: readParam,
+        includeTabTotals: true,
+      });
 
-  const unreadActivities = filteredActivities.filter(a => !a.read);
-  const readActivities = filteredActivities.filter(a => a.read);
-  
-  const displayedActivities = activeTab === 'unread' ? unreadActivities : readActivities;
+      if (
+        result.pagination.totalPages > 0 &&
+        page > result.pagination.totalPages
+      ) {
+        setPage(result.pagination.totalPages);
+        return;
+      }
+
+      if (
+        result.activities.length === 0 &&
+        page > 1 &&
+        result.pagination.total > 0
+      ) {
+        setPage((p) => Math.max(1, p - 1));
+        return;
+      }
+
+      const translatedActivities = result.activities.map(translateActivity);
+      setActivities(translatedActivities);
+      setPagination(result.pagination);
+      if (result.tabTotals) {
+        setTabTotals(result.tabTotals);
+      }
+      setError(null);
+
+      try {
+        const [
+          pendingFrequencyRequests,
+          pendingStatusRequests,
+          allCancellationRequests,
+          allVacationRequests,
+        ] = await Promise.all([
+          frequencyRequestService.getPendingRequests(),
+          statusRequestService.getPendingRequests(),
+          appointmentCancellationRequestService.getAll(),
+          vacationRequestService.getAll(),
+        ]);
+
+        const pendingFrequencyPatientIds = new Set(
+          pendingFrequencyRequests.map((r) => String(r.patientId))
+        );
+
+        const pendingDischargePatientIds = new Set(
+          pendingStatusRequests
+            .filter(
+              (r) => r.requestedStatus === 'inactive' && r.type !== 'activation'
+            )
+            .map((r) => String(r.patientId))
+        );
+
+        const pendingActivationPatientIds = new Set(
+          pendingStatusRequests
+            .filter(
+              (r) => r.type === 'activation' && r.requestedStatus === 'active'
+            )
+            .map((r) => String(r.patientId))
+        );
+
+        const pendingCancellationRequestIds = new Set(
+          allCancellationRequests
+            .filter((r) => r.status === 'pending')
+            .map((r) => String(r.id))
+        );
+
+        const pendingVacationRequestIds = new Set(
+          allVacationRequests
+            .filter((r) => r.status === 'pending')
+            .map((r) => String(r.id))
+        );
+
+        const resolved: Record<string, boolean> = {};
+        translatedActivities.forEach((activity) => {
+          if (activity.metadata?.patientId) {
+            const patientId = String(activity.metadata.patientId);
+
+            if (
+              activity.type === 'FREQUENCY_CHANGE_REQUEST' ||
+              activity.type === 'FREQUENCY_CHANGE_REQUESTED'
+            ) {
+              if (!pendingFrequencyPatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
+            }
+
+            if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
+              if (!pendingDischargePatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
+            }
+
+            if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
+              if (!pendingActivationPatientIds.has(patientId)) {
+                resolved[activity._id] = true;
+              }
+            }
+          }
+
+          if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
+            const cancellationRequestId = activity.metadata?.cancellationRequestId;
+            if (cancellationRequestId) {
+              if (
+                !pendingCancellationRequestIds.has(String(cancellationRequestId))
+              ) {
+                resolved[activity._id] = true;
+              }
+            }
+          }
+
+          if (activity.type === 'VACATION_REQUESTED') {
+            const vacationRequestId = activity.metadata?.vacationRequestId;
+            if (vacationRequestId) {
+              if (!pendingVacationRequestIds.has(String(vacationRequestId))) {
+                resolved[activity._id] = true;
+              }
+            }
+          }
+        });
+        setDisabledActivities(resolved);
+      } catch (err) {
+        console.error('Error al verificar solicitudes pendientes:', err);
+      }
+    } catch (err) {
+      console.error('Error loading activities:', err);
+      setError('Error al cargar las actividades');
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, page]);
+
+  useEffect(() => {
+    loadActivities();
+  }, [loadActivities]);
 
   const handleActivityClick = async (activity: Activity): Promise<void> => {
     if (activity.type === 'FREQUENCY_CHANGE_REQUEST' || activity.type === 'FREQUENCY_CHANGE_REQUESTED') {
@@ -563,126 +696,10 @@ const ActivityPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadActivities();
-  }, []);
-
-  const loadActivities = async () => {
-    try {
-      setLoading(true);
-      const data = await activityService.getActivities();
-      const translatedActivities = data.map(translateActivity);
-      setActivities(translatedActivities);
-      setError(null);
-
-      // Verificar qué actividades de frecuencia, status y cancelaciones ya están resueltas
-      try {
-        const [pendingFrequencyRequests, pendingStatusRequests, allCancellationRequests, allVacationRequests] = await Promise.all([
-          frequencyRequestService.getPendingRequests(),
-          statusRequestService.getPendingRequests(),
-          appointmentCancellationRequestService.getAll(),
-          vacationRequestService.getAll()
-        ]);
-        
-        const pendingFrequencyPatientIds = new Set(
-          pendingFrequencyRequests.map(r => String(r.patientId))
-        );
-        
-        const pendingDischargePatientIds = new Set(
-          pendingStatusRequests
-            .filter(r => r.requestedStatus === 'inactive' && r.type !== 'activation')
-            .map(r => String(r.patientId))
-        );
-        
-        const pendingActivationPatientIds = new Set(
-          pendingStatusRequests
-            .filter(r => r.type === 'activation' && r.requestedStatus === 'active')
-            .map(r => String(r.patientId))
-        );
-
-        const pendingCancellationRequestIds = new Set(
-          allCancellationRequests
-            .filter(r => r.status === 'pending')
-            .map(r => String(r.id))
-        );
-
-        const pendingVacationRequestIds = new Set(
-          allVacationRequests
-            .filter((r) => r.status === 'pending')
-            .map((r) => String(r.id))
-        );
-        
-        const resolved: Record<string, boolean> = {};
-        translatedActivities.forEach(activity => {
-          if (activity.metadata?.patientId) {
-            const patientId = String(activity.metadata.patientId);
-            
-            // Verificar actividades de frecuencia
-            if (
-              activity.type === 'FREQUENCY_CHANGE_REQUEST' || 
-              activity.type === 'FREQUENCY_CHANGE_REQUESTED'
-            ) {
-              if (!pendingFrequencyPatientIds.has(patientId)) {
-                resolved[activity._id] = true;
-              }
-            }
-            
-            // Verificar actividades de baja
-            if (activity.type === 'PATIENT_DISCHARGE_REQUEST') {
-              if (!pendingDischargePatientIds.has(patientId)) {
-                resolved[activity._id] = true;
-              }
-            }
-            
-            // Verificar actividades de activación
-            if (activity.type === 'PATIENT_ACTIVATION_REQUEST') {
-              if (!pendingActivationPatientIds.has(patientId)) {
-                resolved[activity._id] = true;
-              }
-            }
-          }
-
-          // Verificar actividades de cancelación
-          if (activity.type === 'APPOINTMENT_CANCELLATION_REQUESTED') {
-            const cancellationRequestId = activity.metadata?.cancellationRequestId;
-            if (cancellationRequestId) {
-              if (!pendingCancellationRequestIds.has(String(cancellationRequestId))) {
-                resolved[activity._id] = true;
-              }
-            }
-          }
-
-          // Verificar actividades de vacaciones
-          if (activity.type === 'VACATION_REQUESTED') {
-            const vacationRequestId = activity.metadata?.vacationRequestId;
-            if (vacationRequestId) {
-              if (!pendingVacationRequestIds.has(String(vacationRequestId))) {
-                resolved[activity._id] = true;
-              }
-            }
-          }
-        });
-        setDisabledActivities(resolved);
-      } catch (error) {
-        console.error('Error al verificar solicitudes pendientes:', error);
-        // Si falla, no marcamos nada como resuelto para mantener el comportamiento actual
-      }
-    } catch (error) {
-      console.error('Error loading activities:', error);
-      setError('Error al cargar las actividades');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleMarkAsRead = async (activityId: string) => {
     try {
       await activityService.markAsRead(activityId);
-      setActivities(activities.map(activity => 
-        activity._id === activityId 
-          ? { ...activity, read: true }
-          : activity
-      ));
+      await loadActivities();
     } catch (error) {
       console.error('Error marking activity as read:', error);
     }
@@ -691,7 +708,11 @@ const ActivityPage: React.FC = () => {
   const handleMarkAllAsRead = async () => {
     try {
       await activityService.markAllAsRead();
-      setActivities(activities.map(activity => ({ ...activity, read: true })));
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        await loadActivities();
+      }
     } catch (error) {
       console.error('Error marking all activities as read:', error);
     }
@@ -706,6 +727,14 @@ const ActivityPage: React.FC = () => {
     try {
       await activityService.clearAllActivities();
       setActivities([]);
+      setTabTotals({ unread: 0, read: 0 });
+      setPagination({
+        page: 1,
+        limit: PAGE_SIZE,
+        total: 0,
+        totalPages: 0,
+      });
+      setPage(1);
       toast.success('Actividades eliminadas correctamente');
     } catch (error) {
       console.error('Error clearing activities:', error);
@@ -776,7 +805,7 @@ const ActivityPage: React.FC = () => {
   } else {
     content = (
       <div className="divide-y divide-gray-200">
-        {displayedActivities.length === 0 ? (
+        {activities.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
             <BellIcon className="mx-auto h-12 w-12 text-gray-400" />
             <p className="mt-2">
@@ -786,9 +815,8 @@ const ActivityPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          displayedActivities.map((activity) => {
-            const translated = translateActivity(activity);
-            console.log(translated);
+          activities.map((activity) => {
+            const translated = activity;
             const isFrequencyRequest =
               translated.type === 'FREQUENCY_CHANGE_REQUEST' || translated.type === 'FREQUENCY_CHANGE_REQUESTED';
             const isStatusRequest =
@@ -877,7 +905,37 @@ const ActivityPage: React.FC = () => {
             );
           })
         )}
-
+        {pagination.totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-gray-50">
+            <p className="text-sm text-gray-600">
+              Página {pagination.page} de {pagination.totalPages}
+              {pagination.total > 0 && (
+                <span className="text-gray-400">
+                  {' '}
+                  · {pagination.total} en esta pestaña
+                </span>
+              )}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                disabled={page >= pagination.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -899,7 +957,7 @@ const ActivityPage: React.FC = () => {
                 Actividad Reciente
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Aquí puedes ver todas las actividades y notificaciones recientes del sistema
+                Notificaciones del sistema, por pestaña (no leídas / leídas), con paginación. Las más recientes aparecen primero.
               </p>
             </div>
           </div>
@@ -907,27 +965,35 @@ const ActivityPage: React.FC = () => {
             {/* Tabs para No leídas / Leídas */}
             <div className="flex rounded-lg bg-gray-100 p-1">
               <button
-                onClick={() => setActiveTab('unread')}
+                type="button"
+                onClick={() => {
+                  setActiveTab('unread');
+                  setPage(1);
+                }}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   activeTab === 'unread'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                No leídas ({unreadActivities.length})
+                No leídas ({tabTotals.unread})
               </button>
               <button
-                onClick={() => setActiveTab('read')}
+                type="button"
+                onClick={() => {
+                  setActiveTab('read');
+                  setPage(1);
+                }}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   activeTab === 'read'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Leídas ({readActivities.length})
+                Leídas ({tabTotals.read})
               </button>
             </div>
-            {unreadActivities.length > 0 && (
+            {tabTotals.unread > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -935,7 +1001,7 @@ const ActivityPage: React.FC = () => {
                 Marcar todo como leído
               </button>
             )}
-            {activities.length > 0 && (
+            {tabTotals.unread + tabTotals.read > 0 && (
               <button
                 onClick={handleClearAll}
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"

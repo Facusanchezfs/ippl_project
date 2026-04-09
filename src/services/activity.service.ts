@@ -1,6 +1,18 @@
 import api from '../config/api';
 import { Activity } from '../types/Activity';
 
+export interface ActivitiesPagination {
+	page: number;
+	limit: number;
+	total: number;
+	totalPages: number;
+}
+
+export interface ActivitiesTabTotals {
+	unread: number;
+	read: number;
+}
+
 const activityService = {
 	// Obtener todas las actividades
 	async getActivities(): Promise<Activity[]> {
@@ -12,6 +24,65 @@ const activityService = {
 		} catch (error) {
 			console.error('Error fetching activities:', error);
 			return [];
+		}
+	},
+
+	async getActivitiesPage(params: {
+		page: number;
+		limit: number;
+		read?: boolean;
+		includeTabTotals?: boolean;
+	}): Promise<{
+		activities: Activity[];
+		pagination: ActivitiesPagination;
+		tabTotals?: ActivitiesTabTotals;
+	}> {
+		const { page, limit, read, includeTabTotals } = params;
+		try {
+			const response = await api.get('/activities', {
+				params: {
+					page,
+					limit,
+					...(read !== undefined
+						? { read: read ? 'true' : 'false' }
+						: {}),
+					...(includeTabTotals ? { includeTabTotals: 'true' } : {}),
+				},
+			});
+			const raw = response.data?.data ?? response.data;
+			if (!raw || typeof raw !== 'object') {
+				return {
+					activities: [],
+					pagination: { page: 1, limit, total: 0, totalPages: 0 },
+				};
+			}
+			if (!('activities' in raw) || !('pagination' in raw)) {
+				return {
+					activities: [],
+					pagination: { page: 1, limit, total: 0, totalPages: 0 },
+				};
+			}
+			const activities = Array.isArray((raw as { activities: unknown }).activities)
+				? ((raw as { activities: Activity[] }).activities)
+				: [];
+			const p = (raw as { pagination: ActivitiesPagination }).pagination;
+			const tabTotals = (raw as { tabTotals?: ActivitiesTabTotals }).tabTotals;
+			return {
+				activities,
+				pagination: {
+					page: p.page,
+					limit: p.limit,
+					total: p.total,
+					totalPages: p.totalPages,
+				},
+				...(tabTotals ? { tabTotals } : {}),
+			};
+		} catch (error) {
+			console.error('Error fetching activities (paginated):', error);
+			return {
+				activities: [],
+				pagination: { page: 1, limit: params.limit, total: 0, totalPages: 0 },
+			};
 		}
 	},
 

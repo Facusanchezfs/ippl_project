@@ -109,16 +109,28 @@ async function getActivities(req, res) {
     
     const offset = (page - 1) * limit;
 
-    const whereConditions = {
+    const baseWhere = {
       type: relevantTypes,
     };
 
     if (userRole === 'professional') {
-      whereConditions.professionalId = userId;
+      baseWhere.professionalId = userId;
     } else {
-      whereConditions.professionalId = {
+      baseWhere.professionalId = {
         [Op.ne]: null
       };
+    }
+
+    let readFilter;
+    if (req.query.read !== undefined && req.query.read !== '') {
+      const v = String(req.query.read).toLowerCase();
+      if (v === 'true' || v === '1') readFilter = true;
+      else if (v === 'false' || v === '0') readFilter = false;
+    }
+
+    const whereConditions = { ...baseWhere };
+    if (readFilter !== undefined) {
+      whereConditions.read = readFilter;
     }
 
     const includeConditions = [{
@@ -191,10 +203,35 @@ async function getActivities(req, res) {
 
     const totalPages = Math.ceil(count / limit);
 
-    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    const hasPagination =
+      req.query.page !== undefined ||
+      req.query.limit !== undefined ||
+      readFilter !== undefined ||
+      req.query.includeTabTotals === 'true' ||
+      req.query.includeTabTotals === '1';
+
+    let tabTotals = null;
+    const wantTabTotals =
+      hasPagination &&
+      (req.query.includeTabTotals === 'true' || req.query.includeTabTotals === '1');
+    if (wantTabTotals) {
+      const [unread, read] = await Promise.all([
+        Activity.count({
+          where: { ...baseWhere, read: false },
+          include: includeConditions,
+          distinct: true,
+        }),
+        Activity.count({
+          where: { ...baseWhere, read: true },
+          include: includeConditions,
+          distinct: true,
+        }),
+      ]);
+      tabTotals = { unread, read };
+    }
     
     if (hasPagination) {
-      return sendSuccess(res, {
+      const payload = {
         activities: toActivityDTOList(normalizedActivities),
         pagination: {
           page,
@@ -202,7 +239,9 @@ async function getActivities(req, res) {
           total: count,
           totalPages,
         },
-      });
+      };
+      if (tabTotals) payload.tabTotals = tabTotals;
+      return sendSuccess(res, payload);
     } else {
       return sendSuccess(res, toActivityDTOList(normalizedActivities));
     }
