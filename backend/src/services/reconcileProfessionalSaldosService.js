@@ -1,7 +1,7 @@
 'use strict';
 
-const { Op } = require('sequelize');
-const { User, Appointment, Abono } = require('../../models');
+const { Op, fn, col, where } = require('sequelize');
+const { User, Appointment, Abono, sequelize } = require('../../models');
 
 /** Corte inclusive: solo sesiones / abonos desde esta fecha (YYYY-MM-DD). */
 const RECONCILE_FROM_YMD = '2026-03-30';
@@ -64,7 +64,18 @@ async function runReconcileProfessionalSaldos(options = {}) {
     transaction,
   });
 
-  const dateRange = { [Op.between]: [RECONCILE_FROM_YMD, toYmd] };
+  /** Citas: DATEONLY → between YYYY-MM-DD es inclusivo en todo el día. */
+  const appointmentDateRange = { [Op.between]: [RECONCILE_FROM_YMD, toYmd] };
+
+  /**
+   * Abonos: columna DATETIME. Un between ['from','to'] contra fecha-only suele
+   * truncar el fin a 00:00:00 del último día y excluye abonos de ese día → suma 0
+   * y "Corregir saldos" revierte el efecto del abono. Se compara por DATE(abono).
+   */
+  const abonoDateInPeriodWhere = where(
+    fn('DATE', col('date')),
+    { [Op.between]: [RECONCILE_FROM_YMD, toYmd] }
+  );
 
   const rows = [];
   let cantidadDesfase = 0;
@@ -77,7 +88,7 @@ async function runReconcileProfessionalSaldos(options = {}) {
         status: 'completed',
         attended: true,
         active: true,
-        date: dateRange,
+        date: appointmentDateRange,
       },
       transaction,
     });
@@ -90,13 +101,14 @@ async function runReconcileProfessionalSaldos(options = {}) {
       (await Abono.sum('amount', {
         where: {
           professionalId: prof.id,
-          date: dateRange,
+          [Op.and]: [abonoDateInPeriodWhere],
         },
         transaction,
       })) || 0;
     const ab = round2(Number(abonosSum) || 0);
 
-    const newPend = round2(Math.max(0, fullCommission - ab));
+    /** Igual que abonarComision: pendiente puede ser negativo (saldo a favor). */
+    const newPend = round2(fullCommission - ab);
     const newTotal = newPend <= 0 ? 0 : g;
 
     const oldT = round2(Number(prof.saldoTotal) || 0);
