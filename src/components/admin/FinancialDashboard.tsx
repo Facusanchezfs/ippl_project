@@ -17,7 +17,6 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
-import patientsService from '../../services/patients.service';
 import appointmentsService from '../../services/appointments.service';
 import { parseNumber } from '../../utils/functionUtils';
 import type { Appointment } from '../../types/Appointment';
@@ -382,56 +381,6 @@ const FinancialDashboard: React.FC = () => {
 			y += 10;
 		}
 		
-		doc.setLineWidth(0.1);
-		doc.line(10, y + 4, 200, y + 4);
-		y += 10;
-		
-		const patients = await patientsService.getProfessionalPatients(prof.id);
-		const appointments = await appointmentsService.getProfessionalAppointments(
-			prof.id
-		);
-		const patientsWithDebt = patients
-			.map((patient: any) => {
-				const debt = appointments.appointments
-					.filter(
-						(a: any) =>
-							a.patientId === patient.id &&
-							a.status === 'completed' &&
-							a.attended
-					)
-					.reduce(
-						(acc: number, curr: any) => acc + (curr.remainingBalance || 0),
-						0
-					);
-				return { name: patient.name, debt };
-			})
-			.filter((p: any) => p.debt > 0);
-		doc.setFont('helvetica', 'bold');
-		doc.setFontSize(14);
-		doc.text('Pacientes con Deuda:', 10, y);
-		y += 8;
-		doc.setFont('helvetica', 'normal');
-		doc.setFontSize(12);
-		if (patientsWithDebt.length === 0) {
-			doc.text('Ningún paciente tiene deuda pendiente.', 10, y);
-		} else {
-			doc.setFillColor(230, 230, 230);
-			doc.rect(10, y - 5, 190, 8, 'F');
-			doc.setFont('helvetica', 'bold');
-			doc.text('Nombre', 15, y);
-			doc.text('Deuda', 180, y, { align: 'right' });
-			y += 7;
-			doc.setFont('helvetica', 'normal');
-			patientsWithDebt.forEach((p: any) => {
-				doc.text(p.name, 15, y);
-				doc.text(`$${p.debt.toFixed(2)}`, 180, y, { align: 'right' });
-				y += 7;
-				if (y > 270) {
-					doc.addPage();
-					y = 20;
-				}
-			});
-		}
 		doc.save(`Resumen_${prof.name.replace(/ /g, '_')}.pdf`);
 	};
 
