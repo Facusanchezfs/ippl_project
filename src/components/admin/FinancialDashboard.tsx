@@ -392,7 +392,7 @@ const FinancialDashboard: React.FC = () => {
 		);
 		const patientsWithDebt = patients
 			.map((patient: any) => {
-				const debt = appointments
+				const debt = appointments.appointments
 					.filter(
 						(a: any) =>
 							a.patientId === patient.id &&
