@@ -676,10 +676,6 @@ const AppointmentsPage = () => {
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Fecha y Hora</h3>
                 <p className="mt-1 text-sm text-gray-900">
-                  {combineLocalDateTime(
-                    selectedAppointmentForDescription.date,
-                    selectedAppointmentForDescription.startTime
-                  )}
                   {formatAppointmentDateTimeEsAR(
                     selectedAppointmentForDescription.date,
                     selectedAppointmentForDescription.startTime
