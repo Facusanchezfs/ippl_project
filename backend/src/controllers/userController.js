@@ -1,5 +1,6 @@
 'use strict';
 const bcrypt = require('bcryptjs');
+const { Op } = require('sequelize');
 const {
   User,
   Abono,
@@ -201,21 +202,90 @@ const updateUser = async (req, res) => {
 };
 
 const deleteUser = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
 
-    const user = await User.findByPk(id);
-    if (!user) return sendError(res, 404, 'Usuario no encontrado');
+    const user = await User.findByPk(id, { transaction: t });
+    if (!user) {
+      await t.rollback();
+      return sendError(res, 404, 'Usuario no encontrado');
+    }
 
     if (user.status === 'inactive') {
+      await t.rollback();
       return sendSuccess(res, { user: toUserDTO(user) }, 'El usuario ya estaba inactivo');
     }
 
-    await user.update({ status: 'inactive' });
+    await user.update({ status: 'inactive' }, { transaction: t });
+
+    if (user.role === 'professional') {
+      const patients = await Patient.findAll({
+        where: {
+          professionalId: user.id,
+          active: true,
+        },
+        attributes: ['id'],
+        transaction: t,
+      });
+
+      const patientIds = patients.map((p) => p.id);
+
+      let updatedPatients = 0;
+      let cancelledAppointments = 0;
+      let disabledRecurrences = 0;
+
+      if (patientIds.length > 0) {
+        const [patientCount] = await Patient.update(
+          { status: 'inactive' },
+          {
+            where: {
+              id: patientIds,
+              status: { [Op.ne]: 'inactive' },
+            },
+            transaction: t,
+          }
+        );
+        updatedPatients = patientCount || 0;
+
+        const [appointmentCount] = await Appointment.update(
+          { status: 'cancelled' },
+          {
+            where: {
+              professionalId: user.id,
+              status: 'scheduled',
+              active: true,
+            },
+            transaction: t,
+            validate: false,
+          }
+        );
+        cancelledAppointments = appointmentCount || 0;
+
+        const [recurrenceCount] = await RecurringAppointment.update(
+          { active: false },
+          {
+            where: {
+              patientId: patientIds,
+              active: true,
+            },
+            transaction: t,
+          }
+        );
+        disabledRecurrences = recurrenceCount || 0;
+      }
+
+      logger.info(
+        `[deleteUser] Profesional ${id} desactivado: pacientes inactivos=${updatedPatients}, citas canceladas=${cancelledAppointments}, recurrencias desactivadas=${disabledRecurrences}`
+      );
+    }
+
+    await t.commit();
     await user.reload();
 
     return sendSuccess(res, { user: toUserDTO(user) }, 'Usuario desactivado correctamente');
   } catch (error) {
+    await t.rollback();
     logger.error('Error deleting user:', error);
     return sendError(res, 500, 'Error al desactivar usuario');
   }
@@ -264,26 +334,24 @@ const permanentDeleteUser = async (req, res) => {
       );
     }
 
-    const appointments = await Appointment.findAll({
+    // En este modelo Appointment.professionalId es NOT NULL.
+    // Para habilitar el borrado permanente sin romper FKs/validaciones,
+    // se eliminan todas las citas del profesional.
+    const scheduledAppointmentsCount = await Appointment.count({
       where: {
         professionalId: user.id,
         active: true,
-        status: 'scheduled'
+        status: 'scheduled',
       },
-      transaction: t
+      transaction: t,
     });
-
-    if (appointments.length > 0) {
-      logger.info(`[permanentDeleteUser] Cancelando ${appointments.length} citas programadas`);
-      await Promise.all(
-        appointments.map(appointment =>
-          appointment.update({
-            professionalId: null,
-            professionalName: null,
-            status: 'cancelled',
-            active: false
-          }, { transaction: t })
-        )
+    const deletedAppointmentsCount = await Appointment.destroy({
+      where: { professionalId: user.id },
+      transaction: t,
+    });
+    if (deletedAppointmentsCount > 0) {
+      logger.info(
+        `[permanentDeleteUser] Eliminando ${deletedAppointmentsCount} cita(s) del profesional (scheduled activas: ${scheduledAppointmentsCount})`
       );
     }
 
