@@ -334,6 +334,19 @@ const permanentDeleteUser = async (req, res) => {
       );
     }
 
+    // IMPORTANTE: RecurringAppointments tiene FK RESTRICT tanto hacia Users
+    // (professionalId) como hacia Appointments (baseAppointmentId). Se debe
+    // borrar ANTES que citas/usuario para evitar bloqueos por integridad.
+    const deletedRecurringCount = await RecurringAppointment.destroy({
+      where: { professionalId: user.id },
+      transaction: t,
+    });
+    if (deletedRecurringCount > 0) {
+      logger.info(
+        `[permanentDeleteUser] Eliminando ${deletedRecurringCount} registro(s) de RecurringAppointments del profesional`
+      );
+    }
+
     // En este modelo Appointment.professionalId es NOT NULL.
     // Para habilitar el borrado permanente sin romper FKs/validaciones,
     // se eliminan todas las citas del profesional.
@@ -420,18 +433,6 @@ const permanentDeleteUser = async (req, res) => {
 
     if (deletedActivitiesCount > 0) {
       logger.info(`[permanentDeleteUser] Eliminando ${deletedActivitiesCount} activities asociadas al profesional`);
-    }
-
-    // Recurrencias siguen existiendo en BD aunque el paciente se desasigne o las citas se cancelen;
-    // la FK professionalId -> Users es RESTRICT y bloquea el DELETE del usuario.
-    const deletedRecurringCount = await RecurringAppointment.destroy({
-      where: { professionalId: user.id },
-      transaction: t,
-    });
-    if (deletedRecurringCount > 0) {
-      logger.info(
-        `[permanentDeleteUser] Eliminando ${deletedRecurringCount} registro(s) de RecurringAppointments del profesional`
-      );
     }
 
     logger.info(`[permanentDeleteUser] Eliminando usuario ${id} permanentemente`);
