@@ -381,4 +381,6 @@ async function generateRecurringAppointments(options = {}) {
 
 module.exports = {
   generateRecurringAppointments,
+  calculateNextDate,
+  toYmd,
 };

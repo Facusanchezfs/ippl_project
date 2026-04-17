@@ -12,6 +12,7 @@ const {
   ScheduleApplyError,
   baseAppointmentIsFutureScheduledTemplate,
 } = require('../services/adminRecurringScheduleApplyService');
+const { calculateNextDate, toYmd } = require('../services/recurringGenerationService');
 
 const MSG_INACTIVE_PATIENT_NO_RECURRING =
   'No se puede gestionar la agenda recurrente mientras el paciente está inactivo. Activa al paciente primero.';
@@ -394,7 +395,59 @@ const getPatientRecurringScheduleAdmin = async (req, res) => {
       } else if (nextScheduled) {
         ref = nextScheduled;
       } else {
-        ref = baseAppointment || null;
+        // Sin cita futura programada: NO usar la cita base si quedó en el pasado / completada,
+        // porque el admin ve "Próxima fecha" como la última sesión ya hecha (QA).
+        const anchorAppt =
+          (await Appointment.findOne({
+            where: {
+              recurringAppointmentId: recurrence.id,
+              active: true,
+              status: 'completed',
+              attended: true,
+            },
+            order: [
+              ['date', 'DESC'],
+              ['startTime', 'DESC'],
+            ],
+          })) ||
+          (await Appointment.findOne({
+            where: {
+              recurringAppointmentId: recurrence.id,
+              active: true,
+              status: 'completed',
+            },
+            order: [
+              ['date', 'DESC'],
+              ['startTime', 'DESC'],
+            ],
+          }));
+
+        const tmpl = anchorAppt || baseAppointment;
+        const freq = recurrence.frequency;
+
+        if (tmpl && freq) {
+          let cand = toYmd(tmpl.date);
+          const startHHMM = tmpl.startTime || '00:00';
+          let guard = 0;
+          while (
+            cand < todayStr ||
+            (cand === todayStr &&
+              String(startHHMM).padStart(5, '0') < String(nowTime).padStart(5, '0'))
+          ) {
+            cand = calculateNextDate(cand, freq);
+            guard += 1;
+            if (guard > 400) break;
+          }
+
+          ref = {
+            date: cand,
+            startTime: tmpl.startTime,
+            endTime: tmpl.endTime,
+            sessionCost: tmpl.sessionCost,
+          };
+        } else {
+          ref = baseAppointment || null;
+        }
       }
 
       if (!ref) return null;
