@@ -62,11 +62,77 @@ function getArgentinaWeekdayLongEs(date = new Date()) {
   }).format(date);
 }
 
+/** Fecha almacenada como DATE / DATEONLY (solo dígitos y guiones, sin componente horario ISO). */
+const MYSQL_DATEONLY_FULL = /^\d{4}-\d{2}-\d{2}$/;
+/** Prefijo de fecha en DATETIME de MySQL (`YYYY-MM-DD HH:MM:SS`). */
+const MYSQL_DATETIME_PREFIX = /^(\d{4}-\d{2}-\d{2})[\s]\d/;
+/** Indica instante ISO / RFC3339 (no confundir con DATEONLY puro). */
+function looksLikeIsoInstantString(s) {
+  return (
+    s.includes('T') ||
+    /Z$/i.test(s) ||
+    /[+-]\d{2}:?\d{2}$/.test(s)
+  );
+}
+
+/**
+ * Convierte valores típicos de `Appointment.date` (DATEONLY de MySQL, `Date` de Sequelize,
+ * cadena ISO con zona) a `YYYY-MM-DD` en **calendario civil de Argentina**.
+ *
+ * - `Date`: siempre vía `Intl` en `America/Argentina/Buenos_Aires` (misma base que `getArgentinaCivilDateString`).
+ * - Cadena `YYYY-MM-DD` sola: se devuelve tal cual (semántica de fecha civil guardada, sin reinterpretar por UTC).
+ * - Cadena tipo MySQL `YYYY-MM-DD HH:MM:SS`: se usa el prefijo de fecha civil.
+ * - Cadenas con instante ISO (`T` / `Z` / offset): se interpretan como instante y se proyectan a calendario AR.
+ *
+ * No usa `String(val).slice(0, 10)` sobre valores arbitrarios.
+ */
+function normalizeToArgentinaCivilYmd(value) {
+  if (value == null || value === '') return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    /**
+     * `DATEONLY` suele llegar como `Date` en medianoche **UTC** (p. ej. `2026-04-24` →
+     * `2026-04-23T21:00:00-03:00` en AR). `Intl` en Argentina daría el día **anterior** al
+     * guardado en MySQL. Para ese patrón usamos el calendario UTC del instante (= fecha SQL).
+     */
+    const uH = value.getUTCHours();
+    const uM = value.getUTCMinutes();
+    const uS = value.getUTCSeconds();
+    const uMs = value.getUTCMilliseconds();
+    if (uH === 0 && uM === 0 && uS === 0 && uMs === 0) {
+      const y = value.getUTCFullYear();
+      const mo = String(value.getUTCMonth() + 1).padStart(2, '0');
+      const da = String(value.getUTCDate()).padStart(2, '0');
+      return `${y}-${mo}-${da}`;
+    }
+    return getArgentinaCivilDateString(value);
+  }
+  if (typeof value !== 'string') return '';
+  const s = value.trim();
+  if (!s) return '';
+  if (MYSQL_DATEONLY_FULL.test(s)) {
+    return s;
+  }
+  const sqlPrefix = MYSQL_DATETIME_PREFIX.exec(s);
+  if (sqlPrefix) {
+    return sqlPrefix[1];
+  }
+  if (looksLikeIsoInstantString(s)) {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return '';
+    return getArgentinaCivilDateString(d);
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  return getArgentinaCivilDateString(d);
+}
+
 module.exports = {
   AR_TIMEZONE,
   getArgentinaCivilDateString,
   getArgentinaTimeHHMM,
   getArgentinaWeekdayLongEs,
+  normalizeToArgentinaCivilYmd,
   /** Alias explícitos (misma implementación que getArgentina*). */
   getLocalDateString: getArgentinaCivilDateString,
   getLocalTimeHHMM: getArgentinaTimeHHMM,

@@ -14,6 +14,7 @@ const {
   getArgentinaCivilDateString,
   getArgentinaTimeHHMM,
   getArgentinaWeekdayLongEs,
+  normalizeToArgentinaCivilYmd,
 } = require('../utils/civilDateUtils');
 const { updateCronHealth } = require('../services/cronHealthService');
 
@@ -39,22 +40,26 @@ const AUTO_COMPLETE_AFTER_END_MIN = 5;
  */
 const BACKLOG_EARLIEST_MINUTES = 9 * 60;
 
-function toMinutes(hhmm) {
-  const [h, m] = String(hhmm || '')
-    .split(':')
-    .map((x) => parseInt(x, 10));
-  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+/**
+ * Parsea `HH:MM` de columnas de cita. Devuelve `null` si el formato no es válido (no completar).
+ */
+function parseStrictHHMMToMinutes(hhmm) {
+  if (hhmm == null || hhmm === '') return null;
+  const s = String(hhmm).trim();
+  const m = s.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
 }
 
 function hasValidTimeOrder(startTime, endTime) {
-  if (!startTime || !endTime) return false;
-  return toMinutes(endTime) > toMinutes(startTime);
-}
-
-function appointmentDateToYmd(dateVal) {
-  if (dateVal == null || dateVal === '') return '';
-  const s = String(dateVal);
-  return s.length >= 10 ? s.slice(0, 10) : s;
+  const startMin = parseStrictHHMMToMinutes(startTime);
+  const endMin = parseStrictHHMMToMinutes(endTime);
+  if (startMin == null || endMin == null) return false;
+  return endMin > startMin;
 }
 
 /** Domingo civil AR: no se liquida backlog de días previos (hasta el lunes ≥ 09:00). */
@@ -64,34 +69,77 @@ function isSundayArgentina(now) {
 }
 
 /**
- * ¿Puede esta cita pasar a `completed` en el instante `now` (hora civil AR)?
+ * Evalúa si la cita puede pasar a `completed` en el instante `now` (calendario y reloj civil AR).
  *
- * - Mismo día: solo si ya pasó `endTime` + margen (no usar `startTime`).
- * - Días anteriores (backlog): solo lun–sáb y desde las 09:00 AR (no madrugada ni domingo).
+ * - Mismo día (`ymd === todayStr`): solo `endTime` + margen; **nunca** backlog.
+ * - Días anteriores (`ymd < todayStr`): backlog (≥ 09:00 AR, no domingo).
+ * - `ymd > todayStr`: nunca.
+ *
+ * @returns {{ due: boolean, branch: 'Mismo Día' | 'Backlog' | null }}
  */
-function isDueForAutoComplete(appointmentDateYmd, startTime, endTime, now) {
-  const todayStr = getArgentinaCivilDateString(now);
-  const nowMin = toMinutes(getArgentinaTimeHHMM(now));
-
-  if (!hasValidTimeOrder(startTime, endTime)) return false;
-  if (appointmentDateYmd > todayStr) return false;
-
-  if (appointmentDateYmd < todayStr) {
-    if (isSundayArgentina(now)) return false;
-    return nowMin >= BACKLOG_EARLIEST_MINUTES;
+function evaluateDueForAutoComplete(appointmentDateRaw, startTime, endTime, now) {
+  const ymd = normalizeToArgentinaCivilYmd(appointmentDateRaw);
+  const todayStr = normalizeToArgentinaCivilYmd(now);
+  if (!ymd || !todayStr) {
+    return { due: false, branch: null };
   }
 
-  const dueMin = toMinutes(endTime) + AUTO_COMPLETE_AFTER_END_MIN;
-  return nowMin >= dueMin;
+  const startMin = parseStrictHHMMToMinutes(startTime);
+  const endMin = parseStrictHHMMToMinutes(endTime);
+  if (startMin == null || endMin == null || !(endMin > startMin)) {
+    return { due: false, branch: null };
+  }
+
+  let nowMin;
+  try {
+    nowMin = parseStrictHHMMToMinutes(getArgentinaTimeHHMM(now));
+  } catch {
+    return { due: false, branch: null };
+  }
+  if (nowMin == null) {
+    return { due: false, branch: null };
+  }
+
+  if (ymd > todayStr) {
+    return { due: false, branch: null };
+  }
+
+  if (ymd === todayStr) {
+    const dueMin = endMin + AUTO_COMPLETE_AFTER_END_MIN;
+    if (!Number.isFinite(dueMin) || dueMin < 0) {
+      return { due: false, branch: null };
+    }
+    const ok = nowMin >= dueMin;
+    return { due: ok, branch: ok ? 'Mismo Día' : null };
+  }
+
+  if (ymd < todayStr) {
+    if (isSundayArgentina(now)) {
+      return { due: false, branch: null };
+    }
+    const ok = nowMin >= BACKLOG_EARLIEST_MINUTES;
+    return { due: ok, branch: ok ? 'Backlog' : null };
+  }
+
+  return { due: false, branch: null };
+}
+
+function isDueForAutoComplete(appointmentDateRaw, startTime, endTime, now) {
+  return evaluateDueForAutoComplete(
+    appointmentDateRaw,
+    startTime,
+    endTime,
+    now
+  ).due;
 }
 
 /**
  * Auto-completar citas `scheduled` según regla de negocio (fin de turno + ventanas de backlog).
- * Transición atómica: `findOne ... FOR UPDATE` + `save` solo si sigue `scheduled` y sigue `isDue`.
+ * Cada cita: transacción + `FOR UPDATE` sobre la fila antes de evaluar de nuevo y guardar.
  */
 async function completeDueAppointments() {
   const now = new Date();
-  const todayStr = getArgentinaCivilDateString(now);
+  const todayStr = normalizeToArgentinaCivilYmd(now);
 
   const where = {
     active: true,
@@ -111,7 +159,6 @@ async function completeDueAppointments() {
 
   for (const appt of candidates) {
     const { id, date, startTime, endTime } = appt;
-    const ymd = appointmentDateToYmd(date);
 
     if (!startTime || !endTime) {
       skippedMissingTimes++;
@@ -129,7 +176,7 @@ async function completeDueAppointments() {
       continue;
     }
 
-    if (!isDueForAutoComplete(ymd, startTime, endTime, now)) {
+    if (!isDueForAutoComplete(date, startTime, endTime, now)) {
       skippedNotDue++;
       continue;
     }
@@ -163,22 +210,6 @@ async function completeDueAppointments() {
             return;
           }
 
-          const ymd = appointmentDateToYmd(row.date);
-          if (
-            !isDueForAutoComplete(
-              ymd,
-              row.startTime,
-              row.endTime,
-              new Date()
-            )
-          ) {
-            skippedNotDueUnderLock++;
-            logger.debug(
-              `[RecurringCron] Auto-complete skip id=${id} reason=not_due_under_lock`
-            );
-            return;
-          }
-
           if (!row.startTime || !row.endTime) {
             skippedInvalidUnderLock++;
             logger.debug(
@@ -187,15 +218,34 @@ async function completeDueAppointments() {
             return;
           }
 
-          const startMin = toMinutes(row.startTime);
-          const endMin = toMinutes(row.endTime);
-          if (!(endMin > startMin)) {
-            skippedInvalidUnderLock++;
+          const decisionAt = new Date();
+          const { due, branch } = evaluateDueForAutoComplete(
+            row.date,
+            row.startTime,
+            row.endTime,
+            decisionAt
+          );
+
+          if (!due || !branch) {
+            skippedNotDueUnderLock++;
             logger.debug(
-              `[RecurringCron] Auto-complete skip id=${id} reason=invalid_times_under_lock startTime=${row.startTime} endTime=${row.endTime} startMin=${startMin} endMin=${endMin}`
+              `[RecurringCron] Auto-complete skip id=${id} reason=not_due_under_lock`
             );
             return;
           }
+
+          if (!hasValidTimeOrder(row.startTime, row.endTime)) {
+            skippedInvalidUnderLock++;
+            logger.debug(
+              `[RecurringCron] Auto-complete skip id=${id} reason=invalid_times_under_lock startTime=${row.startTime} endTime=${row.endTime}`
+            );
+            return;
+          }
+
+          const previousStatus = row.status;
+          const ymdNorm = normalizeToArgentinaCivilYmd(row.date);
+          const horaCita = `${ymdNorm} ${row.startTime}-${row.endTime}`;
+          const horaArgentina = `${getArgentinaCivilDateString(decisionAt)} ${getArgentinaTimeHHMM(decisionAt)}`;
 
           const beforeSnapshot = buildBalanceSnapshot(row);
           const remainingBalance = computeRemainingBalanceAttended(row);
@@ -223,8 +273,9 @@ async function completeDueAppointments() {
             deltas.length > 0
               ? deltas.map((d) => `${d.professionalId}:${d.delta}`).join(',')
               : 'none';
-          logger.debug(
-            `[RecurringCron] Auto-complete ok id=${id} professionalId=${row.professionalId} remainingBalance=${remainingBalance} financialDeltas=${deltaStr}`
+
+          logger.info(
+            `[RecurringCron] Auto-complete aplicado id=${id} statusAnterior=${previousStatus} horaCita=${horaCita} horaServidorUtc=${decisionAt.toISOString()} horaArgentina=${horaArgentina} rama=${branch} professionalId=${row.professionalId} remainingBalance=${remainingBalance} financialDeltas=${deltaStr}`
           );
         });
       } catch (err) {
