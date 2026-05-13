@@ -351,25 +351,47 @@ const ReportsPage: React.FC = () => {
 
       const getSessionValue = (a: any) => a.sessionCost ?? a.paymentAmount ?? 0;
 
-      const freqLabel = (f?: 'weekly' | 'biweekly' | 'monthly') =>
-        f === 'weekly'
-          ? 'Semanal'
-          : f === 'biweekly'
-            ? 'Quincenal'
-            : f === 'monthly'
-              ? 'Mensual'
-              : '-';
+      const freqLabel = (f?: string) => {
+        switch (f) {
+          case 'weekly': return 'Semanal';
+          case 'biweekly': return 'Quincenal';
+          case 'monthly': return 'Mensual';
+          case 'twice_weekly': return '2 veces/semana';
+          default: return '-';
+        }
+      };
 
-      const rows = finalizadas.map((a) => [
-        a.patientName,
-        freqLabel(patientMap[a.patientId]?.sessionFrequency),
-        `$${getSessionValue(a).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+      // Agrupar por paciente: una fila por paciente único con total de sesiones y costo acumulado.
+      const byPatient = new Map<string, { name: string; freq: string; totalCost: number; sessions: number }>();
+      for (const a of finalizadas) {
+        const key = String(a.patientId ?? a.patientName ?? 'unknown');
+        const cost = getSessionValue(a);
+        const existing = byPatient.get(key);
+        if (existing) {
+          existing.totalCost += cost;
+          existing.sessions += 1;
+        } else {
+          byPatient.set(key, {
+            name: a.patientName || '-',
+            freq: freqLabel(patientMap[a.patientId]?.sessionFrequency),
+            totalCost: cost,
+            sessions: 1,
+          });
+        }
+      }
+
+      const rows = [...byPatient.values()].map((p) => [
+        p.name,
+        p.freq,
+        String(p.sessions),
+        `$${p.totalCost.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
       ]);
 
       const total = finalizadas.reduce((sum, a) => sum + getSessionValue(a), 0);
       const totalRow = [
         'TOTAL',
         '',
+        String(finalizadas.length),
         `$${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
       ];
 
@@ -385,10 +407,10 @@ const ReportsPage: React.FC = () => {
       doc.text(`Reporte de Citas Finalizadas - ${prof.name}`, 105, 25, { align: 'center' });
       doc.setFontSize(11);
       doc.text(`Rango: ${startDate || '...'} a ${endDate || '...'}`, 10, 32);
-      doc.text(`Cantidad de citas finalizadas: ${finalizadas.length}`, 10, 40);
+      doc.text(`Pacientes atendidos: ${byPatient.size}  |  Total sesiones: ${finalizadas.length}`, 10, 40);
 
       autoTable(doc, {
-        head: [['Paciente', 'Frecuencia', 'Costo por sesión']],
+        head: [['Paciente', 'Frecuencia', 'Sesiones', 'Costo total']],
         body: [...rows, totalRow],
         startY: 52,
         styles: { fontSize: 10 },

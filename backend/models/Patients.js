@@ -91,6 +91,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
+      sessionCost: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+
       active: {
         type: DataTypes.BOOLEAN,
         allowNull: false,

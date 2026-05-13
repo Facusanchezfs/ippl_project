@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Seba Cerutti\\\\Desktop\\\\ippl_project\" -Force | Select-Object Name, @{Name='Type'; Expression={if \\($_.PSIsContainer\\) {'Directory'} else {'File'}}})",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Seba Cerutti\\\\Desktop\\\\ippl_project\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\Seba Cerutti\\\\Desktop\\\\ippl_project\\\\backend\\\\migrations\" -Name)",
+      "Bash(Sort-Object)"
+    ]
+  }
+}

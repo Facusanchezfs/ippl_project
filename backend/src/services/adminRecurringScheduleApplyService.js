@@ -189,8 +189,20 @@ async function applyAdminRecurringScheduleUpdate({
     await recurrence.save({ transaction: t });
   }
 
+  const patientUpdates = {};
+
   if (patient.sessionFrequency !== recurrence.frequency) {
-    await patient.update({ sessionFrequency: recurrence.frequency }, { transaction: t });
+    patientUpdates.sessionFrequency = recurrence.frequency;
+  }
+
+  const incomingCost = sessionCost != null ? Number(sessionCost) : null;
+  const existingCost = patient.sessionCost != null ? Number(patient.sessionCost) : null;
+  if (incomingCost !== null && incomingCost !== existingCost) {
+    patientUpdates.sessionCost = incomingCost;
+  }
+
+  if (Object.keys(patientUpdates).length > 0) {
+    await patient.update(patientUpdates, { transaction: t });
   }
 
   const cancelFromDate = usedFallback
