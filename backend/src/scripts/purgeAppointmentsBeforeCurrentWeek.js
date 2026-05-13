@@ -167,13 +167,15 @@ async function main() {
       if (!prof) continue;
 
       const currentTotal = round2(Number(prof.saldoTotal) || 0);
+      const currentPend = round2(Number(prof.saldoPendiente) || 0);
       const newTotal = round2(Math.max(0, currentTotal - sessionSum));
 
       let commissionInt = parseInt(prof.commission ?? 0, 10);
       if (Number.isNaN(commissionInt)) commissionInt = 0;
       commissionInt = Math.max(0, Math.min(100, commissionInt));
       const commissionRate = commissionInt / 100;
-      const newPend = round2(newTotal * commissionRate);
+      const sessionCommission = round2(sessionSum * commissionRate);
+      const newPend = round2(currentPend - sessionCommission);
 
       await prof.update(
         { saldoTotal: newTotal, saldoPendiente: newPend },

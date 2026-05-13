@@ -107,9 +107,9 @@ async function runReconcileProfessionalSaldos(options = {}) {
       })) || 0;
     const ab = round2(Number(abonosSum) || 0);
 
-    /** Igual que abonarComision: pendiente puede ser negativo (saldo a favor). */
+    /** pendiente puede ser negativo (saldo a favor del profesional). */
     const newPend = round2(fullCommission - ab);
-    const newTotal = newPend <= 0 ? 0 : g;
+    const newTotal = g;
 
     const oldT = round2(Number(prof.saldoTotal) || 0);
     const oldP = round2(Number(prof.saldoPendiente) || 0);

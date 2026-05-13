@@ -549,14 +549,16 @@ const deleteAppointment = async (req, res) => {
         
         if (prof) {
           const currentTotal = toAmount(prof.saldoTotal) ?? 0;
+          const currentPend = toAmount(prof.saldoPendiente) ?? 0;
           const newTotal = round2(Math.max(0, currentTotal - sessionCost));
-          
+
           let commissionInt = parseInt(prof.commission ?? 0, 10);
           if (isNaN(commissionInt)) commissionInt = 0;
           commissionInt = Math.max(0, Math.min(100, commissionInt));
           const commissionRate = commissionInt / 100;
-          
-          const newPend = round2(newTotal * commissionRate);
+
+          const sessionCommission = round2(sessionCost * commissionRate);
+          const newPend = round2(currentPend - sessionCommission);
           
           await prof.update(
             { saldoTotal: newTotal, saldoPendiente: newPend },

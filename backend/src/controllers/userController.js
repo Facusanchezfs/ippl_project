@@ -23,7 +23,7 @@ function toAmount(v) {
 }
 
 function round2(v) {
-  return Math.round((Number(v) || 0) * 100) / 100;
+  return Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 }
 
 
@@ -473,15 +473,11 @@ const abonarComision = async (req, res) => {
     }
 
     const prevSaldo = toAmount(professional.saldoPendiente);
-    const rawNext = prevSaldo - amount;
-
-    const nextSaldo = +rawNext.toFixed(2);
-    const shouldResetTotal = nextSaldo <= 0;
+    const nextSaldo = round2(prevSaldo - amount);
 
     await professional.update(
       {
         saldoPendiente: nextSaldo,
-        saldoTotal: shouldResetTotal ? 0 : professional.saldoTotal,
         updatedAt: new Date(),
       },
       { transaction: t }
@@ -500,7 +496,7 @@ const abonarComision = async (req, res) => {
     await t.commit();
     return sendSuccess(res, {
       saldoPendiente: nextSaldo,
-      paidInFull: shouldResetTotal && prevSaldo > 0,
+      paidInFull: nextSaldo <= 0 && prevSaldo > 0,
     }, 'Comisión abonada correctamente');
   } catch (error) {
     await t.rollback();
