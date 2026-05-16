@@ -127,7 +127,7 @@ async function generateRecurringAppointments(options = {}) {
       try {
         // Verificar que el paciente siga activo
         const patient = await Patient.findByPk(recurrence.patientId, {
-          attributes: ['id', 'name', 'active', 'status'],
+          attributes: ['id', 'name', 'active', 'status', 'sessionCost'],
         });
 
         if (!patient || patient.active === false || patient.status === 'inactive') {
@@ -237,7 +237,7 @@ async function generateRecurringAppointments(options = {}) {
               if (mismatchIdx !== -1) {
                 const cancelIds = futures.slice(mismatchIdx).map((f) => f.id);
                 await Appointment.update(
-                  { status: 'cancelled' },
+                  { status: 'cancelled', active: false },
                   {
                     where: { id: { [Op.in]: cancelIds } },
                     validate: false,
@@ -359,10 +359,10 @@ async function generateRecurringAppointments(options = {}) {
                   status: 'scheduled',
                   notes: null,
                   audioNote: null,
-                  sessionCost: slotSource.sessionCost,
+                  sessionCost: patient?.sessionCost ?? slotSource.sessionCost,
                   attended: null,
                   paymentAmount: null,
-                  remainingBalance: slotSource.sessionCost,
+                  remainingBalance: patient?.sessionCost ?? slotSource.sessionCost,
                   recurringAppointmentId: recurrenceId,
                   active: true,
                 },

@@ -319,7 +319,7 @@ const ReportsPage: React.FC = () => {
 
       // getProfessionalAppointments() devuelve { appointments, pagination }, no un array directo.
       const [appointmentsResponse, patients] = await Promise.all([
-        appointmentsService.getProfessionalAppointments(prof.id),
+        appointmentsService.getProfessionalAppointments(prof.id, undefined, undefined, 'all', 'exclude'),
         patientsService.getProfessionalPatients(prof.id),
       ]);
 

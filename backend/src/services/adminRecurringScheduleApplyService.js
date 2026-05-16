@@ -212,7 +212,7 @@ async function applyAdminRecurringScheduleUpdate({
       : oldAnchorDate;
 
   await Appointment.update(
-    { status: 'cancelled' },
+    { status: 'cancelled', active: false },
     {
       where: {
         recurringAppointmentId: recurrence.id,
