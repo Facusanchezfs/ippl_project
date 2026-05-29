@@ -295,6 +295,7 @@ const approveVacationRequest = async (req, res) => {
 
       for (const appt of appointments) {
         appt.status = 'cancelled';
+        appt.active = false;
         await appt.save({ transaction: t });
       }
 

@@ -1,4 +1,4 @@
-const { Appointment, RecurringAppointment, Patient, sequelize } = require('../../models');
+const { Appointment, RecurringAppointment, Patient, VacationRequest, sequelize } = require('../../models');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 const fs = require('fs');
@@ -339,6 +339,18 @@ const getPatientRecurringScheduleAdmin = async (req, res) => {
       return sendError(res, 404, 'No hay configuración recurrente activa para este paciente');
     }
 
+    const professionalId = recurrences[0]?.professionalId;
+    const approvedVacations = professionalId
+      ? await VacationRequest.findAll({
+          where: {
+            professionalId,
+            status: 'approved',
+            endDate: { [Op.gte]: todayStr },
+          },
+          attributes: ['startDate', 'endDate'],
+        })
+      : [];
+
     const simpleRecurrences = recurrences.filter((r) => !r.groupId);
     const groupedById = recurrences
       .filter((r) => r.groupId)
@@ -382,7 +394,13 @@ const getPatientRecurringScheduleAdmin = async (req, res) => {
         baseAppointment &&
         baseAppointment.active &&
         baseAppointment.status === 'scheduled' &&
-        baseAppointment.date >= todayStr;
+        (
+          String(baseAppointment.date) > todayStr ||
+          (
+            String(baseAppointment.date) === todayStr &&
+            String(baseAppointment.startTime ?? '00:00') >= nowTime
+          )
+        );
 
       let ref = null;
 
@@ -432,7 +450,10 @@ const getPatientRecurringScheduleAdmin = async (req, res) => {
           while (
             cand < todayStr ||
             (cand === todayStr &&
-              String(startHHMM).padStart(5, '0') < String(nowTime).padStart(5, '0'))
+              String(startHHMM).padStart(5, '0') < String(nowTime).padStart(5, '0')) ||
+            approvedVacations.some(
+              (v) => String(v.startDate) <= cand && String(v.endDate) >= cand
+            )
           ) {
             cand = calculateNextDate(cand, freq);
             guard += 1;
