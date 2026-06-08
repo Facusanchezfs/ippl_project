@@ -11,6 +11,7 @@ const {
   applyProfessionalBalanceForTransition,
 } = require('../services/appointmentFinancialEffectsService');
 const {
+  AR_TIMEZONE,
   getArgentinaCivilDateString,
   getArgentinaTimeHHMM,
   getArgentinaWeekdayLongEs,
@@ -244,6 +245,23 @@ async function completeDueAppointments() {
 
           const previousStatus = row.status;
           const ymdNorm = normalizeToArgentinaCivilYmd(row.date);
+
+          // Señal defensiva (Bug 1): si auto-completamos una cita cuya fecha quedó
+          // más de 1 día por detrás de hoy, puede ser un `date` mal guardado/backfilleado.
+          // No bloquea el cierre, pero deja rastro para que QA detecte filas con fecha incorrecta.
+          const todayNorm = normalizeToArgentinaCivilYmd(decisionAt);
+          if (ymdNorm && todayNorm && branch === 'Backlog') {
+            const diffDays = Math.round(
+              (Date.parse(`${todayNorm}T00:00:00Z`) - Date.parse(`${ymdNorm}T00:00:00Z`)) /
+                86400000
+            );
+            if (Number.isFinite(diffDays) && diffDays > 1) {
+              logger.warn(
+                `[RecurringCron] Auto-complete de cita con fecha rezagada id=${id} date=${ymdNorm} hoy=${todayNorm} diffDias=${diffDays} (posible fecha mal guardada)`
+              );
+            }
+          }
+
           const horaCita = `${ymdNorm} ${row.startTime}-${row.endTime}`;
           const horaArgentina = `${getArgentinaCivilDateString(decisionAt)} ${getArgentinaTimeHHMM(decisionAt)}`;
 
@@ -292,7 +310,9 @@ async function completeDueAppointments() {
   return transitioned;
 }
 
-cron.schedule(AUTO_COMPLETE_CRON, async () => {
+cron.schedule(
+  AUTO_COMPLETE_CRON,
+  async () => {
   const startedAt = Date.now();
   try {
     const transitioned = await completeDueAppointments();
@@ -313,9 +333,13 @@ cron.schedule(AUTO_COMPLETE_CRON, async () => {
     });
     logger.error('[RecurringCron] Auto-complete failed', error);
   }
-});
+  },
+  { timezone: AR_TIMEZONE }
+);
 
-cron.schedule(RECURRING_GENERATION_CRON, async () => {
+cron.schedule(
+  RECURRING_GENERATION_CRON,
+  async () => {
   const startedAt = Date.now();
   if (recurringGenerationRunning) {
     logger.warn(
@@ -367,4 +391,6 @@ cron.schedule(RECURRING_GENERATION_CRON, async () => {
   } finally {
     recurringGenerationRunning = false;
   }
-});
+  },
+  { timezone: AR_TIMEZONE }
+);

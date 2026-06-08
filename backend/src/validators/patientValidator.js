@@ -35,6 +35,14 @@ const assignPatientSchema = Joi.object({
       .allow(null, '')
       .optional(),
     statusChangeReason: Joi.string().allow(null, '').optional(),
+    // Próxima fecha de cita (YYYY-MM-DD) usada al reasignar el paciente a otro profesional.
+    nextDate: Joi.string()
+      .pattern(/^\d{4}-\d{2}-\d{2}$/)
+      .allow(null, '')
+      .optional()
+      .messages({
+        'string.pattern.base': 'La próxima fecha de cita debe tener formato YYYY-MM-DD',
+      }),
   }),
 });
 

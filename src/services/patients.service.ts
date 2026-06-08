@@ -20,6 +20,8 @@ export interface AssignPatientDTO {
   audioNote?: string;
   sessionFrequency: 'weekly' | 'biweekly' | 'monthly';
   statusChangeReason?: string;
+  // Próxima fecha de cita (YYYY-MM-DD) al reasignar el paciente a otro profesional.
+  nextDate?: string;
 }
 
 const patientsService = {

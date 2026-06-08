@@ -6,6 +6,7 @@ const { createActivity } = require('./activityController');
 const logger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/response');
 const { getArgentinaCivilDateString } = require('../utils/civilDateUtils');
+const { reassignPatientProfessional } = require('../services/reassignProfessionalService');
 
 async function getAllPatients(req, res) {
   try {
@@ -184,6 +185,7 @@ async function assignPatient(req, res) {
       audioNote,
       sessionFrequency,
       statusChangeReason,
+      nextDate,
     } = req.body;
 
     const patient = await Patient.findByPk(patientId);
@@ -224,42 +226,88 @@ async function assignPatient(req, res) {
     
     if (sessionFrequency !== undefined) patient.sessionFrequency = sessionFrequency;
 
-    await patient.save();
+    const newProfessionalId = professionalId ?? patient.professionalId;
+    const professionalIdChanged =
+      newProfessionalId != null &&
+      String(newProfessionalId) !== String(originalProfessionalId);
 
-    // FIX: si el admin deja el paciente como `inactive` desde edición,
-    // cancelar futuras citas programadas y desactivar recurrencias,
-    // para que el CRON no siga generando/mostrando agenda para pacientes inactivos.
-    if (requestedStatus === 'inactive') {
-      const t = await sequelize.transaction();
-      try {
-        const todayStr = getArgentinaCivilDateString();
+    // Reasignación a otro profesional (sin pasar a inactivo): se re-ancla la agenda
+    // recurrente bajo el nuevo profesional a partir de la próxima fecha indicada por el admin.
+    const willReassign = professionalIdChanged && requestedStatus !== 'inactive';
 
-        await Appointment.update(
-          { status: 'cancelled' },
-          {
-            where: {
-              patientId: patient.id,
-              status: 'scheduled',
-              active: true,
-              date: { [Op.gte]: todayStr },
-            },
-            transaction: t,
-            validate: false,
-          }
+    if (willReassign && patient.sessionFrequency) {
+      const todayStr = getArgentinaCivilDateString();
+      if (!nextDate) {
+        return sendError(
+          res,
+          400,
+          'Debe indicar la próxima fecha de cita para reasignar al paciente a otro profesional'
         );
-
-        await RecurringAppointment.update(
-          { active: false },
-          {
-            where: { patientId: patient.id, active: true },
-            transaction: t,
-          }
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(nextDate))) {
+        return sendError(
+          res,
+          400,
+          'La próxima fecha de cita tiene un formato inválido (se espera YYYY-MM-DD)'
         );
+      }
+      if (String(nextDate) < todayStr) {
+        return sendError(res, 400, 'La próxima fecha de cita no puede estar en el pasado');
+      }
+    }
 
-        await t.commit();
-      } catch (err) {
-        await t.rollback();
-        throw err;
+    if (willReassign) {
+      // Todo en una sola transacción: persistir el paciente + cancelar futuras del
+      // profesional anterior + desactivar recurrencias viejas + recrear bajo el nuevo.
+      await sequelize.transaction(async (t) => {
+        await patient.save({ transaction: t });
+        await reassignPatientProfessional({
+          t,
+          patient,
+          oldProfessionalId: originalProfessionalId,
+          newProfessionalId,
+          newProfessionalName: patient.professionalName,
+          nextDate: patient.sessionFrequency ? nextDate : null,
+        });
+      });
+    } else {
+      await patient.save();
+
+      // FIX: si el admin deja el paciente como `inactive` desde edición,
+      // cancelar futuras citas programadas y desactivar recurrencias,
+      // para que el CRON no siga generando/mostrando agenda para pacientes inactivos.
+      if (requestedStatus === 'inactive') {
+        const t = await sequelize.transaction();
+        try {
+          const todayStr = getArgentinaCivilDateString();
+
+          await Appointment.update(
+            { status: 'cancelled' },
+            {
+              where: {
+                patientId: patient.id,
+                status: 'scheduled',
+                active: true,
+                date: { [Op.gte]: todayStr },
+              },
+              transaction: t,
+              validate: false,
+            }
+          );
+
+          await RecurringAppointment.update(
+            { active: false },
+            {
+              where: { patientId: patient.id, active: true },
+              transaction: t,
+            }
+          );
+
+          await t.commit();
+        } catch (err) {
+          await t.rollback();
+          throw err;
+        }
       }
     }
 
@@ -297,10 +345,6 @@ async function assignPatient(req, res) {
       statusChangeReason: statusChangeReason ?? null,
     });
 
-    const newProfessionalId = professionalId ?? patient.professionalId;
-    const professionalIdChanged = newProfessionalId && 
-                                  String(newProfessionalId) !== String(originalProfessionalId);
-    
     if (professionalIdChanged && newProfessionalId) {
       await createActivity(
         'PATIENT_ASSIGNED',

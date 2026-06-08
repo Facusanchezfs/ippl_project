@@ -47,6 +47,8 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   const [textNote, setTextNote] = useState(patient.textNote || '');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [hasExistingAudioNote, setHasExistingAudioNote] = useState(!!patient.audioNote);
+  // Próxima fecha de cita al reasignar a otro profesional (re-ancla la agenda recurrente).
+  const [reassignNextDate, setReassignNextDate] = useState<string>('');
 
   // Estado de agenda recurrente
   const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -84,6 +86,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
     setTextNote(patient.textNote || '');
     setHasExistingAudioNote(!!patient.audioNote);
     setAudioBlob(null);
+    setReassignNextDate('');
   }, [patient]);
 
   // Cargar agenda recurrente al abrir modal
@@ -158,6 +161,21 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
   const effectivePatientStatus = isEditing ? status : patient.status;
   const scheduleBlockedForInactive = effectivePatientStatus === 'inactive';
 
+  // ¿Cambió el profesional en la edición?
+  const professionalChanged =
+    !!professionalId && String(professionalId) !== String(patient.professionalId);
+  // ¿El paciente tiene agenda recurrente que habría que re-anclar al reasignar?
+  const hasRecurringSchedule = !!(scheduleMode || scheduleFrequency || patient.sessionFrequency);
+  // Próxima fecha de cita existente (para pre-llenar el campo al reasignar).
+  const scheduledNextDate =
+    scheduleMode === 'single'
+      ? scheduleSingle.nextDate
+      : scheduleEntries
+          .map((e) => e.nextDate)
+          .filter(Boolean)
+          .sort()[0] || '';
+  const effectiveReassignNextDate = reassignNextDate || scheduledNextDate;
+
   const handleCancelEdit = () => {
     setIsEditing(false);
     setStatus(patient.status);
@@ -165,6 +183,7 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
     setTextNote(patient.textNote || '');
     setHasExistingAudioNote(!!patient.audioNote);
     setAudioBlob(null);
+    setReassignNextDate('');
   };
 
   const handleSave = async () => {
@@ -179,6 +198,24 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
       payload.professionalId = professionalId;
       if (selectedProf) {
         payload.professionalName = selectedProf.name;
+      }
+
+      // Al reasignar, si el paciente tiene agenda recurrente, el admin debe indicar
+      // la próxima fecha desde la cual se re-ancla la recurrencia bajo el nuevo profesional.
+      if (hasRecurringSchedule) {
+        const nd = effectiveReassignNextDate;
+        if (!nd) {
+          toast.error('Indicá la próxima fecha de cita para reasignar al paciente.');
+          return;
+        }
+        const todayStr = new Date().toLocaleDateString('en-CA', {
+          timeZone: 'America/Argentina/Buenos_Aires',
+        });
+        if (nd < todayStr) {
+          toast.error('La próxima fecha de cita no puede estar en el pasado.');
+          return;
+        }
+        payload.nextDate = nd;
       }
     }
 
@@ -468,6 +505,24 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
               </p>
             )}
           </div>
+
+          {isEditing && professionalChanged && hasRecurringSchedule && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Próxima fecha de cita
+              </label>
+              <input
+                type="date"
+                value={effectiveReassignNextDate}
+                onChange={(e) => setReassignNextDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Las citas futuras con el profesional anterior se cancelarán y la agenda
+                recurrente se regenerará bajo el nuevo profesional desde esta fecha.
+              </p>
+            </div>
+          )}
 
 
           <div>
