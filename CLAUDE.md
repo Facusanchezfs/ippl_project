@@ -81,6 +81,16 @@ Four roles with separate route trees:
 - **StatusRequest / VacationRequest / FrequencyRequest** — workflow requests that require admin approval
 - Financial reconciliation recalculates professional `saldoTotal` / `saldoPendiente` from raw appointment data
 
+### Patient Creation & Assignment Flow
+Creating a patient from the admin UI (`handleAddPatient` in `src/components/admin/PatientManagement.tsx`) is **multi-step**, not a single API call:
+1. `POST /patients` (`addPatient`) — creates the base row. Accepts `name`, `description`, `status`, `sessionFrequency` (no professional).
+2. `PUT /patients/:id/assign` (`assignPatient`) — assigns professional + re-confirms `status`/`sessionFrequency`. Only called when a professional was selected.
+3. First `Appointment` is created, then a `RecurringAppointment` (or `createPatientRecurringScheduleAdmin` for `twice_weekly`).
+
+Each step is wrapped in its own try/catch so a later failure doesn't roll back an already-created patient — **surface failures to the user (toast)**, don't swallow them silently.
+
+The `/patients/:id/assign` endpoint is **dual-purpose**: it handles both first assignment and reassignment. Reassignment (`willReassign`) means moving a patient that **already had a professional** (`originalProfessionalId != null`) to a different one — only then is `nextDate` required and the recurring agenda re-anchored via `reassignProfessionalService.js`. A first assignment must NOT be treated as a reassignment.
+
 ## Environment Setup
 
 Backend requires a `.env` file in `backend/`:

@@ -8,6 +8,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 export interface CreatePatientDTO {
   name: string;
   description: string;
+  status?: 'active' | 'pending' | 'inactive';
+  sessionFrequency?: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly';
 }
 
 export interface AssignPatientDTO {

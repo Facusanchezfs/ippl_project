@@ -233,7 +233,13 @@ async function assignPatient(req, res) {
 
     // Reasignación a otro profesional (sin pasar a inactivo): se re-ancla la agenda
     // recurrente bajo el nuevo profesional a partir de la próxima fecha indicada por el admin.
-    const willReassign = professionalIdChanged && requestedStatus !== 'inactive';
+    // Sólo aplica cuando el paciente YA tenía un profesional previo. La primera asignación
+    // (paciente recién creado, originalProfessionalId == null) no es una reasignación: no hay
+    // agenda que re-anclar, así que sigue el guardado simple y no exige `nextDate`.
+    const willReassign =
+      professionalIdChanged &&
+      originalProfessionalId != null &&
+      requestedStatus !== 'inactive';
 
     if (willReassign && patient.sessionFrequency) {
       const todayStr = getArgentinaCivilDateString();

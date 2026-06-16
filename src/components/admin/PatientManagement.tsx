@@ -2671,9 +2671,14 @@ const PatientManagement = () => {
   }) => {
     try {
       // Paso 1: Crear paciente
+      // Enviamos también Estado y Frecuencia para que la creación complete sin
+      // profesional (sólo Estado/Frecuencia) persista esos campos. Si además hay
+      // profesional, el `assignPatient` posterior re-confirma estos mismos valores.
       const newPatient: CreatePatientDTO = {
         name: data.name,
         description: data.description,
+        status: data.status,
+        sessionFrequency: data.sessionFrequency,
       };
       
       const createdPatient = await patientsService.addPatient(newPatient);
@@ -2693,7 +2698,8 @@ const PatientManagement = () => {
           });
         } catch (assignError) {
           console.error('Error al asignar paciente:', assignError);
-          // Continuar aunque falle la asignación, el paciente ya está creado
+          // El paciente ya está creado; avisar para que el error no quede oculto.
+          toast.error('El paciente se creó, pero no se pudo asignar el profesional/estado/frecuencia. Editá el paciente para completarlo.');
         }
       }
 
