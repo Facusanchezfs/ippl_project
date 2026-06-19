@@ -44,11 +44,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       currentFrequency: {
-        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly'),
+        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly', 'twice_weekly'),
         allowNull: false,
       },
       requestedFrequency: {
-        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly'),
+        type: DataTypes.ENUM('weekly', 'biweekly', 'monthly', 'twice_weekly'),
         allowNull: false,
       },
       reason: {

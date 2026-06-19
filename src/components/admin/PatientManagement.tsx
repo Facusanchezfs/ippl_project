@@ -343,7 +343,8 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
       } catch (error: any) {
         console.error('Error al actualizar agenda recurrente (grupo):', error);
         setScheduleError(
-          error?.response?.data?.message ||
+          error?.response?.data?.message ??
+            error?.response?.data?.error ??
             'Error al actualizar la agenda recurrente'
         );
       } finally {
@@ -420,7 +421,8 @@ const ViewDescriptionModal: React.FC<ViewDescriptionModalProps> = ({
     } catch (error: any) {
       console.error('Error al actualizar agenda recurrente:', error);
       setScheduleError(
-        error?.response?.data?.message ||
+        error?.response?.data?.message ??
+          error?.response?.data?.error ??
           'Error al actualizar la agenda recurrente'
       );
     } finally {

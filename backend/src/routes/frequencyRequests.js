@@ -26,9 +26,9 @@ router.post(
         return sendError(res, 400, 'Faltan campos requeridos. Se necesita: patientId, newFrequency y reason');
       }
 
-      const validFrequencies = ['weekly', 'biweekly', 'monthly'];
+      const validFrequencies = ['weekly', 'biweekly', 'monthly', 'twice_weekly'];
       if (!validFrequencies.includes(newFrequency)) {
-        return sendError(res, 400, 'Frecuencia no válida. Las frecuencias permitidas son: weekly, biweekly, monthly');
+        return sendError(res, 400, 'Frecuencia no válida. Las frecuencias permitidas son: weekly, biweekly, monthly, twice_weekly');
       }
 
       if (!reason.trim()) {
@@ -253,6 +253,15 @@ router.post(
             sessionCost: Number(sessionCost),
           });
         } else if (recurrenceAlreadyApplied !== true) {
+          // Aprobación sin agenda: solo dejamos registrada la nueva frecuencia
+          // deseada en el paciente. NO se reconstruye la agenda recurrente acá.
+          //
+          // TODO(twice_weekly): cuando requestedFrequency === 'twice_weekly' la
+          // agenda necesita DOS bloques día/hora, pero la solicitud solo transporta
+          // una frecuencia simple. Aquí marcamos sessionFrequency = 'twice_weekly'
+          // de forma "graceful" (no lanza) para que el admin complete los 2 bloques
+          // desde el editor de agenda del paciente. La generación recurrente de
+          // 2× semana NO se auto-construye desde este flujo.
           await patient.update(
             { sessionFrequency: request.requestedFrequency },
             { transaction: t }

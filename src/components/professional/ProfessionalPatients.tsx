@@ -31,7 +31,7 @@ interface FrequencyChangeModalProps {
   isOpen: boolean;
   onClose: () => void;
   patient: Patient;
-  onSubmit: (newFrequency: 'weekly' | 'biweekly' | 'monthly', reason: string) => Promise<void>;
+  onSubmit: (newFrequency: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly', reason: string) => Promise<void>;
 }
 
 const getStatusColor = (status: string) => {
@@ -154,7 +154,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({ isOpen, onClose, 
 };
 
 const FrequencyChangeModal: React.FC<FrequencyChangeModalProps> = ({ isOpen, onClose, patient, onSubmit }) => {
-  const [newFrequency, setNewFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>(patient.sessionFrequency || 'weekly');
+  const [newFrequency, setNewFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'twice_weekly'>(patient.sessionFrequency || 'weekly');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -226,13 +226,14 @@ const FrequencyChangeModal: React.FC<FrequencyChangeModalProps> = ({ isOpen, onC
             </label>
             <select
               value={newFrequency}
-              onChange={(e) => setNewFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly')}
+              onChange={(e) => setNewFrequency(e.target.value as 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
             >
               <option value="weekly">Semanal</option>
               <option value="biweekly">Quincenal</option>
               <option value="monthly">Mensual</option>
+              <option value="twice_weekly">2 veces por semana</option>
             </select>
           </div>
 
@@ -440,7 +441,7 @@ const ProfessionalPatients = () => {
     }
   };
 
-  const handleFrequencyChange = async (newFrequency: 'weekly' | 'biweekly' | 'monthly', reason: string) => {
+  const handleFrequencyChange = async (newFrequency: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly', reason: string) => {
     if (!selectedPatient || !user) return;
 
     try {

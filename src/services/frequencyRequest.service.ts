@@ -14,8 +14,8 @@ export interface FrequencyRequest {
 	patientName: string;
 	professionalId: string;
 	professionalName: string;
-	currentFrequency: 'weekly' | 'biweekly' | 'monthly';
-	requestedFrequency: 'weekly' | 'biweekly' | 'monthly';
+	currentFrequency: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly';
+	requestedFrequency: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly';
 	reason: string;
 	status: 'pending' | 'approved' | 'rejected';
 	adminResponse?: string;
@@ -25,7 +25,7 @@ export interface FrequencyRequest {
 
 export interface CreateFrequencyRequestDTO {
 	patientId: string;
-	newFrequency: 'weekly' | 'biweekly' | 'monthly';
+	newFrequency: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly';
 	reason: string;
 }
 

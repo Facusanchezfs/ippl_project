@@ -153,7 +153,7 @@ const patientsService = {
     }
   },
 
-  requestFrequencyChange: async (patientId: string, newFrequency: 'weekly' | 'biweekly' | 'monthly', reason: string): Promise<any> => {
+  requestFrequencyChange: async (patientId: string, newFrequency: 'weekly' | 'biweekly' | 'monthly' | 'twice_weekly', reason: string): Promise<any> => {
     try {
       const requestData: CreateFrequencyRequestDTO = {
         patientId,

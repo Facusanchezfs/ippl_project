@@ -540,6 +540,62 @@ const getPatientRecurringScheduleAdmin = async (req, res) => {
  * Soporta frecuencias simples (weekly/biweekly/monthly) y twice_weekly (dos bloques).
  * POST /api/admin/patients/:id/recurring
  */
+/**
+ * Limpia la agenda recurrente PREEXISTENTE de un paciente antes de crear una nueva.
+ *
+ * Se usa al convertir entre modos de recurrencia (p. ej. weekly → twice_weekly y
+ * viceversa), donde el flujo del admin llama al CREATE handler en lugar del UPDATE.
+ * Sin esta limpieza, las citas futuras viejas siguen activas y ocupan el horario,
+ * provocando falsos 409 ("El horario seleccionado no está disponible").
+ *
+ * Reutiliza el mismo patrón que `reassignProfessionalService`:
+ *  - Cancela SOLO las citas futuras `scheduled` (date >= hoy) atadas al paciente.
+ *  - Desactiva (active:false) todas las RecurringAppointment activas del paciente
+ *    (recurrencias simples y filas de grupos twice_weekly).
+ *
+ * No afecta saldoTotal/saldoPendiente del profesional: esos balances sólo cuentan
+ * citas `completed && attended`, nunca futuras `scheduled`, por lo que no hace falta
+ * reconciliación financiera.
+ *
+ * @param {string|number} patientId
+ * @param {string} todayStr Fecha civil de Argentina (YYYY-MM-DD).
+ * @param {import('sequelize').Transaction} t
+ */
+const cleanupExistingPatientRecurrences = async (patientId, todayStr, t) => {
+  const [cancelledCount] = await Appointment.update(
+    { status: 'cancelled', active: false },
+    {
+      where: {
+        patientId,
+        active: true,
+        status: 'scheduled',
+        date: { [Op.gte]: todayStr },
+      },
+      transaction: t,
+      validate: false,
+      hooks: false,
+    }
+  );
+
+  const [deactivatedRecurrences] = await RecurringAppointment.update(
+    { active: false },
+    {
+      where: { patientId, active: true },
+      transaction: t,
+    }
+  );
+
+  if (cancelledCount > 0 || deactivatedRecurrences > 0) {
+    logger.info(
+      `[createPatientRecurringScheduleAdmin] Limpieza previa paciente ${patientId}: ` +
+        `${cancelledCount} cita(s) futura(s) cancelada(s), ` +
+        `${deactivatedRecurrences} recurrencia(s) desactivada(s).`
+    );
+  }
+
+  return { cancelledCount, deactivatedRecurrences };
+};
+
 const createPatientRecurringScheduleAdmin = async (req, res) => {
   try {
     const { id } = req.params;
@@ -615,6 +671,15 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
             'El paciente debe tener un profesional asignado antes de crear una agenda recurrente'
           );
         }
+
+        // Limpieza de la agenda recurrente PREEXISTENTE del paciente.
+        // Permite convertir una recurrencia simple (weekly/biweekly/monthly) a
+        // twice_weekly sin que las citas futuras viejas ocupen el horario y
+        // disparen falsos 409. Mismo patrón que reassignProfessionalService:
+        // cancelar SOLO futuras `scheduled` y desactivar las recurrencias.
+        // No afecta saldoTotal/saldoPendiente porque esos sólo cuentan citas
+        // `completed && attended` (nunca futuras scheduled).
+        await cleanupExistingPatientRecurrences(patient.id, todayStr, t);
 
         const groupId = uuidv4();
         const createdEntries = [];
@@ -793,6 +858,11 @@ const createPatientRecurringScheduleAdmin = async (req, res) => {
           'El paciente debe tener un profesional asignado antes de crear una agenda recurrente'
         );
       }
+
+      // Limpieza de la agenda recurrente PREEXISTENTE del paciente (ver nota en
+      // la rama twice_weekly). Permite convertir desde twice_weekly (o re-crear
+      // una recurrencia simple) sin que las citas futuras viejas colisionen.
+      await cleanupExistingPatientRecurrences(patient.id, todayStr, t);
 
       const toMinutesLocal = (hhmm) => {
         const [h, m] = String(hhmm || '').split(':').map((x) => parseInt(x, 10));
